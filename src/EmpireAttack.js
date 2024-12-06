@@ -13,7 +13,8 @@ export class EmpireAttack extends BaseGame {
       this.EXTRA_CELLS = 0;
     }
     init() {
-      this.player = new Player();
+      // this.player = new Player();
+      this.player = new Bot(["home", "defend", "attack", "cycle"], 1);
       this.bot = new Bot(["home", "expand", "defend", "attack", "random", "cycle"]);
       // this.bot = new Bot(["expand"]);
       super.init();
@@ -102,10 +103,16 @@ export class EmpireAttack extends BaseGame {
       this.player.onTick(this.cells);
       this.bot.onTick(this.cells);
 
+      if (Math.random() < 0.25 && this.player.performAction) {
+        const [ux, uy] = this.bot.home;
+        const [x, y, power] = this.player.performAction(this.copyCells(), [ux, uy]);
+        this.cells[x][y] += power;
+      }
+
       if (Math.random() < 0.25) {
         const [ux, uy] = this.player.home;
         const [x, y, power] = this.bot.performAction(this.copyCells(), [ux, uy]);
-        this.cells[x][y] -= power;
+        this.cells[x][y] += power;
       }
     }
 
