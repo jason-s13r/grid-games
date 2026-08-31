@@ -70,10 +70,13 @@ spaces:
       build: build-app
       publish: no-publish
 dependencies:
+  protocol:
+    - sim
   web:
     - sim
 initials:
   prototype: 0.1.0
+  protocol: 0.1.0
   sim: 0.1.0
   web: 0.1.0
 

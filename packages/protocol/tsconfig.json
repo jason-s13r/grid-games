@@ -1,0 +1,16 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "outDir": "dist",
+    "rootDir": "src",
+    "declaration": true,
+    "declarationMap": true,
+    "sourceMap": true,
+    // DOM is here for Web Crypto's types — CryptoKey, SubtleCrypto, JsonWebKey —
+    // which have no lib of their own. The package runs in Node too, and every
+    // global it actually touches (crypto, TextEncoder, btoa) exists in both. It
+    // must not reach for anything else the DOM lib happens to expose.
+    "lib": ["ES2022", "DOM"]
+  },
+  "include": ["src"]
+}
