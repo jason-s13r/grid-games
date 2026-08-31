@@ -79,6 +79,14 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
 
+      # dispat builds only what is releasing, so a library that has not changed
+      # since its last tag never gets its build stage — and the app that
+      # imports it then resolves a dist/ that was never emitted. Building the
+      # libraries up front makes the app's build independent of what the plan
+      # happens to include.
+      - name: Build the libraries
+        run: pnpm --filter "./packages/*" build
+
       - uses: yohimik/dispat@v1
 
       - name: Run the release

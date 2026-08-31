@@ -21,6 +21,9 @@
 
 scripts:
   build-lib: pnpm build
+  # Regenerates pnpm-lock.yaml after the version stage, so the release commit
+  # never carries a lockfile that disagrees with the manifests beside it.
+  sync-lock: pnpm install --lockfile-only
   # Nothing goes to a registry. The library ships as a tarball attached to its
   # GitHub release, which a bot peer or the observer can install straight from
   # the download URL. Packed into a temp dir, never the package folder, because
@@ -46,6 +49,7 @@ spaces:
       # --frozen-lockfile. Package versions are still written.
       match: ["workspace:*"]
       range: "workspace:*"
+      syncLock: [sync-lock]
     flow:
       build: build-lib
       publish: publish-lib
@@ -61,6 +65,7 @@ spaces:
       # --frozen-lockfile. Package versions are still written.
       match: ["workspace:*"]
       range: "workspace:*"
+      syncLock: [sync-lock]
     flow:
       build: build-app
       publish: no-publish
@@ -86,6 +91,9 @@ changelog:
 commit:
   enabled: true
   push: true
+  # The lockfile lives at the root, outside every package folder, so it has to
+  # be named or syncLock's regeneration would be left out of the commit.
+  include: [pnpm-lock.yaml]
   name: github-actions[bot]
   email: github-actions[bot]@users.noreply.github.com
 github:
