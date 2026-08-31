@@ -92,6 +92,18 @@ const EJECTION_DELAY = STEPS_PER_SECOND * 4;
  *  reconnecting phone should not cost someone their seat. */
 const DEFAULT_STALL_TIMEOUT = 15_000;
 
+/** How far behind wall-clock time a peer must be at start() before it treats
+ *  itself as arriving late rather than starting fresh. Adopting a genesis takes
+ *  a round trip or two, so a peer joining a game that is genuinely new is
+ *  already a second or so behind; ten seconds is well clear of that and well
+ *  under any real absence. */
+const RESUME_BEHIND = STEPS_PER_SECOND * 10;
+
+/** How long a snapshot we asked for stays welcome. Long enough for a large map
+ *  to cross a slow channel; short enough that a stale one arriving later is
+ *  refused rather than rewinding a peer that has since recovered on its own. */
+const SNAPSHOT_WAIT_MS = 10_000;
+
 export type EjectionReason = "equivocation" | "stalled";
 
 const seatKey = (seat: Seat): string => `${seat.empire}:${seat.member}`;
@@ -143,6 +155,12 @@ export class Lockstep {
   private readyCeiling = Number.MAX_SAFE_INTEGER;
   private lastBeat = -Infinity;
   private halted: string | null = null;
+  /** How long a snapshot we asked for stays welcome. Outside this window a
+   *  snapshot is only adopted when it is strictly ahead of us. */
+  private snapshotWantedUntil = 0;
+  /** Set only at start(), when the game turns out to have begun without us:
+   *  the one case where there is nothing worth simulating until it is answered. */
+  private holdingForResume = false;
   private unlisten?: () => void;
 
   lateMoves = 0;
@@ -177,9 +195,32 @@ export class Lockstep {
   start(): void {
     this.unlisten = this.transport.listen((from, frame) => this.receive(from, frame));
     this.checkpoint(this.sim.step);
+
+    // Arriving to a game already in progress. Simulating up from step 0 would
+    // spend minutes deriving a state any peer can hand over in one message, and
+    // would spend those minutes broadcasting checkpoints that disagree with
+    // every one of them. Ask first, and hold the simulation until the answer
+    // lands or the wait runs out.
+    //
+    // The request names the wall-clock step rather than ours, because a peer
+    // answers with the most recent snapshot it holds at or before the step it
+    // is asked for — and ours is the one number known to be too old.
+    if (this.targetStep() - this.sim.step > RESUME_BEHIND) {
+      this.holdingForResume = true;
+      this.requestSnapshot(this.targetStep());
+    }
+
     // Without this nobody ever speaks first, and every peer sits at step 0
     // waiting for a promise none of them has made.
     this.announceReady();
+  }
+
+  /** True while waiting for a snapshot of a game that started without us. */
+  private resuming(): boolean {
+    if (!this.holdingForResume) return false;
+    if (this.now() < this.snapshotWantedUntil) return true;
+    this.holdingForResume = false; // nobody answered; replay from step 0 instead
+    return false;
   }
 
   stop(): void {
@@ -206,7 +247,7 @@ export class Lockstep {
    *  renderer must repaint. */
   pump(): Set<number> {
     const dirty = new Set<number>();
-    if (this.halted || this.sim.ended) return dirty;
+    if (this.halted || this.sim.ended || this.resuming()) return dirty;
 
     const target = this.targetStep();
     let budget = MAX_STEPS_PER_PUMP;
@@ -338,11 +379,11 @@ export class Lockstep {
 
   private receive(from: string, frame: Frame): void {
     const lane = this.lanes.get(from) ?? Promise.resolve();
-    const next = lane.then(() => this.handle(frame)).catch(() => undefined);
+    const next = lane.then(() => this.handle(from, frame)).catch(() => undefined);
     this.lanes.set(from, next);
   }
 
-  private async handle(frame: Frame): Promise<void> {
+  private async handle(from: string, frame: Frame): Promise<void> {
     switch (frame.t) {
       case FRAME.MOVE:
         return this.onMove(frame.signed);
@@ -357,7 +398,7 @@ export class Lockstep {
       case FRAME.EQUIVOCATION:
         return this.onEquivocation(frame.proof);
       case FRAME.SNAPSHOT_REQUEST:
-        return this.onSnapshotRequest(frame.step);
+        return this.onSnapshotRequest(from, frame.step);
       case FRAME.SNAPSHOT:
         return this.onSnapshot(frame.step, frame.hash, frame.data);
       default:
@@ -575,19 +616,40 @@ export class Lockstep {
     if (late) this.requestSnapshot();
   }
 
-  private onSnapshotRequest(step: number): void {
-    const entry = this.snapshots.at(step);
-    if (!entry) return;
-    this.transport.broadcast({
+  /** Answer with the present, not with an archive.
+   *
+   *  A stored snapshot is only useful to someone who also holds every move
+   *  between it and now — and a peer that has just arrived holds none of them,
+   *  because they were broadcast before it was listening. So the reply is the
+   *  state as of the last step this peer simulated, plus the moves it still has
+   *  pending for the steps after it. Those two together are the whole game.
+   *
+   *  Sent to the asker alone. A snapshot is the largest message the mesh ever
+   *  carries, nobody else asked for it, and re-sending pending moves to a peer
+   *  that already has them is how a move gets applied twice.
+   *
+   *  The step in the request is advisory. A peer rebuilding from a desync wants
+   *  a correct state, not an old one — and this peer's newest is the most
+   *  correct thing it has to offer. Rewinding it to an archived checkpoint would
+   *  only oblige it to replay the very moves it may have applied wrongly. */
+  private onSnapshotRequest(from: string, _step: number): void {
+    this.transport.send(from, {
       t: FRAME.SNAPSHOT,
-      step: entry.step,
-      hash: entry.hash,
-      data: encodeSnapshot(entry.data),
+      step: this.sim.step,
+      hash: this.sim.hash(),
+      data: encodeSnapshot(this.sim.snapshot()),
     });
+    for (const moves of this.pending.values()) {
+      for (const signed of moves) this.transport.send(from, { t: FRAME.MOVE, signed });
+    }
   }
 
   private async onSnapshot(step: number, hash: number, data: string): Promise<void> {
-    if (step <= this.sim.step && this.ourHashes.get(step) === hash) return; // nothing to learn
+    if (step === this.sim.step && this.sim.hash() === hash) return; // already there
+    // Behind us, and we did not ask. Adopting it would throw away steps this
+    // peer has correctly applied in order to help with someone else's rescue.
+    if (step <= this.sim.step && this.now() >= this.snapshotWantedUntil) return;
+    if (step < this.sim.step && this.ourHashes.get(step) === hash) return; // nothing to learn
     const buffer = decodeSnapshot(data);
     if (!buffer) return;
     this.adopt(buffer, hash);
@@ -612,6 +674,8 @@ export class Lockstep {
     for (const step of [...this.pending.keys()]) {
       if (step <= this.sim.step) this.pending.delete(step);
     }
+    this.holdingForResume = false;
+    this.snapshotWantedUntil = 0;
     this.ourHashes.clear();
     this.ourReady = -1;
     this.broadcastReady = -1;
@@ -622,6 +686,7 @@ export class Lockstep {
   }
 
   requestSnapshot(step = this.sim.step): void {
+    this.snapshotWantedUntil = this.now() + SNAPSHOT_WAIT_MS;
     this.transport.broadcast({ t: FRAME.SNAPSHOT_REQUEST, step });
   }
 
@@ -635,8 +700,20 @@ export class Lockstep {
 
   private stash(signed: SignedMove): void {
     const list = this.pending.get(signed.move.step);
-    if (list) list.push(signed);
-    else this.pending.set(signed.move.step, [signed]);
+    if (!list) {
+      this.pending.set(signed.move.step, [signed]);
+      return;
+    }
+    // The same move can reach this peer twice: a peer answering a snapshot
+    // request re-sends everything it still holds, and some of that may already
+    // be here. Applying one move twice is a desync, so a slot is claimed once.
+    // Equivocation is not the concern — a second move in a claimed slot that
+    // differs was already caught and proved before it reached this point.
+    const slot = `${signed.move.empire}:${signed.move.member}:${signed.move.seq}`;
+    const taken = list.some(
+      (held) => `${held.move.empire}:${held.move.member}:${held.move.seq}` === slot,
+    );
+    if (!taken) list.push(signed);
   }
 
   private drain(step: number): Move[] {

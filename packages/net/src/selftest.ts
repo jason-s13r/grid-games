@@ -489,6 +489,70 @@ async function snapshotResume(): Promise<void> {
   );
 }
 
+async function latecomerResumesByItself(): Promise<void> {
+  section("a peer arriving late resumes without being told to");
+  // Snapshots every 24 steps and clicks every 30, so by the time the latecomer
+  // arrives the newest snapshot is guaranteed to be a few steps behind the
+  // table with moves in the gap — which is the case a stored snapshot alone
+  // cannot answer, and the reason a request is served from the present.
+  const t = await table({ seats: [2, 1], snapshotInterval: 24 });
+  await run(t, 180, await clickAround(t, 30));
+
+  const source = t.peers[0]!.driver;
+  const stored = source.snapshots.latest()!;
+  ok(
+    "the newest stored snapshot is already behind the table",
+    stored.step < source.step,
+    `snapshot ${stored.step} vs table ${source.step}`,
+  );
+
+  // No seat: an observer is the honest shape of this test, because it isolates
+  // the resume from the question of whether the table waited for it.
+  const latecomer = new Lockstep({
+    genesis: t.genesis,
+    sim: new Sim(t.genesis),
+    roster: Roster.fromGenesis(t.genesis),
+    transport: t.net.connect("latecomer"),
+    now: t.clock.now,
+    snapshotInterval: 24,
+  });
+  latecomer.start();
+  eq("it starts at step 0", latecomer.step, 0);
+
+  const spin = async (rounds: number): Promise<void> => {
+    for (let i = 0; i < rounds; i++) {
+      t.clock.advance(MS_PER_STEP);
+      for (let pass = 0; pass < 3; pass++) {
+        for (const peer of t.peers) peer.driver.pump();
+        latecomer.pump();
+        await settle(2);
+        t.net.flush();
+        await settle(2);
+      }
+    }
+  };
+
+  // One round is enough for the request to go out and the answer to come back.
+  await spin(1);
+  ok(
+    "it did not grind up from the beginning",
+    latecomer.step > stored.step,
+    `latecomer at ${latecomer.step}`,
+  );
+
+  await spin(24);
+  ok(
+    "it is on the table's state",
+    latecomer.step === source.step && latecomer.hash() === source.hash(),
+    `latecomer ${latecomer.step}/${latecomer.hash()} vs table ${source.step}/${source.hash()}`,
+  );
+
+  // The moves that were in flight when it arrived were re-sent to it alone, so
+  // they must have applied exactly once. A double application would show up
+  // here as a hash that agrees with nobody.
+  ok("and the table still agrees with itself", agreed(t));
+}
+
 async function desyncIsNoticed(): Promise<void> {
   section("a divergent peer is noticed");
   const t = await table({ seats: [2, 1], checkpointInterval: 12 });
@@ -515,6 +579,7 @@ async function main(): Promise<void> {
   await stalledPeerIsDropped();
   await equivocationIsCaught();
   await snapshotResume();
+  await latecomerResumesByItself();
   await desyncIsNoticed();
 
   console.log(
