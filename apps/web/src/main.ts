@@ -272,12 +272,36 @@ const panel = new LobbyPanel(lobbyEl, {
   host: () => void begin(),
   join: (code) => void begin(code),
   start: () => void lobby?.host({ bots: 1, ...SOLO_MAP }),
+  leave: () => {
+    lobby?.close();
+    lobby = undefined;
+    panel.detach();
+  },
 });
 
 async function begin(code?: string): Promise<void> {
   if (lobby) return;
+  panel.connecting();
+
   const identity = await myIdentity();
-  lobby = await Lobby.open(identity, code);
+  let opened: Lobby;
+  try {
+    opened = await Lobby.open(identity, code);
+  } catch (error) {
+    // Reaching the broker can fail outright — offline, blocked, or the service
+    // is down. Swallowing it left the panel looking like the click did nothing.
+    const reason = (error as Error).message;
+    // A failed chunk fetch is the browser's phrasing for "you are offline", and
+    // it is the first thing that breaks because PeerJS loads on demand.
+    panel.detach(
+      reason.includes("dynamically imported module")
+        ? "could not load the networking code — check your connection."
+        : reason,
+    );
+    return;
+  }
+
+  lobby = opened;
   panel.attach(lobby);
   lobby.onStart = (genesis, seat, transport) => {
     const driver = new Lockstep({

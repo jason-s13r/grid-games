@@ -27,6 +27,15 @@ import type { PeerMesh, Transport, FrameHandler, Seat } from "@tessera/net";
 
 const IDENTITY_STORE = "tessera.identity";
 
+/** How long a joiner waits for a channel to the host before giving up.
+ *
+ *  Reaching the broker is not the same as reaching the host. Roughly one peer
+ *  pair in five sits behind symmetric NAT and never forms a direct connection,
+ *  and that failure is silent — no error arrives, the channel simply never
+ *  opens. Without a deadline the joiner waits forever on a screen that says
+ *  everything is fine. */
+const JOIN_TIMEOUT_MS = 15_000;
+
 /** The keypair is the seat. Losing it loses the seat, so it is persisted —
  *  and because it is persisted, a private window is a different player. */
 export async function myIdentity(): Promise<Identity> {
@@ -62,6 +71,7 @@ export class Lobby {
 
   private handler?: FrameHandler;
   private readonly backlog: Array<{ from: string; frame: Frame }> = [];
+  private watchdog?: ReturnType<typeof setTimeout>;
 
   private constructor(
     readonly identity: Identity,
@@ -71,6 +81,16 @@ export class Lobby {
     this.code = join ?? mesh.id;
     this.phase = join ? "waiting" : "hosting";
     this.mesh.listen((from, frame) => this.route(from, frame));
+
+    if (join) {
+      this.watchdog = setTimeout(() => {
+        if (this.phase !== "waiting" || this.mesh.peers().length > 0) return;
+        this.fail(
+          `no answer from ${join}. Either the code is wrong, the host has closed the ` +
+            `game, or your networks cannot reach each other directly.`,
+        );
+      }, JOIN_TIMEOUT_MS);
+    }
   }
 
   /** PeerJS arrives here, on demand: a solo game never downloads it. Resolves
@@ -88,9 +108,13 @@ export class Lobby {
       },
       onError: (error) => {
         if (!lobby) return;
-        lobby.phase = "failed";
-        lobby.problem = error.message;
-        lobby.changed();
+        // PeerJS tags its errors; the two that matter to a player are being
+        // unable to reach the broker at all and naming a room that is not there.
+        const type = (error as Error & { type?: string }).type;
+        if (type === "peer-unavailable") lobby.fail(`no game is running under ${join}.`);
+        else if (type === "network" || type === "server-error") {
+          lobby.fail("lost contact with the matchmaking broker.");
+        } else lobby.fail(error.message);
       },
     });
     lobby = new Lobby(identity, mesh, join);
@@ -98,8 +122,23 @@ export class Lobby {
   }
 
   private welcome(peer: string): void {
+    this.clearWatchdog();
     this.greet(peer);
     this.changed();
+  }
+
+  private fail(problem: string): void {
+    if (this.phase === "playing") return; // a live game is not the lobby's to end
+    this.clearWatchdog();
+    this.phase = "failed";
+    this.problem = problem;
+    this.changed();
+  }
+
+  private clearWatchdog(): void {
+    if (this.watchdog === undefined) return;
+    clearTimeout(this.watchdog);
+    this.watchdog = undefined;
   }
 
   get roster(): LobbyMember[] {
@@ -171,9 +210,7 @@ export class Lobby {
   private async adopt(genesis: Genesis): Promise<void> {
     const problems = await inspectGenesis(genesis);
     if (problems.length > 0) {
-      this.phase = "failed";
-      this.problem = `refused the game: ${problems.join(", ")}`;
-      this.changed();
+      this.fail(`refused the game: ${problems.join(", ")}`);
       return;
     }
 
@@ -184,12 +221,11 @@ export class Lobby {
       });
     });
     if (!seat) {
-      this.phase = "failed";
-      this.problem = "this game's roster does not include you";
-      this.changed();
+      this.fail("this game's roster does not include you");
       return;
     }
 
+    this.clearWatchdog();
     this.phase = "playing";
     this.changed();
     this.onStart?.(genesis, seat, this.transport());
@@ -220,6 +256,7 @@ export class Lobby {
   }
 
   close(): void {
+    this.clearWatchdog();
     this.mesh.close();
   }
 }
