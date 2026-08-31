@@ -12,6 +12,7 @@
       <header class="topbar">
         <h1 class="brand">Tessera</h1>
         <div class="clock" data-clock></div>
+        <span class="version" data-version></span>
         <div class="topbar-actions">
           <button data-action="pause" class="btn">Pause</button>
           <button data-action="new" class="btn">New game</button>
@@ -23,6 +24,21 @@
           <canvas class="lod" data-lod></canvas>
           <div class="tiles" data-tiles></div>
           <div class="banner" data-banner hidden></div>
+
+          <div class="mapctl">
+            <div class="dpad">
+              <button class="btn ctl" data-pan="up"    aria-label="Pan up">&#9650;</button>
+              <button class="btn ctl" data-pan="left"  aria-label="Pan left">&#9664;</button>
+              <button class="btn ctl" data-pan="home"  aria-label="Centre on your capital" title="Centre on your capital">&#9678;</button>
+              <button class="btn ctl" data-pan="right" aria-label="Pan right">&#9654;</button>
+              <button class="btn ctl" data-pan="down"  aria-label="Pan down">&#9660;</button>
+            </div>
+            <div class="zoomctl">
+              <button class="btn ctl" data-zoom="in"  aria-label="Zoom in">+</button>
+              <span class="zoomlevel" data-zoomlevel></span>
+              <button class="btn ctl" data-zoom="out" aria-label="Zoom out">&minus;</button>
+            </div>
+          </div>
         </div>
       </main>
 

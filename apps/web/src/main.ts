@@ -4,7 +4,8 @@
 // lockstep driver will drive it: moves in, dirty tiles out, camera and DOM
 // strictly outside the simulation.
 
-import { seedFrom } from "@tessera/sim";
+import { seedFrom, PROTOCOL_VERSION } from "@tessera/sim";
+import pkg from "../package.json";
 import { LocalGame } from "./game/Local.js";
 import { Camera, MIN_ZOOM, MAX_ZOOM, DOM_MIN_ZOOM } from "./view/Camera.js";
 import { MapImage } from "./view/MapImage.js";
@@ -21,6 +22,12 @@ const pick = <T extends Element>(selector: string): T => {
 };
 
 injectThemeCss();
+
+// Version comes from the manifest, which dispat rewrites on release, so what
+// the UI shows is whatever was actually built. The protocol number is the one
+// that decides whether two peers can play together at all.
+document.querySelector("[data-version]")!.textContent =
+  `v${pkg.version} · protocol ${PROTOCOL_VERSION}`;
 
 const viewportEl = pick<HTMLDivElement>("[data-viewport]");
 const tilesEl = pick<HTMLDivElement>("[data-tiles]");
@@ -66,8 +73,7 @@ function resize(): void {
   camera.resize(rect.width, rect.height);
 
   if (!centred && rect.width > 0 && rect.height > 0) {
-    const capital = game.sim.state.empires[game.empire - 1]!.capital;
-    camera.centreOn(capital % MAP.width, Math.floor(capital / MAP.width));
+    centreOnCapital();
     centred = true;
   }
 }
@@ -81,7 +87,14 @@ let dragMoved = 0;
 let lastX = 0;
 let lastY = 0;
 
+/** The map controls sit on top of the viewport, and the viewport captures the
+ *  pointer to drive panning. Capture redirects the rest of the gesture to the
+ *  capturing element, so without this the buttons never see their own click. */
+const onControls = (event: Event): boolean =>
+  !!(event.target as HTMLElement).closest(".mapctl");
+
 viewportEl.addEventListener("pointerdown", (event) => {
+  if (onControls(event)) return;
   dragging = true;
   dragMoved = 0;
   lastX = event.clientX;
@@ -100,6 +113,8 @@ viewportEl.addEventListener("pointermove", (event) => {
 });
 
 viewportEl.addEventListener("pointerup", (event) => {
+  if (onControls(event)) return;
+  if (!dragging) return;
   dragging = false;
   viewportEl.releasePointerCapture(event.pointerId);
   // A drag is a pan, not a click.
@@ -114,19 +129,72 @@ viewportEl.addEventListener("pointerup", (event) => {
   else game.claim(x, y);
 });
 
+// Wheel deltas are wildly inconsistent — a mouse notch is ~100px, a trackpad
+// emits a stream of small ones, and some devices report lines instead. Rather
+// than scaling zoom by each delta (which makes trackpads lurch), accumulate and
+// spend one ladder step per notch-worth of scrolling.
+const WHEEL_NOTCH = 60;
+let wheelAccum = 0;
+
 viewportEl.addEventListener(
   "wheel",
   (event) => {
     event.preventDefault();
+    const pixels = event.deltaMode === 1 ? event.deltaY * 16 : event.deltaY;
+    wheelAccum += pixels;
+
+    // At most one rung per event, and drop the remainder rather than banking
+    // it: a single mouse notch reports ~100px, so spending every accumulated
+    // notch made one flick skip two or three zoom levels.
+    if (Math.abs(wheelAccum) < WHEEL_NOTCH) return;
+    const direction = wheelAccum < 0 ? 1 : -1;
+    wheelAccum = 0;
+
     const rect = viewportEl.getBoundingClientRect();
-    camera.zoomAt(
-      event.clientX - rect.left,
-      event.clientY - rect.top,
-      event.deltaY < 0 ? 1.12 : 1 / 1.12,
-    );
+    camera.zoomStep(direction, event.clientX - rect.left, event.clientY - rect.top);
   },
   { passive: false },
 );
+
+// --- map controls ------------------------------------------------------------
+
+const PAN_FRACTION = 0.35;
+
+function centreOnCapital(): void {
+  const capital = game.sim.state.empires[game.empire - 1]!.capital;
+  camera.centreOn(capital % MAP.width, Math.floor(capital / MAP.width));
+}
+
+pick<HTMLElement>(".mapctl").addEventListener("click", (event) => {
+  const button = (event.target as HTMLElement).closest<HTMLElement>("button");
+  if (!button) return;
+
+  switch (button.dataset.pan) {
+    case "up": return camera.panByViewport(0, -PAN_FRACTION);
+    case "down": return camera.panByViewport(0, PAN_FRACTION);
+    case "left": return camera.panByViewport(-PAN_FRACTION, 0);
+    case "right": return camera.panByViewport(PAN_FRACTION, 0);
+    case "home": return centreOnCapital();
+  }
+  if (button.dataset.zoom === "in") camera.zoomStep(1);
+  if (button.dataset.zoom === "out") camera.zoomStep(-1);
+});
+
+window.addEventListener("keydown", (event) => {
+  if (event.target instanceof HTMLInputElement) return;
+  const handled = true;
+  switch (event.key) {
+    case "ArrowUp": camera.panByViewport(0, -PAN_FRACTION); break;
+    case "ArrowDown": camera.panByViewport(0, PAN_FRACTION); break;
+    case "ArrowLeft": camera.panByViewport(-PAN_FRACTION, 0); break;
+    case "ArrowRight": camera.panByViewport(PAN_FRACTION, 0); break;
+    case "+": case "=": camera.zoomStep(1); break;
+    case "-": case "_": camera.zoomStep(-1); break;
+    case "Home": case "h": centreOnCapital(); break;
+    default: return;
+  }
+  if (handled) event.preventDefault();
+});
 
 pick<HTMLButtonElement>('[data-action="pause"]').addEventListener("click", (event) => {
   const btn = event.currentTarget as HTMLButtonElement;
@@ -146,6 +214,10 @@ pick<HTMLButtonElement>('[data-action="new"]').addEventListener("click", () => {
 
 // --- loop --------------------------------------------------------------------
 
+const zoomLevelEl = pick<HTMLElement>("[data-zoomlevel]");
+const zoomInEl = pick<HTMLButtonElement>('[data-zoom="in"]');
+const zoomOutEl = pick<HTMLButtonElement>('[data-zoom="out"]');
+
 let minimapDue = 0;
 
 function frame(now: number): void {
@@ -158,9 +230,12 @@ function frame(now: number): void {
     controls.render(game.sim.state);
     controls.setZoomHint(
       camera.zoom >= DOM_MIN_ZOOM
-        ? `${Math.round(camera.zoom)}px per tile — drag to pan, scroll to zoom`
-        : `${Math.round(camera.zoom)}px per tile — zoom in past ${DOM_MIN_ZOOM}px for detail`,
+        ? `${camera.zoom}px per tile — drag, scroll, or use the arrows`
+        : `${camera.zoom}px per tile — zoom past ${DOM_MIN_ZOOM}px for tile detail`,
     );
+    zoomLevelEl.textContent = `${camera.zoom}`;
+    zoomInEl.disabled = !camera.canZoomIn;
+    zoomOutEl.disabled = !camera.canZoomOut;
     minimapDue = now + 200;
   }
 

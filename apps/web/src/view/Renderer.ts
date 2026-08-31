@@ -88,7 +88,10 @@ export class Renderer {
     }
 
     if (camera.changed || zoomed) {
-      this.reconcile(state);
+      // A zoom moves every tile, not just the ones entering view. Repainting
+      // without repositioning leaves tiles sized for the new zoom sitting on
+      // the old grid, overlapping each other.
+      this.reconcile(state, zoomed);
       return;
     }
 
@@ -102,7 +105,7 @@ export class Renderer {
 
   /** Bring the live set in line with the visible range: release what left,
    *  acquire what entered, repaint the rest. */
-  private reconcile(state: State): void {
+  private reconcile(state: State, reposition: boolean): void {
     const { x0, y0, x1, y1 } = this.camera.range();
     const width = state.width;
 
@@ -118,8 +121,12 @@ export class Renderer {
       for (let x = x0; x < x1; x++) {
         const i = idx(x, y, width);
         const el = this.live.get(i);
-        if (el) this.paintTile(el, state, i);
-        else this.acquire(state, i);
+        if (el) {
+          if (reposition) this.position(el, i, width);
+          this.paintTile(el, state, i);
+        } else {
+          this.acquire(state, i);
+        }
       }
     }
   }
@@ -137,13 +144,17 @@ export class Renderer {
 
   private acquire(state: State, i: number): void {
     const el = this.pool.pop() ?? this.create();
-    const x = i % state.width;
-    const y = (i - x) / state.width;
-    el.style.transform = `translate(${x * this.camera.zoom}px, ${y * this.camera.zoom}px)`;
+    this.position(el, i, state.width);
     this.live.set(i, el);
     this.paintTile(el, state, i);
     if (!el.isConnected) this.tiles.appendChild(el);
     el.hidden = false;
+  }
+
+  private position(el: HTMLDivElement, i: number, width: number): void {
+    const x = i % width;
+    const y = (i - x) / width;
+    el.style.transform = `translate(${x * this.camera.zoom}px, ${y * this.camera.zoom}px)`;
   }
 
   private release(i: number, el: HTMLDivElement): void {

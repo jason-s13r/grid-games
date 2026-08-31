@@ -181,6 +181,67 @@ body {
   50% { outline-color: rgba(127, 232, 240, 0.35); }
 }
 
+// --- map controls ------------------------------------------------------------
+
+.mapctl {
+  position: absolute;
+  right: 12px;
+  bottom: 12px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  user-select: none;
+}
+
+.dpad {
+  display: grid;
+  grid-template-columns: repeat(3, 30px);
+  grid-template-rows: repeat(3, 30px);
+  grid-template-areas: ". up ." "left home right" ". down .";
+  gap: 2px;
+
+  [data-pan="up"] { grid-area: up; }
+  [data-pan="left"] { grid-area: left; }
+  [data-pan="home"] { grid-area: home; }
+  [data-pan="right"] { grid-area: right; }
+  [data-pan="down"] { grid-area: down; }
+}
+
+.zoomctl {
+  display: grid;
+  grid-template-columns: 30px;
+  justify-items: center;
+  gap: 2px;
+}
+
+.zoomlevel {
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+  color: var(--muted);
+  background: rgba(255, 251, 232, 0.9);
+  border-radius: 3px;
+  padding: 0 4px;
+}
+
+.btn.ctl {
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  display: grid;
+  place-items: center;
+  font-size: 12px;
+  line-height: 1;
+  background: rgba(253, 251, 242, 0.94);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.14);
+}
+
+.version {
+  font-size: 10px;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
 .banner {
   position: absolute;
   inset: auto 0 0 0;
