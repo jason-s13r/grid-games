@@ -1,5 +1,52 @@
 # Changelog
 
+## web@0.3.0 (2026-08-31)
+
+### Features
+
+- host and join a mesh game from the browser
+  Closes the Phase C milestone: two tabs, WebRTC between them, matching
+  state hashes. Verified end to end — hosted from one context, joined by
+  room code from another, both empires claiming tiles, agreeing on step
+  and hash the whole way.
+
+  PeerJS is loaded on demand rather than imported, so it lands in its own
+  bundle and a solo game never downloads it — and, more to the point, the
+  lockstep driver stays runnable under Node for the harness. Parcel would
+  not resolve an exports subpath, which is what a static import would have
+  needed.
+
+  The lobby owns the mesh's only listener. A joiner cannot build its
+  driver until the genesis record arrives, and game frames share that
+  channel, so anything landing in the gap is buffered and replayed once
+  the driver exists. Local play and mesh play now meet a shared Driver
+  interface: the view never learns which one it has.
+
+### Fixes
+
+- give every lobby dead end an exit
+  A joiner that reached the broker but never reached the host sat on a
+  screen saying everything was fine. Reaching the broker is not reaching
+  the host: roughly one peer pair in five is behind symmetric NAT and the
+  channel simply never opens, with no error to report.
+
+    * No channel to the host after 15s names the three possible causes.
+    * peer-unavailable and broker errors are named rather than shown as
+      whatever string PeerJS produced.
+    * begin() dropped a failed open on the floor, leaving the panel
+      looking like the click did nothing.
+
+  Every state now has a way back: Back, Leave, or Cancel.
+
+  Verified against the production build served from a subpath — bad code,
+  offline, cancel while hosting, and the happy path still agreeing.
+
+### Dependencies
+
+- net: 0.1.0 -> 0.2.0
+- protocol: 0.1.0 -> 0.2.0
+
+
 ## web@0.2.1 (2026-08-31)
 
 ### Fixes
