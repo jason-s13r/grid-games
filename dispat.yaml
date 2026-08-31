@@ -21,19 +21,21 @@
 
 scripts:
   build-lib: pnpm build
-  # No npm token is configured yet, and a release must not fail over that.
-  # Set NODE_AUTH_TOKEN in the release job to start publishing for real.
+  # Nothing goes to a registry. The library ships as a tarball attached to its
+  # GitHub release, which a bot peer or the observer can install straight from
+  # the download URL. Packed into a temp dir, never the package folder, because
+  # the release commit stages that folder and would otherwise carry the .tgz.
   publish-lib: |
-    if [ -z "${NODE_AUTH_TOKEN:-}" ]; then
-      echo "no NODE_AUTH_TOKEN: skipping the npm publish of $DISPAT_PACKAGE"
-      exit 0
-    fi
-    pnpm publish --no-git-checks --access public
+    set -eu
+    out=$(mktemp -d)
+    pnpm pack --pack-destination "$out" >/dev/null
+    echo "DISPAT_EXPORT_GITHUB=$out/$(ls "$out")" >> "$DISPAT_OUTPUT"
+    echo "packed $DISPAT_PACKAGE $DISPAT_VERSION for the GitHub release"
   build-app: pnpm build
   no-publish: echo "$DISPAT_PACKAGE ships as a deployed app, not a registry package"
 spaces:
   # Shared libraries: the sim, and later the wire protocol and mesh. These are
-  # what bot peers and the observer consume, so they are published.
+  # what bot peers and the observer consume, so each release carries a tarball.
   packages:
     path: packages
     autoVersion:

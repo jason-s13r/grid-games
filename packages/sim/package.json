@@ -1,6 +1,7 @@
 {
   "name": "@tessera/sim",
   "version": "0.1.0",
+  "private": true,
   "description": "Deterministic Empire Attack simulation core. The state hash is the compatibility contract.",
   "license": "MIT",
   "type": "module",
@@ -12,7 +13,9 @@
       "default": "./dist/index.js"
     }
   },
-  "files": ["dist"],
+  "files": [
+    "dist"
+  ],
   "bin": {
     "tessera-replay": "./dist/replay.js"
   },
