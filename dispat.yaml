@@ -35,7 +35,19 @@ scripts:
     echo "DISPAT_EXPORT_GITHUB=$out/$(ls "$out")" >> "$DISPAT_OUTPUT"
     echo "packed $DISPAT_PACKAGE $DISPAT_VERSION for the GitHub release"
   build-app: pnpm build
-  no-publish: echo "$DISPAT_PACKAGE ships as a deployed app, not a registry package"
+  # An app has no registry to go to, but its build is still worth keeping: the
+  # zip is the exact bundle that was deployed to Pages for this version, so a
+  # release is reproducible from its own artifact rather than only from source.
+  # Built with --public-url ./, so it serves from any path — unzip it anywhere.
+  # Zipped into a temp dir, never the package folder, because the release
+  # commit stages that folder and would otherwise carry the archive.
+  export-app: |
+    set -eu
+    out=$(mktemp -d)
+    site="$out/tessera-$DISPAT_PACKAGE-$DISPAT_VERSION-site.zip"
+    (cd dist && zip -qr "$site" .)
+    echo "DISPAT_EXPORT_GITHUB=$site" >> "$DISPAT_OUTPUT"
+    echo "zipped $DISPAT_PACKAGE $DISPAT_VERSION for the GitHub release"
 spaces:
   # Shared libraries: the sim, and later the wire protocol and mesh. These are
   # what bot peers and the observer consume, so each release carries a tarball.
@@ -54,7 +66,8 @@ spaces:
       build: build-lib
       publish: publish-lib
   # Deployables: the web frontend, and later the headless bot peer and the
-  # archive/observer peer. Versioned and changelogged, never published to npm.
+  # archive/observer peer. Versioned and changelogged, never published to npm —
+  # each release instead carries the built static site as a zip.
   apps:
     path: apps
     autoVersion:
@@ -68,7 +81,7 @@ spaces:
       syncLock: [sync-lock]
     flow:
       build: build-app
-      publish: no-publish
+      publish: export-app
 dependencies:
   net:
     - sim
