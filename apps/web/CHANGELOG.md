@@ -1,5 +1,17 @@
 # Changelog
 
+## web@0.2.1 (2026-08-31)
+
+### Fixes
+
+- keep the workspace protocol on the sim dependency
+  autoVersion rewrote workspace:* to ^0.2.0, which unlinks the package
+  from the workspace and leaves pnpm-lock.yaml recording a specifier the
+  manifest no longer declares, so the deploy's --frozen-lockfile install
+  refused to run. Constrain the rewrite to workspace ranges and write them
+  back as they were; package versions are still stamped.
+
+
 ## web@0.2.0 (2026-08-31)
 
 ### Features
