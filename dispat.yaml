@@ -77,13 +77,14 @@ dependencies:
     - sim
   web:
     - sim
+    - net
+    - protocol
 initials:
   net: 0.1.0
   prototype: 0.1.0
   protocol: 0.1.0
   sim: 0.1.0
   web: 0.1.0
-
 # --- release records -----------------------------------------------------
 #
 # The release run writes what it did: a changelog per package, one release
