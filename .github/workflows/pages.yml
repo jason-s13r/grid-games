@@ -1,0 +1,84 @@
+name: Pages
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Never let two deploys race; a queued one supersedes the one in flight.
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # dispat derives versions from commit history, so a shallow clone
+          # would leave it with nothing to read.
+          fetch-depth: 0
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Stamp versions with dispat
+        # Reconciles the manifests to the versions dispat would release, so the
+        # deployed build shows what it would be published as. Never fatal: a
+        # version stamp is not worth failing a deploy over, and the manifests
+        # already carry a sensible fallback.
+        continue-on-error: true
+        run: |
+          curl -fsSL https://raw.githubusercontent.com/yohimik/dispat/main/install.sh | sh
+          export PATH="$HOME/.local/bin:$PATH"
+          dispat autoversion
+          echo "--- versions being deployed ---"
+          node -p "require('./apps/web/package.json').version"
+          node -p "require('./apps/prototype/package.json').version"
+
+      # Parcel does not clear its output directory, so a restored cache or a
+      # renamed package can leave bundles from an earlier build lying around to
+      # be published alongside the current ones.
+      - name: Clean build outputs
+        run: rm -rf apps/*/dist packages/*/dist
+
+      # Topological, so @tessera/sim compiles before the client that imports it.
+      - run: pnpm -r build
+
+      - name: Assemble site
+        run: |
+          mkdir -p _site/web _site/prototype
+          cp public/index.html _site/index.html
+          cp -r apps/web/dist/. _site/web/
+          cp -r apps/prototype/dist/. _site/prototype/
+          # Without this, Pages runs Jekyll and drops files beginning with _.
+          touch _site/.nojekyll
+          find _site -maxdepth 2 -type f | sort
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
