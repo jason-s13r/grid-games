@@ -29,6 +29,8 @@ spaces:
   # what bot peers and the observer consume, so they are published.
   packages:
     path: packages
+    autoVersion:
+      manifests: root
     flow:
       build: build-lib
       publish: publish-lib
@@ -36,6 +38,8 @@ spaces:
   # archive/observer peer. Versioned and changelogged, never published to npm.
   apps:
     path: apps
+    autoVersion:
+      manifests: root
     flow:
       build: build-app
       publish: no-publish
