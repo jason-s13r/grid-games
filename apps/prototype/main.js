@@ -1,6 +1,6 @@
 import { EmpireAttack } from "./src/EmpireAttack";
 
-const game = new EmpireAttack('[game="empire-attack"]');
+const game = new EmpireAttack('[game="tessera"]');
 
 game.init();
 
