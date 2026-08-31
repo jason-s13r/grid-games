@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Tessera</title>
+    <link rel="stylesheet" href="styles/main.scss" />
+    <script type="module" src="src/main.ts"></script>
+  </head>
+  <body>
+    <div class="app">
+      <header class="topbar">
+        <h1 class="brand">Tessera</h1>
+        <div class="clock" data-clock></div>
+        <div class="topbar-actions">
+          <button data-action="pause" class="btn">Pause</button>
+          <button data-action="new" class="btn">New game</button>
+        </div>
+      </header>
+
+      <main class="stage">
+        <div class="viewport" data-viewport>
+          <canvas class="lod" data-lod></canvas>
+          <div class="tiles" data-tiles></div>
+          <div class="banner" data-banner hidden></div>
+        </div>
+      </main>
+
+      <aside class="sidebar">
+        <section class="panel">
+          <h2>Minimap</h2>
+          <canvas class="minimap" data-minimap width="240" height="160"></canvas>
+          <p class="hint" data-zoomhint></p>
+        </section>
+
+        <section class="panel">
+          <h2>Your empire</h2>
+          <div data-you></div>
+        </section>
+
+        <section class="panel">
+          <h2>Standings</h2>
+          <div data-standings></div>
+        </section>
+      </aside>
+    </div>
+  </body>
+</html>

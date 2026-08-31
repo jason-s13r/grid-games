@@ -1,0 +1,314 @@
+// Tessera. The tile patterns are the prototype's conic-gradient flag art,
+// generalised: both were already written against --c1/--c2, so N empires is a
+// matter of swapping two variables rather than authoring a gradient each.
+
+:root {
+  --paper: #fffbe8;
+  --grid-line: #e2ded0;
+  --ink: #23201a;
+  --muted: #6f6858;
+  --panel: #f7f3e4;
+  --edge: #d9d3c0;
+}
+
+* { box-sizing: border-box; }
+
+// A class that sets `display` outclasses the UA rule for [hidden], which
+// silently breaks el.hidden. The LOD canvas and the win banner both do, so
+// make the attribute win everywhere.
+[hidden] { display: none !important; }
+
+html, body { height: 100%; margin: 0; }
+
+body {
+  font: 13px/1.45 ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  color: var(--ink);
+  background: #ece7d6;
+}
+
+.app {
+  display: grid;
+  grid-template-columns: 1fr 264px;
+  grid-template-rows: auto 1fr;
+  grid-template-areas: "top top" "stage side";
+  height: 100vh;
+}
+
+.topbar {
+  grid-area: top;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 8px 14px;
+  background: var(--panel);
+  border-bottom: 1px solid var(--edge);
+}
+
+.brand {
+  font-size: 15px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  margin: 0;
+}
+
+.clock {
+  font-variant-numeric: tabular-nums;
+  color: var(--muted);
+}
+
+.topbar-actions { margin-left: auto; display: flex; gap: 8px; }
+
+.stage { grid-area: stage; min-width: 0; min-height: 0; }
+
+.viewport {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background: var(--paper);
+  cursor: grab;
+  touch-action: none;
+  &:active { cursor: grabbing; }
+}
+
+.lod { position: absolute; inset: 0; display: block; }
+
+.tiles {
+  position: absolute;
+  top: 0;
+  left: 0;
+  will-change: transform;
+  --tile-size: 24px;
+}
+
+// --- tiles -------------------------------------------------------------------
+
+.tile {
+  --s: var(--tile-size);
+  --c1: transparent;
+  --c2: transparent;
+
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: var(--s);
+  height: var(--s);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 7px;
+  line-height: 1;
+  color: #fff;
+  text-shadow: #000 0 0 2px;
+  border-right: 1px solid var(--grid-line);
+  border-bottom: 1px solid var(--grid-line);
+  overflow: hidden;
+}
+
+// The prototype's three-point star.
+.tile.p-star {
+  --d: calc(var(--s) / 10);
+  --_g: var(--c1) 36deg, #0000 0;
+  background:
+    conic-gradient(from 162deg at calc(var(--s) * 0.5) calc(var(--s) * 0.68), var(--_g)),
+    conic-gradient(from 18deg at calc(var(--s) * 0.19) calc(var(--s) * 0.59), var(--_g)),
+    conic-gradient(from 306deg at calc(var(--s) * 0.81) calc(var(--s) * 0.59), var(--_g)),
+    var(--c2);
+  background-position: 0 calc(var(--s) * 0.35);
+  background-size: calc(var(--s) + var(--d)) calc(var(--s) + var(--d));
+}
+
+// The prototype's pinwheel.
+.tile.p-spiral {
+  --_c: var(--c1) 25%, #0000 0;
+  --_g1: conic-gradient(at 62.5% 12.5%, var(--_c));
+  --_g2: conic-gradient(at 87.5% 62.5%, var(--_c));
+  --_g3: conic-gradient(at 25% 12.5%, var(--_c));
+  background:
+    var(--_g1) calc(var(--s) / -8) calc(var(--s) / 2),
+    var(--_g1) calc(-3 * var(--s) / 8) calc(var(--s) / 4),
+    var(--_g2) calc(3 * var(--s) / 8) calc(var(--s) / 4),
+    var(--_g2) calc(var(--s) / -8) 0,
+    var(--_g3) 0 calc(var(--s) / -4),
+    var(--_g3) calc(var(--s) / -4) 0,
+    conic-gradient(at 87.5% 87.5%, var(--_c)) calc(var(--s) / 8) 0 var(--c2);
+  background-size: var(--s) var(--s);
+}
+
+// Terrain. Impassable ground reads as solid; crossings read as built.
+.tile.t-mountain { background: #6b6255 linear-gradient(135deg, #8a7f6d 25%, transparent 25%); }
+.tile.t-lake     { background: #2f6b8f; }
+.tile.t-river    { background: #4a90b8; }
+.tile.t-bridge   { background: #9a7f52; box-shadow: inset 0 0 0 2px #6d5836; }
+.tile.t-wall     { background: #8a8178; box-shadow: inset 0 0 0 1px #6d655c; }
+.tile.t-ladder   { background: #b09a6a; box-shadow: inset 0 0 0 2px #7d6b45; }
+
+// Items sit on top of whatever holds them.
+.tile.i-bronze,
+.tile.i-silver,
+.tile.i-gold,
+.tile.i-diamond {
+  &::after {
+    content: "";
+    position: absolute;
+    inset: 22%;
+    border-radius: 50%;
+    box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.45), 0 0 6px rgba(255, 255, 255, 0.5);
+  }
+}
+.tile.i-bronze::after  { background: radial-gradient(circle at 35% 30%, #f0b070, #cd7f32); }
+.tile.i-silver::after  { background: radial-gradient(circle at 35% 30%, #ffffff, #b9b9b9); }
+.tile.i-gold::after    { background: radial-gradient(circle at 35% 30%, #fff3a0, #ffd700); }
+.tile.i-diamond::after {
+  background: radial-gradient(circle at 35% 30%, #ffffff, #7fe8f0);
+  border-radius: 0;
+  transform: rotate(45deg);
+}
+
+.tile.is-capital {
+  outline: 2px solid #fff;
+  outline-offset: -2px;
+  box-shadow: inset 0 0 0 3px rgba(0, 0, 0, 0.55);
+  z-index: 2;
+}
+
+.tile.is-protected {
+  outline-color: #7fe8f0;
+  animation: pulse 1.6s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  50% { outline-color: rgba(127, 232, 240, 0.35); }
+}
+
+.banner {
+  position: absolute;
+  inset: auto 0 0 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 14px;
+  background: rgba(20, 18, 14, 0.86);
+  color: #fff;
+  strong { font-size: 18px; letter-spacing: 0.04em; }
+  span { color: #c9c2ad; }
+}
+
+// --- sidebar -----------------------------------------------------------------
+
+.sidebar {
+  grid-area: side;
+  background: var(--panel);
+  border-left: 1px solid var(--edge);
+  overflow-y: auto;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.panel h2 {
+  margin: 0 0 8px;
+  font-size: 10px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.minimap {
+  width: 100%;
+  height: auto;
+  display: block;
+  background: #1d1b16;
+  border: 1px solid var(--edge);
+  cursor: crosshair;
+  image-rendering: pixelated;
+}
+
+.hint { margin: 6px 0 0; font-size: 11px; color: var(--muted); }
+
+.you-head { display: flex; align-items: center; gap: 6px; margin-bottom: 8px; }
+
+.swatch {
+  width: 12px;
+  height: 12px;
+  border-radius: 2px;
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.35);
+  display: inline-block;
+  flex: none;
+}
+
+.tag {
+  margin-left: auto;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #0b6b73;
+  background: #d8f5f7;
+  border-radius: 3px;
+  padding: 1px 5px;
+}
+
+.meter {
+  position: relative;
+  height: 18px;
+  background: #e6e0cd;
+  border: 1px solid var(--edge);
+  border-radius: 3px;
+  overflow: hidden;
+}
+.meter-fill { height: 100%; transition: width 120ms linear; }
+.meter-label {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+  text-shadow: 0 0 3px #fff;
+}
+
+.facts { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; margin: 10px 0; }
+.facts dt { font-size: 10px; color: var(--muted); }
+.facts dd { margin: 0; font-variant-numeric: tabular-nums; font-weight: 600; }
+
+.shop { display: grid; grid-template-columns: 1fr 1fr; gap: 5px; }
+
+.btn {
+  font: inherit;
+  padding: 5px 9px;
+  border: 1px solid var(--edge);
+  background: #fdfbf2;
+  border-radius: 4px;
+  cursor: pointer;
+  &:hover:not(:disabled) { background: #fff; border-color: #b9b198; }
+  &:disabled { opacity: 0.45; cursor: default; }
+  &.sm { font-size: 11px; padding: 4px 6px; }
+  &.armed { background: #ffe9a8; border-color: #c9a531; }
+}
+
+.cost { color: var(--muted); }
+
+.roster { margin-top: 10px; display: grid; gap: 3px; }
+.roster-row {
+  display: flex;
+  justify-content: space-between;
+  font-size: 11px;
+  padding: 2px 4px;
+  background: #efe9d8;
+  border-radius: 3px;
+  &.afk { opacity: 0.5; }
+}
+.roster-pop { font-variant-numeric: tabular-nums; }
+
+.standing {
+  display: grid;
+  grid-template-columns: 12px 1fr auto auto;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 0;
+  &.dead { opacity: 0.4; text-decoration: line-through; }
+}
+.standing-tiles { font-variant-numeric: tabular-nums; font-weight: 600; }
+.standing-meta { font-size: 10px; color: var(--muted); min-width: 26px; text-align: right; }

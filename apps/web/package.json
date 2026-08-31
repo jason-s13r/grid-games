@@ -1,0 +1,21 @@
+{
+  "name": "@tessera/web",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "source": "index.html",
+  "scripts": {
+    "dev": "parcel",
+    "build": "parcel build --public-url ./",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test": "pnpm typecheck"
+  },
+  "dependencies": {
+    "@tessera/sim": "workspace:*"
+  },
+  "devDependencies": {
+    "@parcel/transformer-sass": "2.16.4",
+    "parcel": "2.16.4",
+    "typescript": "5.6.3"
+  }
+}
