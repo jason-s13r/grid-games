@@ -40,6 +40,12 @@ spaces:
     path: packages
     autoVersion:
       manifests: root
+      # Only touch ranges already declared with the workspace protocol, and
+      # write them back unchanged. Rewriting workspace:* to ^0.2.0 breaks the
+      # local link and leaves pnpm-lock.yaml stale, which fails the deploy's
+      # --frozen-lockfile. Package versions are still written.
+      match: ["workspace:*"]
+      range: "workspace:*"
     flow:
       build: build-lib
       publish: publish-lib
@@ -49,6 +55,12 @@ spaces:
     path: apps
     autoVersion:
       manifests: root
+      # Only touch ranges already declared with the workspace protocol, and
+      # write them back unchanged. Rewriting workspace:* to ^0.2.0 breaks the
+      # local link and leaves pnpm-lock.yaml stale, which fails the deploy's
+      # --frozen-lockfile. Package versions are still written.
+      match: ["workspace:*"]
+      range: "workspace:*"
     flow:
       build: build-app
       publish: no-publish

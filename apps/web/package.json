@@ -11,7 +11,7 @@
     "test": "pnpm typecheck"
   },
   "dependencies": {
-    "@tessera/sim": "^0.2.0"
+    "@tessera/sim": "workspace:*"
   },
   "devDependencies": {
     "@parcel/transformer-sass": "2.16.4",
