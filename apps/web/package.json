@@ -1,6 +1,6 @@
 {
   "name": "@tessera/web",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "type": "module",
   "source": "index.html",
@@ -11,7 +11,7 @@
     "test": "pnpm typecheck"
   },
   "dependencies": {
-    "@tessera/sim": "workspace:*"
+    "@tessera/sim": "^0.2.0"
   },
   "devDependencies": {
     "@parcel/transformer-sass": "2.16.4",
