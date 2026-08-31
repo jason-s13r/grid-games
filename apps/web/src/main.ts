@@ -345,6 +345,8 @@ Object.assign(window as unknown as Record<string, unknown>, {
   tessera: {
     get game() { return game; },
     get camera() { return camera; },
+    get mesh() { return mesh; },
+    get lobby() { return lobby; },
     MIN_ZOOM,
     MAX_ZOOM,
   },

@@ -70,6 +70,10 @@ export class Lobby {
   onStart?: (genesis: Genesis, seat: Seat, transport: Transport) => void;
 
   private handler?: FrameHandler;
+  /** The record we agreed to play, kept so a peer that arrives after the game
+   *  started can be told what it is. Every peer keeps it, not only the host:
+   *  by the time someone reloads, the host may be long gone. */
+  private sealed?: Genesis;
   private readonly backlog: Array<{ from: string; frame: Frame }> = [];
   private watchdog?: ReturnType<typeof setTimeout>;
 
@@ -124,6 +128,10 @@ export class Lobby {
   private welcome(peer: string): void {
     this.clearWatchdog();
     this.greet(peer);
+    // Mid-game arrival: someone reloaded, or opened the room again from another
+    // device. They cannot ask for the genesis, because until they have it they
+    // do not know the game id every other frame is signed against.
+    if (this.sealed) this.mesh.send(peer, { t: FRAME.GENESIS, genesis: this.sealed });
     this.changed();
   }
 
@@ -226,6 +234,7 @@ export class Lobby {
     }
 
     this.clearWatchdog();
+    this.sealed = genesis;
     this.phase = "playing";
     this.changed();
     this.onStart?.(genesis, seat, this.transport());
