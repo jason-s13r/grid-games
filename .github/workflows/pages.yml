@@ -1,8 +1,17 @@
 name: Pages
 
+# Deploying is downstream of releasing: release.yml calls this workflow with
+# the release commit dispat just pushed, so what Pages serves is always a
+# version that was actually cut. A push to main deliberately does not deploy
+# — it would overwrite a released site with unreleased code.
 on:
-  push:
-    branches: [main]
+  workflow_call:
+    inputs:
+      ref:
+        description: Commit or tag to build. Defaults to whatever triggered the run.
+        type: string
+        required: false
+        default: ""
   workflow_dispatch:
 
 permissions:
@@ -21,6 +30,10 @@ jobs:
     steps:
       - uses: actions/checkout@v7
         with:
+          # The release commit when release.yml calls us, the triggering commit
+          # otherwise. checkout treats an empty ref as unset, but being explicit
+          # keeps the fallback readable.
+          ref: ${{ inputs.ref || github.sha }}
           # dispat derives versions from commit history, so a shallow clone
           # would leave it with nothing to read.
           fetch-depth: 0
@@ -34,15 +47,15 @@ jobs:
 
       - run: pnpm install --frozen-lockfile
 
+      - uses: yohimik/dispat@v1
+
       - name: Stamp versions with dispat
-        # Reconciles the manifests to the versions dispat would release, so the
-        # deployed build shows what it would be published as. Never fatal: a
-        # version stamp is not worth failing a deploy over, and the manifests
-        # already carry a sensible fallback.
+        # A release commit already carries its real versions, so this is a
+        # no-op there. It only does work for a manual run off unreleased main,
+        # where it shows what the next release would be. Never fatal: a version
+        # stamp is not worth failing a deploy over.
         continue-on-error: true
         run: |
-          curl -fsSL https://raw.githubusercontent.com/yohimik/dispat/main/install.sh | sh
-          export PATH="$HOME/.local/bin:$PATH"
           dispat autoversion
           echo "--- versions being deployed ---"
           node -p "require('./apps/web/package.json').version"

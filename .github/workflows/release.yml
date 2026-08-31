@@ -1,0 +1,108 @@
+name: Release
+
+# dispat computes the release from the conventional commits, writes the
+# changelogs, rewrites the manifests, creates one release commit carrying all
+# of it, tags every released package on that commit ({name}@{version}) and
+# pushes the branch and the tags. The deploy job then publishes that exact
+# commit to Pages.
+#
+# Manual, not on push: a release is a decision, and dispat's own commits would
+# otherwise re-enter the trigger. Note that tags pushed with the workflow's
+# GITHUB_TOKEN do not start another workflow, so the deploy has to be part of
+# this run rather than something a tag-push trigger picks up.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# dispat takes a release-lock tag on the remote and refuses a concurrent run.
+# Queueing here means a second dispatch waits instead of being refused.
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  plan:
+    name: Is there anything to release
+    runs-on: ubuntu-latest
+    outputs:
+      releasing: ${{ steps.status.outputs.releasing }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - uses: yohimik/dispat@v1
+
+      # status computes the plan without building, tagging or writing
+      # anything. --require-release answers with exit 3 when the plan releases
+      # nothing and exit 1 when something is actually wrong, so this is a case
+      # rather than an if: an if would read a broken config as "nothing to
+      # release" and skip the release instead of failing.
+      - name: Compute the plan
+        id: status
+        run: |
+          rc=0
+          dispat status --require-release || rc=$?
+          case "$rc" in
+            0) echo "releasing=true" >> "$GITHUB_OUTPUT" ;;
+            3)
+              echo "releasing=false" >> "$GITHUB_OUTPUT"
+              echo "### Nothing to release" >> "$GITHUB_STEP_SUMMARY"
+              echo "" >> "$GITHUB_STEP_SUMMARY"
+              echo "No package has commits since its last tag." >> "$GITHUB_STEP_SUMMARY"
+              ;;
+            *) exit "$rc" ;;
+          esac
+
+  release:
+    name: Release
+    needs: plan
+    if: needs.plan.outputs.releasing == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # the release lock, the release commit, tags and releases
+    outputs:
+      sha: ${{ steps.released.outputs.sha }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      # The build stage runs `pnpm build` in each package, so the toolchain has
+      # to be here before dispat is.
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+
+      - uses: yohimik/dispat@v1
+
+      - name: Run the release
+        # Version, build and publish for every changed package in dependency
+        # order, then the changelogs, the release commit, the tags and the
+        # GitHub releases.
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: dispat --log-format json
+
+      # dispat left the release commit at HEAD and pushed it. Deploying this
+      # SHA rather than the branch is what stops a merge landing mid-run from
+      # being published as though it were part of the release.
+      - name: Record the release commit
+        id: released
+        run: echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
+  deploy:
+    name: Deploy to Pages
+    needs: release
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    uses: ./.github/workflows/pages.yml
+    with:
+      ref: ${{ needs.release.outputs.sha }}

@@ -21,7 +21,14 @@
 
 scripts:
   build-lib: pnpm build
-  publish-lib: pnpm publish --no-git-checks --access public
+  # No npm token is configured yet, and a release must not fail over that.
+  # Set NODE_AUTH_TOKEN in the release job to start publishing for real.
+  publish-lib: |
+    if [ -z "${NODE_AUTH_TOKEN:-}" ]; then
+      echo "no NODE_AUTH_TOKEN: skipping the npm publish of $DISPAT_PACKAGE"
+      exit 0
+    fi
+    pnpm publish --no-git-checks --access public
   build-app: pnpm build
   no-publish: echo "$DISPAT_PACKAGE ships as a deployed app, not a registry package"
 spaces:
@@ -50,3 +57,23 @@ initials:
   prototype: 0.1.0
   sim: 0.1.0
   web: 0.1.0
+
+# --- release records -----------------------------------------------------
+#
+# The release run writes what it did: a changelog per package, one release
+# commit carrying all of them, an annotated tag per released package
+# ({name}@{version}, so web@0.2.0) and a GitHub release. All of it is opt-in;
+# commit is disabled by default.
+#
+# The Pages deploy keys off the commit this produces rather than off main, so
+# the published site is always a version that exists.
+changelog:
+  enabled: true
+commit:
+  enabled: true
+  push: true
+  name: github-actions[bot]
+  email: github-actions[bot]@users.noreply.github.com
+github:
+  enabled: true
+  allPackages: true
