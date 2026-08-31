@@ -405,3 +405,67 @@ body {
   }
 }
 .lobby-problem { color: #9a3412; }
+
+// --- chat --------------------------------------------------------------------
+
+.chat-log {
+  // Tall enough to hold a short exchange, capped so a busy game cannot push
+  // the standings off the bottom of the sidebar.
+  height: 150px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 4px 6px;
+  border: 1px solid #d9d2bd;
+  border-radius: 4px;
+  background: #fffdf6;
+  font-size: 11px;
+  line-height: 1.45;
+}
+.chat-line {
+  display: flex;
+  gap: 5px;
+  padding: 1px 0;
+  // A long word with no spaces must wrap rather than widen the sidebar.
+  overflow-wrap: anywhere;
+}
+.chat-when {
+  flex: none;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+  font-size: 10px;
+  padding-top: 1px;
+}
+.chat-who {
+  flex: none;
+  font-weight: 700;
+}
+.chat-body {
+  // Fill the room left by the stamp and the name. Without the grow the box
+  // shrinks to its min-content width and a wrapped line reads as indented.
+  flex: 1;
+  min-width: 0;
+}
+.chat-mine .chat-body { color: #1c1a16; }
+.chat-note {
+  color: var(--muted);
+  font-style: italic;
+}
+.chat-form {
+  display: flex;
+  gap: 6px;
+  margin-top: 8px;
+}
+.chat-input {
+  flex: 1;
+  min-width: 0;
+  font: inherit;
+  font-size: 12px;
+  padding: 5px 7px;
+  border: 1px solid #c8c0aa;
+  border-radius: 4px;
+  background: #fffdf6;
+  &:disabled {
+    background: #f2eee1;
+    color: var(--muted);
+  }
+}

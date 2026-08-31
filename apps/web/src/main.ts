@@ -13,12 +13,13 @@ import { OnlineGame } from "./game/Online";
 import type { Driver } from "./game/Driver";
 import { Lobby, myIdentity } from "./net/Lobby";
 import { LobbyPanel } from "./view/LobbyPanel";
+import { ChatPanel } from "./view/Chat";
 import { Camera, MIN_ZOOM, MAX_ZOOM, DOM_MIN_ZOOM } from "./view/Camera";
 import { MapImage } from "./view/MapImage";
 import { Renderer } from "./view/Renderer";
 import { Minimap } from "./view/Minimap";
 import { Controls } from "./view/Controls";
-import { injectThemeCss } from "./view/palette";
+import { injectThemeCss, empireTheme } from "./view/palette";
 import { MOVE } from "@tessera/sim";
 
 const pick = <T extends Element>(selector: string): T => {
@@ -40,6 +41,7 @@ const tilesEl = pick<HTMLDivElement>("[data-tiles]");
 const lodEl = pick<HTMLCanvasElement>("[data-lod]");
 const minimapEl = pick<HTMLCanvasElement>("[data-minimap]");
 const lobbyEl = pick<HTMLDivElement>("[data-lobby]");
+const chatEl = pick<HTMLDivElement>("[data-chat]");
 
 /** The solo map. A mesh game uses whatever its genesis says, so this is
  *  replaced when a game is mounted rather than assumed by the view. */
@@ -268,6 +270,15 @@ function frame(now: number): void {
 
 let lobby: Lobby | undefined;
 
+/** The live mesh driver, when there is one. Chat goes straight to it rather
+ *  than through the Driver interface: a solo game has nobody to talk to, so
+ *  there is nothing for LocalGame to implement. */
+let mesh: Lockstep | undefined;
+
+const chat = new ChatPanel(chatEl, {
+  send: (body) => void mesh?.say(body),
+});
+
 const panel = new LobbyPanel(lobbyEl, {
   host: () => void begin(),
   join: (code) => void begin(code),
@@ -275,6 +286,8 @@ const panel = new LobbyPanel(lobbyEl, {
   leave: () => {
     lobby?.close();
     lobby = undefined;
+    mesh = undefined;
+    chat.close();
     panel.detach();
   },
 });
@@ -312,7 +325,13 @@ async function begin(code?: string): Promise<void> {
       identity,
       seat,
     });
+    driver.onMessage = (message) => chat.add(message);
     driver.start();
+
+    mesh = driver;
+    chat.open(seat);
+    chat.note(`You are ${empireTheme(seat.empire).name}. Say hello.`);
+
     mount(new OnlineGame(driver, lobby!.mesh, seat));
     pick<HTMLButtonElement>('[data-action="pause"]').disabled = true;
     pick<HTMLButtonElement>('[data-action="new"]').disabled = true;
