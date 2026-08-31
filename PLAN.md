@@ -1,8 +1,8 @@
-# Empire Attack — deterministic core, then a serverless P2P mesh
+# Tessera — deterministic core, then a serverless P2P mesh
 
 ## Context
 
-`grid-games` is a working prototype of Empire Attack — one human, one bot, on a CSS-grid board with conic-gradient "flag" tiles. ~600 lines of vanilla JS, no runtime dependencies, bundled by Parcel.
+Tessera is a recreation of the webgame Empire Attack. The repository began as `grid-games`, a working prototype — one human, one bot, on a CSS-grid board with conic-gradient "flag" tiles. ~600 lines of vanilla JS, no runtime dependencies, bundled by Parcel.
 
 The target is a **literally serverless** multiplayer game: static HTML plus WebRTC, with no server holding authority over the game. It needs to support marathon team games lasting days, where three people may share one empire and rotate shifts, bots can cover the night, and players drop and resume. A server is wanted eventually for metrics, rankings, and durable storage — but never as a referee.
 
@@ -184,7 +184,7 @@ Because they are in the hash, `tools/replay.js` reproduces every award exactly �
 - **Element index, not queries.** The current `render()` runs a `querySelector` per cell per frame ([EmpireAttack.js:158](src/EmpireAttack.js#L158)) — 800 DOM queries a frame on a 40×20 grid. Hold a flat array of element refs and touch only the dirty indices returned by `step()`.
 - **Level of detail.** Above ~12px per cell, DOM tiles with the full flag art. Below it, swap to a canvas that draws colour blocks — that is the "lower-res approximation" of a zoomed-out view, with no DOM cost at all.
 - **Minimap** (the AoE piece). A canvas at one pixel per tile, written directly from the `owner` layer into an `ImageData` buffer and blitted scaled — the flat typed array makes this close to free. Draw terrain shading beneath, the viewport rectangle above; click and drag to jump the camera.
-- **Per-empire theming.** Theme by owner id, not by `[title^="-"]` as at [empire-attack.scss:107](empire-attack.scss#L107). Parameterize the existing conic-gradient flag themes on `--c1`/`--c2` and set them per empire class, so adding an empire is a variable swap rather than a new gradient block.
+- **Per-empire theming.** Theme by owner id, not by `[title^="-"]` as at [tessera.scss:107](apps/web/tessera.scss#L107). Parameterize the existing conic-gradient flag themes on `--c1`/`--c2` and set them per empire class, so adding an empire is a variable swap rather than a new gradient block.
 
 Camera state (`camX, camY, zoom`) is pure view state: never in the sim, never hashed, never sent. `src/view/Controls.js` keeps [R.js](src/R.js) for counter, inventory, and shop bindings — that part earns its keep as is.
 
@@ -256,7 +256,7 @@ Move to pnpm. [package.json](package.json) currently has no `scripts` and no `pa
 
 **New:** `src/sim/{constants,rng,hash,state,geometry,mapgen,events,rules,policy,stats,victory,sim}.js`, `src/view/{Renderer,Minimap,Camera,Controls,Chat}.js`, `tools/replay.js`, then `src/net/{Identity,Genesis,Mesh,Lockstep,Snapshots,Chat}.js`
 
-**Kept:** [src/R.js](src/R.js) as is; [empire-attack.scss](empire-attack.scss) extended for per-empire themes, terrain, and items
+**Kept:** [src/R.js](src/R.js) as is; [tessera.scss](apps/web/tessera.scss) extended for per-empire themes, terrain, and items
 
 **Retired into the new structure:** [src/BaseGame.js](src/BaseGame.js), [src/EmpireAttack.js](src/EmpireAttack.js), [src/Player.js](src/Player.js), [src/utils.js](src/utils.js), and [src/Bot.js](src/Bot.js) (targeting logic ported to `src/sim/policy.js`)
 
