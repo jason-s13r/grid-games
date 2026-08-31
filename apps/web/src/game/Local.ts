@@ -7,6 +7,7 @@
 
 import { Sim, makeGenesis, CLAIM, MOVE, MEMBER, CONTROL, STEPS_PER_SECOND } from "@tessera/sim";
 import type { Move, EmpireSpec } from "@tessera/sim";
+import type { Driver } from "./Driver";
 
 /** Never simulate more than this in one frame: a backgrounded tab must catch up
  *  without freezing the page when it returns. */
@@ -20,10 +21,11 @@ export interface LocalOptions {
   height: number;
 }
 
-export class LocalGame {
+export class LocalGame implements Driver {
   sim: Sim;
   readonly empire = 1;
   readonly member = 0;
+  readonly online = false;
   running = true;
 
   private pending: Move[] = [];
@@ -115,6 +117,10 @@ export class LocalGame {
     }
 
     return dirty;
+  }
+
+  status(): string {
+    return this.sim.ended ? "Game over" : `Solo · step ${this.sim.step}`;
   }
 
   private heartbeatDue(step: number): boolean {

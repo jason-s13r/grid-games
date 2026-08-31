@@ -4,9 +4,15 @@
 // lockstep driver will drive it: moves in, dirty tiles out, camera and DOM
 // strictly outside the simulation.
 
-import { seedFrom, PROTOCOL_VERSION } from "@tessera/sim";
+import { seedFrom, PROTOCOL_VERSION, Sim } from "@tessera/sim";
+import { Roster } from "@tessera/protocol";
+import { Lockstep } from "@tessera/net";
 import pkg from "../package.json";
 import { LocalGame } from "./game/Local";
+import { OnlineGame } from "./game/Online";
+import type { Driver } from "./game/Driver";
+import { Lobby, myIdentity } from "./net/Lobby";
+import { LobbyPanel } from "./view/LobbyPanel";
 import { Camera, MIN_ZOOM, MAX_ZOOM, DOM_MIN_ZOOM } from "./view/Camera";
 import { MapImage } from "./view/MapImage";
 import { Renderer } from "./view/Renderer";
@@ -33,10 +39,14 @@ const viewportEl = pick<HTMLDivElement>("[data-viewport]");
 const tilesEl = pick<HTMLDivElement>("[data-tiles]");
 const lodEl = pick<HTMLCanvasElement>("[data-lod]");
 const minimapEl = pick<HTMLCanvasElement>("[data-minimap]");
+const lobbyEl = pick<HTMLDivElement>("[data-lobby]");
 
-const MAP = { width: 160, height: 112 };
+/** The solo map. A mesh game uses whatever its genesis says, so this is
+ *  replaced when a game is mounted rather than assumed by the view. */
+const SOLO_MAP = { width: 160, height: 112 };
+let MAP = { ...SOLO_MAP };
 
-let game: LocalGame;
+let game: Driver;
 let camera: Camera;
 let mapImage: MapImage;
 let renderer: Renderer;
@@ -44,7 +54,15 @@ let minimap: Minimap;
 let controls: Controls;
 
 function start(seed: number): void {
-  game = new LocalGame({ seed, bots: 3, teammates: 0, ...MAP });
+  mount(new LocalGame({ seed, bots: 3, teammates: 0, ...SOLO_MAP }));
+}
+
+/** Everything downstream of here is the same for a solo game and a mesh game —
+ *  the driver interface is the whole of the difference. */
+function mount(driver: Driver): void {
+  game = driver;
+  MAP = { width: driver.sim.state.width, height: driver.sim.state.height };
+  tilesEl.replaceChildren();
 
   camera = new Camera(MAP.width, MAP.height);
   mapImage = new MapImage(MAP.width, MAP.height);
@@ -198,6 +216,9 @@ window.addEventListener("keydown", (event) => {
 
 pick<HTMLButtonElement>('[data-action="pause"]').addEventListener("click", (event) => {
   const btn = event.currentTarget as HTMLButtonElement;
+  // The world turns on wall-clock time and other people are in it, so there is
+  // nothing here to pause.
+  if (game.online) return;
   if (game.running) {
     game.pause();
     btn.textContent = "Resume";
@@ -208,7 +229,7 @@ pick<HTMLButtonElement>('[data-action="pause"]').addEventListener("click", (even
 });
 
 pick<HTMLButtonElement>('[data-action="new"]').addEventListener("click", () => {
-  tilesEl.replaceChildren();
+  if (lobby) return; // a mesh game is not this client's to restart
   start(seedFrom(String(Date.now())));
 });
 
@@ -236,10 +257,42 @@ function frame(now: number): void {
     zoomLevelEl.textContent = `${camera.zoom}`;
     zoomInEl.disabled = !camera.canZoomIn;
     zoomOutEl.disabled = !camera.canZoomOut;
+    panel.setStatus(game.status());
     minimapDue = now + 200;
   }
 
   requestAnimationFrame(frame);
+}
+
+// --- multiplayer -------------------------------------------------------------
+
+let lobby: Lobby | undefined;
+
+const panel = new LobbyPanel(lobbyEl, {
+  host: () => void begin(),
+  join: (code) => void begin(code),
+  start: () => void lobby?.host({ bots: 1, ...SOLO_MAP }),
+});
+
+async function begin(code?: string): Promise<void> {
+  if (lobby) return;
+  const identity = await myIdentity();
+  lobby = await Lobby.open(identity, code);
+  panel.attach(lobby);
+  lobby.onStart = (genesis, seat, transport) => {
+    const driver = new Lockstep({
+      genesis,
+      sim: new Sim(genesis),
+      roster: Roster.fromGenesis(genesis),
+      transport,
+      identity,
+      seat,
+    });
+    driver.start();
+    mount(new OnlineGame(driver, lobby!.mesh, seat));
+    pick<HTMLButtonElement>('[data-action="pause"]').disabled = true;
+    pick<HTMLButtonElement>('[data-action="new"]').disabled = true;
+  };
 }
 
 start(seedFrom("tessera"));

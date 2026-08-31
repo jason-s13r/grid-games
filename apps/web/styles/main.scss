@@ -373,3 +373,34 @@ body {
 }
 .standing-tiles { font-variant-numeric: tabular-nums; font-weight: 600; }
 .standing-meta { font-size: 10px; color: var(--muted); min-width: 26px; text-align: right; }
+
+// --- lobby -------------------------------------------------------------------
+
+.lobby-actions {
+  display: flex;
+  gap: 6px;
+  margin-top: 8px;
+  align-items: center;
+}
+.lobby-code {
+  flex: 1;
+  min-width: 0;
+  font: inherit;
+  font-size: 12px;
+  padding: 5px 7px;
+  border: 1px solid #c8c0aa;
+  border-radius: 4px;
+  background: #fffdf6;
+}
+.lobby-room {
+  margin: 6px 0;
+  code {
+    display: inline-block;
+    font-size: 15px;
+    letter-spacing: 1px;
+    padding: 4px 8px;
+    background: #efe9d8;
+    border-radius: 4px;
+    user-select: all;
+  }
+}

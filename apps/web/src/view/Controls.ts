@@ -3,7 +3,7 @@
 import type { State } from "@tessera/sim";
 import { MOVE, PHASE, WIN, STEPS_PER_SECOND, isProtected, summarise } from "@tessera/sim";
 import { empireTheme } from "./palette";
-import type { LocalGame } from "../game/Local";
+import type { Driver } from "../game/Driver";
 
 export type PlaceMode = "none" | "bridge" | "ladder";
 
@@ -27,7 +27,7 @@ export class Controls {
   placeMode: PlaceMode = "none";
 
   constructor(
-    private game: LocalGame,
+    private game: Driver,
     private els: {
       you: HTMLElement;
       standings: HTMLElement;

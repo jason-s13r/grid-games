@@ -5,7 +5,10 @@
     "rootDir": "src",
     "declaration": true,
     "declarationMap": true,
-    "sourceMap": true
+    "sourceMap": true,
+    // DOM is here for mesh.ts alone — RTCIceServer and the data-channel
+    // types. Everything the lockstep driver touches must stay Node-runnable.
+    "lib": ["ES2022", "DOM"]
   },
   "include": ["src"]
 }

@@ -4,3 +4,5 @@ export { SnapshotStore, encodeSnapshot, decodeSnapshot } from "./snapshots.js";
 export type { Checkpointed } from "./snapshots.js";
 export { Lockstep } from "./lockstep.js";
 export type { LockstepOptions, Seat, EjectionReason } from "./lockstep.js";
+export { PeerMesh, createMesh } from "./mesh.js";
+export type { PeerMeshOptions, PeerConstructor } from "./mesh.js";
