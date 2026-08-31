@@ -36,6 +36,22 @@ importers:
         specifier: 5.6.3
         version: 5.6.3
 
+  packages/net:
+    dependencies:
+      '@tessera/protocol':
+        specifier: workspace:*
+        version: link:../protocol
+      '@tessera/sim':
+        specifier: workspace:*
+        version: link:../sim
+    devDependencies:
+      '@types/node':
+        specifier: 22.7.5
+        version: 22.7.5
+      typescript:
+        specifier: 5.6.3
+        version: 5.6.3
+
   packages/protocol:
     dependencies:
       '@tessera/sim':

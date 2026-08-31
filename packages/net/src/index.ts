@@ -1,0 +1,6 @@
+export { LoopbackNetwork } from "./transport.js";
+export type { Transport, FrameHandler, LoopbackOptions } from "./transport.js";
+export { SnapshotStore, encodeSnapshot, decodeSnapshot } from "./snapshots.js";
+export type { Checkpointed } from "./snapshots.js";
+export { Lockstep } from "./lockstep.js";
+export type { LockstepOptions, Seat, EjectionReason } from "./lockstep.js";

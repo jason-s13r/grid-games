@@ -16,7 +16,9 @@ import type {
   SignedAmendment,
   SignedCheckpoint,
   SignedMessage,
+  SignedDrop,
   SignedMove,
+  SignedReady,
 } from "./records.js";
 import type { MemberKey } from "./identity.js";
 
@@ -26,6 +28,8 @@ export const FRAME = {
   PROOF: "proof",
   GENESIS: "genesis",
   MOVE: "move",
+  READY: "ready",
+  DROP: "drop",
   MESSAGE: "message",
   CHECKPOINT: "checkpoint",
   AMENDMENT: "amendment",
@@ -69,6 +73,20 @@ export interface GenesisFrame {
 export interface MoveFrame {
   t: typeof FRAME.MOVE;
   signed: SignedMove;
+}
+
+/** Cumulative: a later READY supersedes an earlier one, so losing one costs a
+ *  moment of pipeline depth rather than correctness. */
+export interface ReadyFrame {
+  t: typeof FRAME.READY;
+  signed: SignedReady;
+}
+
+/** Rebroadcast as it gains endorsements, so a partial tally reaches everyone
+ *  without a coordinator. */
+export interface DropFrame {
+  t: typeof FRAME.DROP;
+  signed: SignedDrop;
 }
 
 export interface MessageFrame {
@@ -117,6 +135,8 @@ export type Frame =
   | ProofFrame
   | GenesisFrame
   | MoveFrame
+  | ReadyFrame
+  | DropFrame
   | MessageFrame
   | CheckpointFrame
   | AmendmentFrame
@@ -169,6 +189,8 @@ export function decodeFrame(text: string): Frame | null {
       return isObject(parsed.genesis) ? (parsed as unknown as GenesisFrame) : null;
 
     case FRAME.MOVE:
+    case FRAME.READY:
+    case FRAME.DROP:
     case FRAME.MESSAGE:
     case FRAME.CHECKPOINT:
     case FRAME.AMENDMENT:

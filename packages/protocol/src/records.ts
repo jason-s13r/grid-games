@@ -24,6 +24,8 @@ const TAG_MESSAGE = "tessera/message/1";
 const TAG_CHECKPOINT = "tessera/checkpoint/1";
 const TAG_AMENDMENT = "tessera/amendment/1";
 const TAG_HELLO = "tessera/hello/1";
+const TAG_READY = "tessera/ready/1";
+const TAG_DROP = "tessera/drop/1";
 
 export const NONCE_BYTES = 16;
 
@@ -236,6 +238,152 @@ export async function verifyCheckpoint(
   } catch {
     return false;
   }
+}
+
+
+// --- readiness ---------------------------------------------------------------
+
+/** "I have submitted every move I will ever submit for a step at or before
+ *  `upTo`." This is what lets the lockstep pipeline advance without a PASS
+ *  message per seat per step: one cumulative assertion replaces twelve a
+ *  second.
+ *
+ *  It is signed for the same reason a checkpoint is. An unsigned readiness
+ *  claim would let any peer assert on another's behalf that it has nothing
+ *  more to say, and every peer would then advance past a step whose real input
+ *  had not arrived — a desync manufactured by a third party. Signed, asserting
+ *  readiness through `upTo` and then submitting a move at or before it is
+ *  equivocation, provable against the signer. */
+export interface Ready {
+  upTo: number;
+  empire: number;
+  member: number;
+}
+
+export interface SignedReady {
+  ready: Ready;
+  sig: string;
+}
+
+export function encodeReady(gameId: string, ready: Ready): Uint8Array {
+  if (!u32(ready.upTo) || !u8(ready.empire) || ready.empire < 1 || !u8(ready.member)) {
+    throw new Error("ready field out of range");
+  }
+  const record = new Writer(8).u32(ready.upTo).u8(ready.empire).u8(ready.member).u16(0).finish();
+  return concat(preamble(TAG_READY, gameId), record);
+}
+
+export async function signReady(
+  identity: Identity,
+  gameId: string,
+  ready: Ready,
+): Promise<SignedReady> {
+  return { ready, sig: await identity.sign(encodeReady(gameId, ready)) };
+}
+
+export async function verifyReady(
+  roster: Roster,
+  gameId: string,
+  signed: SignedReady,
+): Promise<boolean> {
+  if (!signed?.ready || typeof signed.sig !== "string") return false;
+  const key = roster.keyOf(signed.ready.empire, signed.ready.member);
+  if (!key) return false;
+  try {
+    return await verify(key, signed.sig, encodeReady(gameId, signed.ready));
+  } catch {
+    return false;
+  }
+}
+
+
+// --- dropping a stalled seat -------------------------------------------------
+
+/** A peer that stops answering freezes the game, and the fix cannot be a local
+ *  timeout: two peers whose stopwatches disagree would stop waiting on
+ *  different steps and diverge on the spot. So dropping is a decision, taken by
+ *  a quorum, over one exact record.
+ *
+ *  `atStep` is inside the record, not inferred by the receiver. Everyone who
+ *  accepts this record stops waiting for the seat on precisely that step,
+ *  whether they learned about it a second or a minute after it was proposed.
+ *
+ *  A seat may be endorsed for exactly one drop record ever. Two records naming
+ *  different steps therefore cannot both reach a majority, which is what stops
+ *  a race between two proposals from splitting the mesh. */
+export interface Drop {
+  empire: number;
+  member: number;
+  atStep: number;
+}
+
+export interface SignedDrop {
+  drop: Drop;
+  /** Endorsers come from any empire: a stall costs everyone, not just the
+   *  stalled seat's teammates. */
+  signatures: Array<{ empire: number; member: number; sig: string }>;
+}
+
+export function encodeDrop(gameId: string, drop: Drop): Uint8Array {
+  if (!u8(drop.empire) || drop.empire < 1 || !u8(drop.member) || !u32(drop.atStep)) {
+    throw new Error("drop field out of range");
+  }
+  const record = new Writer(8).u32(drop.atStep).u8(drop.empire).u8(drop.member).u16(0).finish();
+  return concat(preamble(TAG_DROP, gameId), record);
+}
+
+export async function endorseDrop(
+  identity: Identity,
+  gameId: string,
+  drop: Drop,
+  by: { empire: number; member: number },
+): Promise<{ empire: number; member: number; sig: string }> {
+  return { ...by, sig: await identity.sign(encodeDrop(gameId, drop)) };
+}
+
+/** Merge what two peers have each collected. Endorsements are a set, so
+ *  gossiping partial tallies converges without anyone coordinating. */
+export function mergeDrop(a: SignedDrop, b: SignedDrop): SignedDrop {
+  const seen = new Map<string, { empire: number; member: number; sig: string }>();
+  for (const signature of [...a.signatures, ...b.signatures]) {
+    seen.set(`${signature.empire}:${signature.member}`, signature);
+  }
+  return { drop: a.drop, signatures: [...seen.values()] };
+}
+
+/** A strict majority of the keyed seats other than the one being dropped. The
+ *  seat cannot vote on its own removal, and it cannot block it either. */
+export async function verifyDrop(
+  roster: Roster,
+  gameId: string,
+  signed: SignedDrop,
+): Promise<boolean> {
+  if (!signed?.drop || !Array.isArray(signed.signatures)) return false;
+  if (!roster.keyOf(signed.drop.empire, signed.drop.member)) return false;
+
+  let payload: Uint8Array;
+  try {
+    payload = encodeDrop(gameId, signed.drop);
+  } catch {
+    return false;
+  }
+
+  const target = `${signed.drop.empire}:${signed.drop.member}`;
+  const electorate = roster.all().filter(
+    (seat) => `${seat.empire}:${seat.member}` !== target,
+  ).length;
+  if (electorate === 0) return false;
+
+  const endorsed = new Set<string>();
+  for (const { empire, member, sig } of signed.signatures) {
+    const slot = `${empire}:${member}`;
+    if (slot === target || endorsed.has(slot)) continue;
+    const key = roster.keyOf(empire, member);
+    if (!key) continue;
+    if (await verify(key, sig, payload)) endorsed.add(slot);
+  }
+
+  return endorsed.size > electorate / 2;
 }
 
 // --- roster amendments -------------------------------------------------------

@@ -20,12 +20,14 @@ import {
   endorseAmendment,
   proveHello,
   signMessage,
+  signReady,
   signMove,
   verifyAmendment,
   verifyEquivocation,
   verifyHello,
   verifyMessage,
   verifyMove,
+  verifyReady,
 } from "./records.js";
 import type { Amendment, SignedAmendment, SignedMove } from "./records.js";
 import { FRAME, decodeFrame, encodeFrame } from "./wire.js";
@@ -234,6 +236,18 @@ async function main(): Promise<void> {
       ...chat,
       message: { ...chat.message, body: "x".repeat(4096) },
     })),
+  );
+
+  section("readiness");
+  const ready = await signReady(alice, gameId, { upTo: 300, empire: 1, member: 0 });
+  ok("a readiness claim verifies", await verifyReady(roster, gameId, ready));
+  ok(
+    "raising someone else's readiness is caught",
+    !(await verifyReady(roster, gameId, { ...ready, ready: { ...ready.ready, upTo: 900 } })),
+  );
+  ok(
+    "readiness cannot be asserted on another seat's behalf",
+    !(await verifyReady(roster, gameId, { ...ready, ready: { ...ready.ready, member: 1 } })),
   );
 
   // --- roster and amendments -------------------------------------------------
