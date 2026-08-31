@@ -3,9 +3,9 @@
 // one drawImage per frame no matter how large the map is.
 
 import type { State } from "@tessera/sim";
-import { Camera } from "./Camera.js";
-import { MapImage } from "./MapImage.js";
-import { empireTheme } from "./palette.js";
+import { Camera } from "./Camera";
+import { MapImage } from "./MapImage";
+import { empireTheme } from "./palette";
 
 export class Minimap {
   private ctx: CanvasRenderingContext2D;

@@ -10,9 +10,9 @@
 
 import type { State } from "@tessera/sim";
 import { ITEM, TERRAIN, idx, isProtected } from "@tessera/sim";
-import { Camera } from "./Camera.js";
-import { MapImage } from "./MapImage.js";
-import { empireTheme } from "./palette.js";
+import { Camera } from "./Camera";
+import { MapImage } from "./MapImage";
+import { empireTheme } from "./palette";
 
 const TERRAIN_CLASS: Record<number, string> = {
   [TERRAIN.MOUNTAIN]: "t-mountain",

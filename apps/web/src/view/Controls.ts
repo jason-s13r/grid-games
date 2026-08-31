@@ -2,8 +2,8 @@
 
 import type { State } from "@tessera/sim";
 import { MOVE, PHASE, WIN, STEPS_PER_SECOND, isProtected, summarise } from "@tessera/sim";
-import { empireTheme } from "./palette.js";
-import type { LocalGame } from "../game/Local.js";
+import { empireTheme } from "./palette";
+import type { LocalGame } from "../game/Local";
 
 export type PlaceMode = "none" | "bridge" | "ladder";
 

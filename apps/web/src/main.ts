@@ -6,13 +6,13 @@
 
 import { seedFrom, PROTOCOL_VERSION } from "@tessera/sim";
 import pkg from "../package.json";
-import { LocalGame } from "./game/Local.js";
-import { Camera, MIN_ZOOM, MAX_ZOOM, DOM_MIN_ZOOM } from "./view/Camera.js";
-import { MapImage } from "./view/MapImage.js";
-import { Renderer } from "./view/Renderer.js";
-import { Minimap } from "./view/Minimap.js";
-import { Controls } from "./view/Controls.js";
-import { injectThemeCss } from "./view/palette.js";
+import { LocalGame } from "./game/Local";
+import { Camera, MIN_ZOOM, MAX_ZOOM, DOM_MIN_ZOOM } from "./view/Camera";
+import { MapImage } from "./view/MapImage";
+import { Renderer } from "./view/Renderer";
+import { Minimap } from "./view/Minimap";
+import { Controls } from "./view/Controls";
+import { injectThemeCss } from "./view/palette";
 import { MOVE } from "@tessera/sim";
 
 const pick = <T extends Element>(selector: string): T => {

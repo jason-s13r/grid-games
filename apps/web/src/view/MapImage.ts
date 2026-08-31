@@ -7,7 +7,7 @@
 
 import type { State } from "@tessera/sim";
 import { ITEM } from "@tessera/sim";
-import { TERRAIN_COLORS, ITEM_COLORS, empireTheme, rgb } from "./palette.js";
+import { TERRAIN_COLORS, ITEM_COLORS, empireTheme, rgb } from "./palette";
 
 export class MapImage {
   readonly canvas: HTMLCanvasElement;
