@@ -1,0 +1,48 @@
+# Release configuration. Conventional commits drive the versions; dispat reads
+# them, computes the graph from the package manifests, and publishes in
+# dependency order.
+#
+# THE COMPATIBILITY CONTRACT IS THE STATE HASH, NOT THE PUBLIC API.
+#
+# Peers only interoperate if their simulations produce bit-identical state for
+# the same (genesis, move log). So for @tessera/sim the semver rule is
+# stricter than usual:
+#
+#   * ANY change that moves the hash is BREAKING -> feat!: / fix!: / major,
+#     even when no exported signature changed. Rule tweaks, spawn-weight
+#     changes, RNG draw-order changes and snapshot layout changes all qualify.
+#   * Only genuinely hash-neutral work is a minor or patch: docs, types,
+#     renderer-facing helpers, performance work that provably preserves the
+#     draw order.
+#
+# packages/sim exports PROTOCOL_VERSION; a peer refuses to join a game whose
+# genesis names a different major. That check is what turns a silent overnight
+# desync into an refusal at the lobby.
+
+scripts:
+  build-lib: pnpm build
+  publish-lib: pnpm publish --no-git-checks --access public
+  build-app: pnpm build
+  no-publish: echo "$DISPAT_PACKAGE ships as a deployed app, not a registry package"
+spaces:
+  # Shared libraries: the sim, and later the wire protocol and mesh. These are
+  # what bot peers and the observer consume, so they are published.
+  packages:
+    path: packages
+    flow:
+      build: build-lib
+      publish: publish-lib
+  # Deployables: the web frontend, and later the headless bot peer and the
+  # archive/observer peer. Versioned and changelogged, never published to npm.
+  apps:
+    path: apps
+    flow:
+      build: build-app
+      publish: no-publish
+dependencies:
+  web:
+    - sim
+initials:
+  prototype: 0.1.0
+  sim: 0.1.0
+  web: 0.1.0

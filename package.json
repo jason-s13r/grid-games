@@ -1,6 +1,14 @@
 {
-  "devDependencies": {
-    "@parcel/transformer-sass": "2.16.4"
-  },
-  "dependencies": {}
+  "name": "tessera",
+  "version": "0.0.0",
+  "private": true,
+  "packageManager": "pnpm@9.12.3",
+  "scripts": {
+    "dev": "pnpm --filter @tessera/web dev",
+    "build": "pnpm -r build",
+    "test": "pnpm -r test",
+    "replay": "pnpm --filter @tessera/sim replay",
+    "release": "dispat release",
+    "release:status": "dispat status"
+  }
 }
