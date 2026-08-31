@@ -38,7 +38,14 @@ export interface PeerMeshOptions {
   onJoin?: (id: string) => void;
   onLeave?: (id: string) => void;
   onError?: (error: Error) => void;
+  /** How long to wait for the broker to assign an id. */
+  openTimeoutMs?: number;
 }
+
+/** A broker that answers slowly is indistinguishable from one that never
+ *  answers, and PeerJS reports neither: it retries quietly. Without a deadline
+ *  the promise below never settles and the caller waits forever. */
+const DEFAULT_OPEN_TIMEOUT_MS = 12_000;
 
 const ROOM_ALPHABET = "abcdefghjkmnpqrstuvwxyz23456789"; // no look-alikes
 
@@ -60,7 +67,14 @@ export async function createMesh(options: PeerMeshOptions = {}): Promise<PeerMes
   const module = await import("peerjs");
   const constructor = (module.default ?? module.Peer) as unknown as PeerConstructor;
   const mesh = new PeerMesh(constructor, options);
-  await mesh.opening;
+  try {
+    await mesh.opening;
+  } catch (error) {
+    // PeerJS retries on its own, so a rejected open would otherwise leave a
+    // connection attempt running for the life of the page.
+    mesh.close();
+    throw error;
+  }
   return mesh;
 }
 
@@ -91,15 +105,23 @@ export class PeerMesh implements Transport {
     });
 
     this.opening = new Promise<string>((resolve, reject) => {
+      const deadline = setTimeout(() => {
+        if (this.opened) return;
+        reject(new Error("the matchmaking broker did not respond"));
+      }, options.openTimeoutMs ?? DEFAULT_OPEN_TIMEOUT_MS);
+
       this.peer.on("open", (assigned: string) => {
         this.opened = true;
+        clearTimeout(deadline);
         this.options.onOpen?.(assigned);
         if (options.join) this.dial(options.join);
         resolve(assigned);
       });
       this.peer.on("error", (error: Error) => {
         this.options.onError?.(error);
-        if (!this.opened) reject(error);
+        if (this.opened) return;
+        clearTimeout(deadline);
+        reject(error);
       });
     });
     this.peer.on("connection", (connection: DataConnection) => this.adopt(connection));
