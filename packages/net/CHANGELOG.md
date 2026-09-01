@@ -1,5 +1,81 @@
 # Changelog
 
+## net@0.4.0 (2026-09-01)
+
+### Features
+
+- seat a substitute mid-game
+  A marathon game outlives its roster. ROSTER_AMEND existed in the protocol
+  and in the simulation but nothing drove it; the driver now proposes,
+  collects endorsements, and seats the newcomer.
+
+  Endorsing is deliberate, unlike endorsing a drop. A drop is an
+  observation — the seat did go silent, and any peer can see it — but an
+  amendment is a decision about who joins the team, and teammates share
+  territory, so a peer that signed whatever reached it would turn a quorum
+  into a formality. onInvitation announces the ask; endorse() answers it.
+
+  The hard part is that the new seat is hashed state: every peer must append
+  it on exactly the same step, or peers agreeing about every move still
+  disagree about the world. So a proposal is dated three seconds ahead and
+  readiness is held below that step while the vote is out. The hold is
+  released on a step number rather than a stopwatch — every peer gives up on
+  the same step, so giving up cannot itself become the thing peers disagree
+  about. A quorum that arrives after its step is a known divergence, and the
+  driver rebuilds from a checkpoint rather than carrying on.
+
+  A record with no valid signature is never stored, gossiped, or allowed to
+  hold a step: otherwise anyone able to open a data channel could stop the
+  game by broadcasting noise.
+
+- let one page run several drivers
+  A PeerBot is a full mesh client, and until now that meant a whole extra
+  browser tab: a mesh only reaches other people, so a bot seated beside its
+  teammate would sign moves that every remote peer applied and its own page
+  never heard. The one peer guaranteed to desync was the one hosting the bot.
+
+  LocalHub is the missing loop-back. It hands out ports that look exactly
+  like a Transport, sends what they broadcast both outward and sideways, and
+  fans anything arriving from a remote peer to every port. Drivers stay
+  unaware they share a page — the alternative, teaching Lockstep that some
+  seats are local, would put a special case in the middle of the consensus
+  code for the sake of a convenience feature.
+
+  Frames cross it as text, as they cross a data channel, and a fan-out is
+  queued whole before any of it is delivered: draining after each recipient
+  would let the first one's reply overtake the second one's copy of the
+  original, and two drivers in one page would see one broadcast in two
+  different orders.
+
+### Fixes
+
+- rebuild the roster, not just the state, from a snapshot
+  Re-applies the amendments and drops behind a snapshot in order, verifying
+  each quorum against the roster as it stood at the time — an empire's quorum
+  grows as the empire does, so replaying in order is what reconstructs the
+  roster each record was signed against. Anything that fails to check out
+  stops the walk rather than being skipped: the records after it were
+  verified against a roster this peer would no longer be reproducing.
+
+  Also makes an arriving peer patient rather than persistent. It now waits
+  out a mesh that has not finished forming — the first request for the world
+  is the one most likely to go out to nobody, because a joiner is routinely
+  playing before its channels have opened — and asks again while it waits.
+  Giving up meant replaying from step zero, which derives a state that agrees
+  with nobody, since the moves that built the real one were broadcast before
+  this peer was listening.
+
+  An earlier attempt at that asked for a snapshot whenever a peer was blocked
+  and behind the wall clock. That is what ordinary waiting looks like, so
+  three browsers spent a game rewinding into each other's snapshots: hundreds
+  of moves arriving for steps already simulated, and hashes that agreed only
+  by coincidence. Waiting is not the same as being lost.
+
+### Dependencies
+
+- protocol: 0.3.0 -> 0.4.0
+
+
 ## net@0.3.0 (2026-09-01)
 
 ### Features

@@ -1,5 +1,34 @@
 # Changelog
 
+## protocol@0.4.0 (2026-09-01)
+
+### Features
+
+- let a snapshot carry the roster it belongs to
+  A snapshot carries the simulation, and the simulation knows members by
+  index and nothing about keys. A peer that adopted one across a roster
+  amendment held a state with a seat in it and no idea whose key sat there,
+  and rejected that player's every move afterwards. The same peer waited
+  forever on seats the rest of the game had dropped, because an ejection is
+  network state and never appears in a snapshot either.
+
+  The frame now carries the amendment and drop records themselves rather
+  than a summary of them, so the receiver re-checks every quorum for itself.
+  A snapshot stays safe to take from anyone, which is the property that lets
+  an untrusted archive peer be useful without being trusted.
+
+- count an amendment's endorsements
+  verifyAmendment answered yes or no, but a peer has to act on a record that
+  is not finished yet: one valid signature is what separates a real proposal
+  from a stranger's noise, and only the first is worth holding a step open
+  for. tallyAmendment returns how many distinct seats have signed and how
+  many it takes, and verifyAmendment is now a comparison of the two.
+
+  mergeAmendment joins two partial tallies the way mergeDrop does, so peers
+  gossiping what each has collected converge without anyone counting for
+  everyone else.
+
+
 ## protocol@0.3.0 (2026-09-01)
 
 ### Features

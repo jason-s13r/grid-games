@@ -1,5 +1,57 @@
 # Changelog
 
+## web@0.5.0 (2026-09-01)
+
+### Features
+
+- join a game already in progress
+  A peer whose key is not in the roster used to be turned away. It now
+  watches: it validates and stores the game exactly as a player does and
+  simply holds nothing, which is why an uninvited peer was always harmless
+  without needing any mechanism to keep it out.
+
+  From there it can be voted in. Anyone seated sees who is watching and can
+  offer a seat on their empire; their teammates see the ask with its tally
+  and agree to it; the moment the quorum lands, the observer is holding a
+  seat and playing. The panel that already shows the room code carries all
+  of it, because "who is playing" is one question and a marathon game
+  changes its answer while you watch.
+
+  The board no longer assumes a seat, either — empire 0 is neutral, so an
+  observer highlights nothing and owns nothing, rather than reading past the
+  end of the empire list.
+
+  Verified in three browsers over a real broker: C joined a game in progress
+  as an observer, A offered a seat, B agreed, and C was seated as member 2 of
+  empire 1 with all three peers on the same hash and no late moves.
+
+- seat a bot for the night shift
+  The lobby can now add bot seats to an empire. The host mints a keypair per
+  seat, writes it into the genesis as an ordinary keyed member, and runs its
+  driver behind the same connection as its own — every other peer sees a
+  normal seat in the roster and validates its moves like anyone else's.
+
+  The price is charged by the rules rather than by the lobby: a bot member
+  accrues at half rate, caps lower, and its coin claims never chain. It can
+  hold the line; the big cascade stays a human play. Three per empire, so
+  "add bots" is not a way to out-populate the table.
+
+  Its key is not persisted and never leaves the page, which is the honest
+  behaviour — a bot exists because the host offered to run it, so closing
+  that tab stops it, and the empire idles exactly as it does when a person
+  walks away.
+
+  Verified in two browsers over a real broker: at step 25 the human seat held
+  25 population and the bot 12, the bot spent its timer unprompted and took
+  its empire from four tiles to seven while nobody clicked, and both peers
+  agreed on the same hash throughout.
+
+### Dependencies
+
+- net: 0.3.0 -> 0.4.0
+- protocol: 0.3.0 -> 0.4.0
+
+
 ## web@0.4.0 (2026-09-01)
 
 ### Features
