@@ -5,7 +5,7 @@
 // the pointer listeners, so proving that a placed bridge hands the board back
 // meant opening two tabs and trying it.
 
-import { MOVE } from "@tessera/sim";
+import { MOVE, adjacentToOwned } from "@tessera/sim";
 import type { Driver } from "./Driver";
 import type { Controls } from "../view/Controls";
 
@@ -24,6 +24,15 @@ export function boardClick(game: Driver, controls: Controls, x: number, y: numbe
 
     case "ladder":
       if (game.act(MOVE.PLACE_LADDER, x, y)) controls.disarm();
+      return;
+
+    // Marching is an ability the empire owns rather than a thing it spends, so
+    // unlike a bridge it stays armed: it costs nothing to leave on, and a tile
+    // already on the border falls through to an ordinary claim anyway. The
+    // player turns it off with the button or with Escape.
+    case "march":
+      if (adjacentToOwned(game.sim.state, x, y, game.empire)) game.claim(x, y);
+      else game.act(MOVE.MARCH, x, y);
       return;
 
     default:

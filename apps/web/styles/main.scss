@@ -330,7 +330,9 @@ body {
   text-shadow: 0 0 3px #fff;
 }
 
-.facts { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; margin: 10px 0; }
+// auto-fit rather than a fixed three: the growth timer is a fourth fact that
+// only exists while the buff is running.
+.facts { display: grid; grid-template-columns: repeat(auto-fit, minmax(58px, 1fr)); gap: 4px; margin: 10px 0; }
 .facts dt { font-size: 10px; color: var(--muted); }
 .facts dd { margin: 0; font-variant-numeric: tabular-nums; font-weight: 600; }
 
@@ -342,6 +344,31 @@ body {
   margin: 6px 0 0;
   min-height: 1.1em;
   font-size: 11px;
+  color: var(--muted);
+}
+
+// Permanent modifiers, kept apart from the consumables above them: these are
+// bought once and change how the empire plays for the rest of the game.
+.upgrades {
+  display: grid;
+  gap: 5px;
+
+  .up {
+    display: grid;
+    grid-template-columns: auto 1fr auto;
+    align-items: baseline;
+    gap: 6px;
+    text-align: left;
+  }
+  .up-what { font-size: 10px; color: var(--muted); }
+  .up.owned { opacity: 1; background: #eef4ea; border-color: #a8c093; }
+}
+
+.side-sub {
+  margin: 12px 0 6px;
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
   color: var(--muted);
 }
 

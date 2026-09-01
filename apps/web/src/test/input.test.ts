@@ -112,6 +112,35 @@ describe("clicking the board", () => {
     });
   });
 
+  describe("marching", () => {
+    beforeEach(() => {
+      empire.marchUnlocked = 1;
+      controls.placeMode = "march";
+    });
+
+    // Unlike a bridge, marching is an ability rather than a stock, so there is
+    // nothing to run out of and no reason to hand the board back.
+    it("a tile two out is marched to, and the mode stays on", () => {
+      boardClick(game, controls, ownX + 2, ownY);
+      expect(controls.placeMode).toBe("march");
+    });
+
+    it("and the tile between comes with it", () => {
+      boardClick(game, controls, ownX + 2, ownY);
+      run(4);
+      const state = game.sim.state;
+      expect(state.owner[idx(ownX + 1, ownY, state.width)]).toBe(empire.id);
+      expect(state.owner[idx(ownX + 2, ownY, state.width)]).toBe(empire.id);
+    });
+
+    it("a tile on the border falls through to an ordinary claim", () => {
+      const before = tilesHeld();
+      boardClick(game, controls, ownX + 1, ownY);
+      run(4);
+      expect(tilesHeld()).toBe(before + 1);
+    });
+  });
+
   describe("running out of stock", () => {
     it("render disarms a mode nothing is left for", () => {
       empire.bridges = 0;
@@ -120,11 +149,12 @@ describe("clicking the board", () => {
       expect(controls.placeMode).toBe("none");
     });
 
-    it("and leaves a mode that still has stock alone", () => {
-      empire.ladders = 2;
-      controls.placeMode = "ladder";
+    it("but march is an ability, so it is never disarmed for lack of stock", () => {
+      empire.marchUnlocked = 1;
+      empire.diamonds = 0;
+      controls.placeMode = "march";
       controls.render(game.sim.state);
-      expect(controls.placeMode).toBe("ladder");
+      expect(controls.placeMode).toBe("march");
     });
   });
 });

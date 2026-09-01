@@ -5,7 +5,7 @@ import { MOVE, PHASE, WIN, STEPS_PER_SECOND, isProtected, summarise } from "@tes
 import { empireTheme } from "./palette";
 import type { Driver } from "../game/Driver";
 
-export type PlaceMode = "none" | "bridge" | "ladder";
+export type PlaceMode = "none" | "bridge" | "ladder" | "march";
 
 const clock = (steps: number): string => {
   const total = Math.floor(steps / STEPS_PER_SECOND);
@@ -42,8 +42,11 @@ export class Controls {
       const what = target.dataset.buy;
       if (what === "bridge") this.game.act(MOVE.BUY_BRIDGE);
       if (what === "ladder") this.game.act(MOVE.BUY_LADDER);
+      if (what === "march") this.game.act(MOVE.BUY_MARCH);
+      if (what === "growth") this.game.act(MOVE.BUY_GROWTH);
       if (what === "place-bridge") this.toggle("bridge");
       if (what === "place-ladder") this.toggle("ladder");
+      if (what === "place-march") this.toggle("march");
     });
   }
 
@@ -77,7 +80,8 @@ export class Controls {
 
     // Nothing left to place means nothing to be armed for. Without this a
     // player whose last bridge was spent by a teammate stays stuck in place
-    // mode with no button lit to tell them why.
+    // mode with no button lit to tell them why. March is exempt: it is an
+    // ability, not a stock, so once it is bought it cannot run out.
     if (
       (this.placeMode === "bridge" && empire.bridges === 0) ||
       (this.placeMode === "ladder" && empire.ladders === 0)
@@ -120,6 +124,29 @@ export class Controls {
         </button>
       </div>
       <p class="shop-hint">${this.hint()}</p>
+      <h3 class="side-sub">Upgrades</h3>
+      <div class="upgrades">
+        ${
+          empire.marchUnlocked
+            ? `<button class="btn sm up ${this.placeMode === "march" ? "armed" : ""}" data-buy="place-march">
+                 March <span class="up-what">reach two tiles</span>
+               </button>`
+            : `<button class="btn sm up" data-buy="march" ${empire.diamonds < rules.marchCost ? "disabled" : ""}>
+                 Buy march <span class="up-what">reach two tiles</span>
+                 <span class="cost">${rules.marchCost}&#9670;</span>
+               </button>`
+        }
+        ${
+          empire.growthUnlocked
+            ? `<button class="btn sm up owned" disabled>
+                 Growth <span class="up-what">connected tiles gain population</span>
+               </button>`
+            : `<button class="btn sm up" data-buy="growth" ${empire.diamonds < rules.growthCost ? "disabled" : ""}>
+                 Buy growth <span class="up-what">connected tiles gain population</span>
+                 <span class="cost">${rules.growthCost}&#9670;</span>
+               </button>`
+        }
+      </div>
       ${
         empire.members.length > 1
           ? `<div class="roster">${empire.members
@@ -161,10 +188,16 @@ export class Controls {
   }
 
   /** What an armed board is waiting for. Placement modes look identical to
-   *  ordinary play until you click the wrong tile, so say it out loud. */
+   *  ordinary play until you click the wrong tile, so say it out loud.
+   *
+   *  Bridges and ladders are stock: bought, carried, spent. March and growth
+   *  are not — they are standing modifiers to how the empire plays, bought
+   *  once and kept, which is why they sit in their own section rather than
+   *  beside the consumables. */
   private hint(): string {
     if (this.placeMode === "bridge") return "Click a river tile beside your border.";
     if (this.placeMode === "ladder") return "Click a wall tile beside your border.";
+    if (this.placeMode === "march") return "Click two tiles out; the one between fills too. Stays on.";
     return "";
   }
 
