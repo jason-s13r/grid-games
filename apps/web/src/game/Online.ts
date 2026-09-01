@@ -4,7 +4,7 @@
 // to the interface the view already speaks, and turns its callbacks into a line
 // of text a player can read.
 
-import { MOVE } from "@tessera/sim";
+import { MOVE, STEPS_PER_SECOND } from "@tessera/sim";
 import type { Move, Sim } from "@tessera/sim";
 import type { Lockstep, PeerMesh, Seat } from "@tessera/net";
 import type { Driver, MoveKind } from "./Driver";
@@ -16,6 +16,8 @@ export class OnlineGame implements Driver {
   readonly running = true;
 
   private note = "";
+  /** Game step at which the note stops being news. */
+  private noteUntil = 0;
 
   constructor(
     private readonly lockstep: Lockstep,
@@ -23,18 +25,28 @@ export class OnlineGame implements Driver {
     private readonly seat: Seat,
   ) {
     lockstep.onEjection = (who, atStep, reason) => {
-      this.note =
+      this.say(
         reason === "equivocation"
           ? `A seat was caught sending conflicting moves and was removed at step ${atStep}.`
-          : `Empire ${who.empire} seat ${who.member} stopped responding and was dropped at step ${atStep}.`;
+          : `Empire ${who.empire} seat ${who.member} stopped responding and was dropped at step ${atStep}.`,
+      );
     };
     lockstep.onDesync = (step) => {
-      this.note = `State disagreement at step ${step} — rebuilding from a checkpoint.`;
+      this.say(`State disagreement at step ${step} — rebuilding from a checkpoint.`);
       lockstep.requestSnapshot(step);
     };
     lockstep.onHalt = (reason) => {
-      this.note = `Stopped: ${reason}`;
+      this.say(`Stopped: ${reason}`, Infinity);
     };
+  }
+
+  /** A note is news, not state. A peer that resumed from a snapshot repairs the
+   *  disagreement that prompted it within a step or two, and leaving the notice
+   *  up afterwards tells every player the game is broken when it is not. Only a
+   *  halt is permanent, because only a halt is still true a minute later. */
+  private say(text: string, seconds = 12): void {
+    this.note = text;
+    this.noteUntil = this.sim.step + STEPS_PER_SECOND * seconds;
   }
 
   get sim(): Sim {
@@ -84,7 +96,7 @@ export class OnlineGame implements Driver {
   }
 
   status(): string {
-    if (this.note) return this.note;
+    if (this.note && this.sim.step < this.noteUntil) return this.note;
 
     const waiting = this.lockstep.blockedOn();
     if (waiting.length > 0) {
