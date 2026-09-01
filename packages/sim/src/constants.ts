@@ -56,15 +56,17 @@ export const DEFAULT_RULES: Rules = {
   // 0 = a bot's coin claim fires but triggered coins never re-trigger, so
   // cascade mastery stays the human skill expression.
   botCascadeDepth: 0,
-  coinIntervalMin: seconds(4),
-  coinIntervalMax: seconds(10),
+  coinIntervalMin: seconds(1.5),
+  coinIntervalMax: seconds(4),
+  // Diamonds buy every item in the shop, so the replacement rate has to keep
+  // up with spending or the shop is decoration.
   coinWeights: [
-    [ITEM.BRONZE, 60],
-    [ITEM.SILVER, 25],
-    [ITEM.GOLD, 8],
-    [ITEM.DIAMOND, 7],
+    [ITEM.BRONZE, 52],
+    [ITEM.SILVER, 24],
+    [ITEM.GOLD, 9],
+    [ITEM.DIAMOND, 15],
   ],
-  maxItemsOnMap: 240,
+  maxItemsOnMap: 360,
 
   bridgeCost: 3,
   ladderCost: 3,
@@ -75,6 +77,9 @@ export const DEFAULT_RULES: Rules = {
   decayNum: 1,
   decayDen: 8,
   decayMin: 1,
+
+  coinNearBias: 72,
+  coinNearRadius: 4,
 
   noobTiles: 40,
   noobSteps: minutes(3),

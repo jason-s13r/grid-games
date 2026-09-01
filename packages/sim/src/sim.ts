@@ -12,6 +12,7 @@ import type { Genesis, Move, Item, MapConfig, Rules, EmpireSpec } from "./types.
 import { DEFAULT_MAP, DEFAULT_RULES, PROTOCOL_VERSION } from "./constants.js";
 import { PASSABLE } from "./constants.js";
 import { EVENT } from "./events.js";
+import { idx, xOf, yOf } from "./geometry.js";
 import { createState, snapshot, restore, hashState } from "./state.js";
 import type { State } from "./state.js";
 import { generate, scheduleSpawn, scheduleUpkeep } from "./mapgen.js";
@@ -149,17 +150,42 @@ export class Sim {
 
   /** Coins spawn only on NEUTRAL passable tiles. That is what makes farming
    *  work: enclose an area, leave neutral pockets inside it, and they keep
-   *  producing. */
+   *  producing.
+   *
+   *  Uniform placement across the whole map put most coins in empty country
+   *  nobody was fighting over, so the shop stayed out of reach and the
+   *  cascade — the best thing in the game — hardly ever fired. Most probes now
+   *  land on an owned tile and hop a few tiles off it, which lands them just
+   *  outside somebody's border: near the fighting, still neutral, still
+   *  farmable by whoever encloses the pocket. A minority stay uniform so the
+   *  far map is not dead ground.
+   *
+   *  Four draws per attempt whatever the branch, so the RNG stream is a
+   *  function of state alone. */
   private spawnItem(dirty: DirtySet): void {
     const state = this.state;
     const rules = state.genesis.rules;
     if (state.itemCount >= rules.maxItemsOnMap) return;
 
+    const { width, height } = state;
     const n = state.owner.length;
+    const r = rules.coinNearRadius;
+
     // Bounded probe rather than a full scan, so spawning stays O(1) on any map
-    // size. Always the same number of RNG draws.
+    // size.
     for (let attempt = 0; attempt < 24; attempt++) {
-      const i = state.rng.int(n);
+      const seed = state.rng.int(n);
+      const near = state.rng.int(100) < rules.coinNearBias;
+      const dx = state.rng.range(-r, r);
+      const dy = state.rng.range(-r, r);
+
+      let i = seed;
+      if (near && state.owner[seed] !== 0) {
+        const x = Math.max(0, Math.min(width - 1, xOf(seed, width) + dx));
+        const y = Math.max(0, Math.min(height - 1, yOf(seed, width) + dy));
+        i = idx(x, y, width);
+      }
+
       if (state.owner[i] !== 0) continue;
       if (state.item[i] !== ITEM.NONE) continue;
       if (!PASSABLE[state.terrain[i]!]) continue;

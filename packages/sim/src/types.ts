@@ -86,6 +86,11 @@ export interface Rules {
   decayDen: number;
   decayMin: number;
 
+  /** Percent chance a spawn probe hops off an owned tile rather than landing
+   *  uniformly, so coins appear near the fighting. */
+  coinNearBias: number;
+  coinNearRadius: number;
+
   noobTiles: number;
   noobSteps: number;
 
