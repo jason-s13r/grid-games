@@ -7,10 +7,14 @@
     "dev": "pnpm --filter @tessera/web dev",
     "build": "pnpm -r build",
     "test": "pnpm -r test",
+    "typecheck": "pnpm -r typecheck",
     "replay": "pnpm --filter @tessera/sim replay",
     "release": "dispat release",
     "release:status": "dispat status",
     "clean": "rm -rf _site apps/*/dist packages/*/dist .parcel-cache apps/*/.parcel-cache",
     "site": "pnpm clean && pnpm -r build && mkdir -p _site/web _site/prototype && cp public/index.html _site/index.html && cp -r apps/web/dist/. _site/web/ && cp -r apps/prototype/dist/. _site/prototype/ && touch _site/.nojekyll"
+  },
+  "devDependencies": {
+    "vitest": "2.1.9"
   }
 }

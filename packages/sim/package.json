@@ -21,7 +21,8 @@
   },
   "scripts": {
     "build": "tsc -p tsconfig.json",
-    "test": "pnpm build && node dist/replay.js --selftest",
+    "typecheck": "tsc -p tsconfig.test.json",
+    "test": "vitest run",
     "replay": "pnpm build && node dist/replay.js"
   },
   "devDependencies": {

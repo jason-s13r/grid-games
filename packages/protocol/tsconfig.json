@@ -12,5 +12,6 @@
     // must not reach for anything else the DOM lib happens to expose.
     "lib": ["ES2022", "DOM"]
   },
-  "include": ["src"]
+  "include": ["src"],
+  "exclude": ["src/test"]
 }

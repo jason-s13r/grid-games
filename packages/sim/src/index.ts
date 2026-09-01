@@ -32,4 +32,5 @@ export { policy } from "./policy.js";
 export { summarise } from "./stats.js";
 export type { EmpireSummary } from "./stats.js";
 export { Sim, makeGenesis, CLAIM, HEARTBEAT } from "./sim.js";
+export { humans, simbot } from "./specs.js";
 export type { GenesisInit } from "./sim.js";
