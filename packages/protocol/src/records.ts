@@ -516,16 +516,29 @@ export async function verifyHello(
 
 // --- equivocation ------------------------------------------------------------
 
-/** Two validly signed moves sharing (empire, member, seq) are cryptographic
- *  proof of cheating: the member told different peers different things. Because
- *  the mesh gossips every move it sees, that is *detected* rather than merely
- *  suspected — and the proof is self-contained, so any peer can check it
- *  without trusting the peer that found it. */
+/** Two validly signed moves sharing (empire, member, step, seq) are
+ *  cryptographic proof of cheating: the member told different peers different
+ *  things about one slot. Because the mesh gossips every move it sees, that is
+ *  *detected* rather than merely suspected — and the proof is self-contained,
+ *  so any peer can check it without trusting the peer that found it.
+ *
+ *  The step belongs in the slot. A seq counter lives in one Lockstep instance
+ *  and restarts at zero when a player reloads, so a returning seat reuses the
+ *  numbers it spent before the reload. Keyed on seq alone that reads as the
+ *  member contradicting itself, and an honest rejoin is answered with an
+ *  ejection. What the accusation has to mean is "two different moves for the
+ *  same step", and the step has to be in the key to say so.
+ *
+ *  Nothing is lost by it. Ordering within a step is by (empire, member, seq),
+ *  so a duplicated pair is exactly the ambiguity that could diverge two peers —
+ *  and that pair is still caught. Reusing a seq at a *different* step decides
+ *  nothing: both moves are gossiped, both are applied at their own steps, and
+ *  every peer lands on the same state. */
 export class EquivocationWatch {
   private readonly seen = new Map<string, SignedMove>();
 
   private static slot(move: Move): string {
-    return `${move.empire}:${move.member}:${move.seq}`;
+    return `${move.empire}:${move.member}:${move.step}:${move.seq}`;
   }
 
   /** Returns the earlier conflicting move, or null. Feed it only moves whose
@@ -576,6 +589,7 @@ export async function verifyEquivocation(
   if (!a?.move || !b?.move) return false;
   if (a.move.empire !== b.move.empire) return false;
   if (a.move.member !== b.move.member) return false;
+  if (a.move.step !== b.move.step) return false;
   if (a.move.seq !== b.move.seq) return false;
   if (sameMove(a.move, b.move)) return false; // the same move twice is not a crime
   return (

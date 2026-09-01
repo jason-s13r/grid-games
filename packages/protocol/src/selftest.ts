@@ -370,6 +370,16 @@ async function main(): Promise<void> {
     })),
   );
 
+  // A reload builds a fresh driver, whose seq counter starts again at zero. The
+  // seat is then honestly re-spending numbers its peers still remember. That is
+  // a rejoin, not a contradiction, and it must not cost anyone their seat.
+  const rejoined: SignedMove = await signMove(alice, gameId, claim(240, 1, 0, 9, 3, 4));
+  ok("a reused seq at a later step is not a crime", watch.record(rejoined) === null);
+  ok(
+    "and it cannot be dressed up as a proof",
+    !(await verifyEquivocation(roster, gameId, { a: other, b: rejoined })),
+  );
+
   // --- framing ---------------------------------------------------------------
 
   section("framing");
