@@ -9,6 +9,7 @@ import { Roster } from "@tessera/protocol";
 import { Lockstep, PeerBot } from "@tessera/net";
 import pkg from "../package.json";
 import { LocalGame } from "./game/Local";
+import { boardClick } from "./game/input";
 import { OnlineGame } from "./game/Online";
 import type { Driver } from "./game/Driver";
 import { Lobby, myIdentity } from "./net/Lobby";
@@ -145,9 +146,12 @@ viewportEl.addEventListener("pointerup", (event) => {
   const [x, y] = camera.tileAt(event.clientX - rect.left, event.clientY - rect.top);
   if (x < 0 || y < 0 || x >= MAP.width || y >= MAP.height) return;
 
-  if (controls.placeMode === "bridge") game.act(MOVE.PLACE_BRIDGE, x, y);
-  else if (controls.placeMode === "ladder") game.act(MOVE.PLACE_LADDER, x, y);
-  else game.claim(x, y);
+  boardClick(game, controls, x, y);
+});
+
+// Escape is the way out of an armed board that has nothing legal to click.
+window.addEventListener("keydown", (event) => {
+  if (event.key === "Escape") controls.disarm();
 });
 
 // Wheel deltas are wildly inconsistent — a mouse notch is ~100px, a trackpad

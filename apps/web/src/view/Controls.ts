@@ -51,6 +51,17 @@ export class Controls {
     this.placeMode = this.placeMode === mode ? "none" : mode;
   }
 
+  /** Put the board back to plain claiming.
+   *
+   *  Arming used to be sticky: a placed bridge left placeMode on "bridge" with
+   *  nothing left in stock, so every later click became a PLACE_BRIDGE that
+   *  failed validation silently and the player simply could not play. One
+   *  placement, one disarm — and render() disarms again if the stock runs out
+   *  some other way. */
+  disarm(): void {
+    this.placeMode = "none";
+  }
+
   render(state: State): void {
     // An observer holds no empire, and empire 0 is neutral. It has a clock and
     // a board like everyone else; what it does not have is a seat to describe.
@@ -63,6 +74,16 @@ export class Controls {
     const member = empire.members[this.game.member]!;
     const rules = state.genesis.rules;
     const theme = empireTheme(empire.id);
+
+    // Nothing left to place means nothing to be armed for. Without this a
+    // player whose last bridge was spent by a teammate stays stuck in place
+    // mode with no button lit to tell them why.
+    if (
+      (this.placeMode === "bridge" && empire.bridges === 0) ||
+      (this.placeMode === "ladder" && empire.ladders === 0)
+    ) {
+      this.placeMode = "none";
+    }
 
     this.els.clock.textContent = `${clock(state.step)} · step ${state.step}`;
 
@@ -98,6 +119,7 @@ export class Controls {
           Place ladder (${empire.ladders})
         </button>
       </div>
+      <p class="shop-hint">${this.hint()}</p>
       ${
         empire.members.length > 1
           ? `<div class="roster">${empire.members
@@ -136,6 +158,14 @@ export class Controls {
     } else {
       this.els.banner.hidden = true;
     }
+  }
+
+  /** What an armed board is waiting for. Placement modes look identical to
+   *  ordinary play until you click the wrong tile, so say it out loud. */
+  private hint(): string {
+    if (this.placeMode === "bridge") return "Click a river tile beside your border.";
+    if (this.placeMode === "ladder") return "Click a wall tile beside your border.";
+    return "";
   }
 
   setZoomHint(text: string): void {
