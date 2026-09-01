@@ -9,7 +9,7 @@ import { beforeAll, describe, expect, it } from "vitest";
 import { MOVE, Sim } from "@tessera/sim";
 import { Roster } from "@tessera/protocol";
 import { Lockstep } from "../index.js";
-import { MS_PER_STEP, agreed, clickAround, pickClaim, run, settle, table } from "./harness.js";
+import { MS_PER_STEP, agreed, clickAround, pickClaim, run, settle, settleNetwork, table } from "./harness.js";
 import type { Peer, Table } from "./harness.js";
 
 describe("a returning peer rebuilds from an untrusted snapshot", () => {
@@ -57,12 +57,7 @@ describe("a returning peer rebuilds from an untrusted snapshot", () => {
   // It holds no seat, so nobody was waiting for it; it simply catches up.
   it("and it catches up to the table", async () => {
     await run(t, 24);
-    for (let pass = 0; pass < 12; pass++) {
-      latecomer.pump();
-      await settle(2);
-      t.net.flush();
-      await settle(2);
-    }
+    await settleNetwork(t, () => latecomer.pump());
     const source = t.peers[0]!.driver;
     expect([latecomer.step, latecomer.hash()]).toEqual([source.step, source.hash()]);
   });
@@ -74,27 +69,13 @@ describe("a peer arriving late resumes without being told to", () => {
   let storedStep: number;
   let stepAfterOneRound: number;
 
-  // One round of the world with the latecomer pumped alongside the table, then
-  // a drain: signing is asynchronous, so a round that ends the moment the clock
-  // stops leaves frames in flight and an assertion reading a table mid-sentence.
+  // The world, with the latecomer pumped alongside the table.
   const spin = async (rounds: number): Promise<void> => {
     for (let i = 0; i < rounds; i++) {
       t.clock.advance(MS_PER_STEP);
-      for (let pass = 0; pass < 3; pass++) {
-        for (const peer of t.peers) peer.driver.pump();
-        latecomer.pump();
-        await settle(2);
-        t.net.flush();
-        await settle(2);
-      }
+      await settleNetwork(t, () => latecomer.pump());
     }
-    for (let pass = 0; pass < 8; pass++) {
-      for (const peer of t.peers) peer.driver.pump();
-      latecomer.pump();
-      await settle(2);
-      t.net.flush();
-      await settle(2);
-    }
+    await settleNetwork(t, () => latecomer.pump());
   };
 
   beforeAll(async () => {

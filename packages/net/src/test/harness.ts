@@ -19,6 +19,11 @@ import type { LoopbackOptions, Seat } from "../index.js";
  *  deterministic rather than merely usually right. */
 export const settle = async (rounds = 8): Promise<void> => {
   for (let i = 0; i < rounds; i++) await new Promise<void>((done) => setImmediate(done));
+  // One timer turn as well. A signature finishes on the crypto threadpool and
+  // its completion lands in the poll phase; on a machine with more workers than
+  // cores that can take longer than any number of setImmediate turns is worth
+  // spending. Yielding to a timer gives the loop a chance to get there.
+  await new Promise<void>((done) => setTimeout(done, 0));
 };
 
 export class Clock {
@@ -180,9 +185,51 @@ export async function table(options: TableOptions): Promise<Table> {
   };
 }
 
-/** One round of wall-clock plus enough pump/flush passes for the pipeline to
- *  drain. Peers may lead each other by up to inputDelay-1 steps, so a single
- *  pass per round would leave the table permanently one step behind itself. */
+/** Pump everyone the test is driving, once.
+ *
+ *  A bot seat plays itself; everyone else is driven by whatever the scenario
+ *  asks for. Extra pumps let a scenario carry a peer that is not at the table,
+ *  such as a latecomer resuming beside it. */
+export function pumpAll(t: Table, ...extra: Array<() => void>): void {
+  for (const peer of t.peers) {
+    if (!t.awake.has(peer.name)) continue;
+    if (peer.bot) peer.bot.tick();
+    else peer.driver.pump();
+  }
+  for (const pump of extra) pump();
+}
+
+/** How many passes delivering nothing count as quiet. Each costs four turns of
+ *  the event loop, so this is the grace a signature still in flight gets before
+ *  the harness decides the network has nothing left to say. */
+const IDLE_PASSES = 4;
+
+/** Runaway guard. A scenario that genuinely will not settle should fail on its
+ *  assertions rather than hang the suite. */
+const MAX_PASSES = 64;
+
+/** Pump and flush until the network goes quiet.
+ *
+ *  This used to be three fixed passes, which quietly made the harness depend on
+ *  how fast the machine could sign. On a loaded CI runner the signatures for
+ *  one step had not resolved before the next began: frames never arrived, every
+ *  peer looked silent to every other, and the stall machinery ejected seats
+ *  that had never been absent. Eighteen checks failed in a suite that passes on
+ *  a quiet laptop every time.
+ *
+ *  Waiting for quiet instead of counting passes makes the harness care about
+ *  what happened rather than how long it took. */
+export async function settleNetwork(t: Table, ...extra: Array<() => void>): Promise<void> {
+  let idle = 0;
+  for (let pass = 0; pass < MAX_PASSES && idle < IDLE_PASSES; pass++) {
+    pumpAll(t, ...extra);
+    await settle(2);
+    idle = t.net.flush() === 0 ? idle + 1 : 0;
+    await settle(2);
+  }
+}
+
+/** Advance the world `steps` steps, letting each one finish before the next. */
 export async function run(
   t: Table,
   steps: number,
@@ -190,30 +237,11 @@ export async function run(
 ): Promise<void> {
   for (let i = 0; i < steps; i++) {
     t.clock.advance(MS_PER_STEP);
-    for (let pass = 0; pass < 3; pass++) {
-      for (const peer of t.peers) {
-        if (!t.awake.has(peer.name)) continue;
-        // A bot seat plays itself; everyone else is driven by the test.
-        if (peer.bot) peer.bot.tick();
-        else peer.driver.pump();
-      }
-      await settle(2);
-      t.net.flush();
-      await settle(2);
-    }
+    await settleNetwork(t);
     if (act) await act(i);
   }
-  // Let anything still in flight land, without advancing the world further.
-  for (let pass = 0; pass < 8; pass++) {
-    for (const peer of t.peers) {
-      if (!t.awake.has(peer.name)) continue;
-      if (peer.bot) peer.bot.tick();
-      else peer.driver.pump();
-    }
-    await settle(2);
-    t.net.flush();
-    await settle(2);
-  }
+  // Anything the last step's actions produced, without advancing the world.
+  await settleNetwork(t);
 }
 
 export const agreed = (t: Table, only?: string[]): boolean => {
