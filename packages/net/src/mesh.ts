@@ -280,7 +280,11 @@ export class PeerMesh implements Transport {
     let parts = held.get(id);
     if (!parts) {
       if (held.size >= MAX_PARTIALS_PER_PEER) held.delete(held.keys().next().value!);
-      held.set(id, (parts = new Array<string | undefined>(n)));
+      // Filled, not merely sized. A sparse array's holes are skipped by every
+      // iteration method, so the completeness check below would visit only the
+      // slices that had arrived, find none of them undefined, and hand on a
+      // truncated frame after the very first one.
+      held.set(id, (parts = new Array<string | undefined>(n).fill(undefined)));
     }
     // A second slice claiming a different total is a different message wearing
     // the same id; the safe reading is that neither can be trusted.

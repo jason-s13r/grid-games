@@ -12,8 +12,8 @@ import { CONTROL, MEMBER, MOVE, STEPS_PER_SECOND, Sim, makeGenesis, validate } f
 import type { EmpireSpec, Genesis, Move } from "@tessera/sim";
 import { CHANNEL, FRAME, Identity, Roster, sealGenesis, signMove } from "@tessera/protocol";
 import type { Frame, Message } from "@tessera/protocol";
-import { LoopbackNetwork, Lockstep } from "./index.js";
-import type { LoopbackOptions, Seat } from "./index.js";
+import { LoopbackNetwork, Lockstep, PeerMesh } from "./index.js";
+import type { LoopbackOptions, PeerConstructor, Seat } from "./index.js";
 
 let failures = 0;
 let checks = 0;
@@ -553,6 +553,262 @@ async function latecomerResumesByItself(): Promise<void> {
   ok("and the table still agrees with itself", agreed(t));
 }
 
+async function aReloadKeepsItsSeat(): Promise<void> {
+  section("a reload rejoins with its own seat intact");
+  // The seq counter lives in a Lockstep instance, so a reload starts it again
+  // at zero and the returning seat honestly re-spends numbers its peers still
+  // remember. Nothing about that is a contradiction, and treating it as one
+  // costs an innocent player their seat and desyncs everyone who saw it.
+  const t = await table({ seats: [2, 1], snapshotInterval: 24, stallTimeout: 60_000 });
+  await run(t, 120, await clickAround(t, 20));
+
+  const gone = t.peers[2]!;
+  const seat = gone.seat!;
+  t.awake.delete(gone.name);
+  t.net.disconnect(gone.name);
+
+  const driver = new Lockstep({
+    genesis: t.genesis,
+    sim: new Sim(t.genesis),
+    roster: Roster.fromGenesis(t.genesis),
+    transport: t.net.connect("e2m0-again"),
+    identity: gone.identity,
+    seat,
+    now: t.clock.now,
+    stallTimeout: 60_000,
+    snapshotInterval: 24,
+  });
+  const back: Peer = {
+    name: "e2m0-again",
+    driver,
+    seat,
+    identity: gone.identity,
+    chat: [],
+    desyncs: [],
+    ejections: [],
+    violations: [],
+  };
+  driver.onDesync = (step, _ours, _theirs, from) => back.desyncs.push({ step, seat: from });
+  driver.onEjection = (from, atStep, reason, late) =>
+    back.ejections.push({ seat: from, atStep, reason, late });
+  driver.onViolation = (_from, what) => back.violations.push(what);
+  driver.start();
+  t.peers.push(back);
+  t.awake.add(back.name);
+
+  await run(t, 24);
+  eq("it is back on the table's step", driver.step, t.peers[0]!.driver.step);
+
+  // The move that used to be the trap: a seq this seat has already spent, for
+  // a slot its peers still hold under the old driver's numbering.
+  ok(
+    "and its move numbering restarted",
+    driver.nextSeq < gone.driver.nextSeq,
+    `back at ${driver.nextSeq}, was at ${gone.driver.nextSeq}`,
+  );
+  const claim = pickClaim(driver.sim, seat.empire, seat.member);
+  ok("it has somewhere legal to click", claim !== null);
+  if (claim) await driver.submit(MOVE.CLAIM, claim.x, claim.y);
+  await run(t, 24, await clickAround(t, 8));
+
+  const accused = t.peers.filter((peer) => peer.ejections.length > 0);
+  ok(
+    "nobody was accused of anything",
+    accused.length === 0,
+    accused.map((peer) => `${peer.name}:${peer.ejections[0]!.reason}`).join(" "),
+  );
+  ok("and the table still agrees with itself", agreed(t, [...t.awake]));
+}
+
+async function readinessSurvivesASlowSignature(): Promise<void> {
+  section("a promise made while signing is renewed, not left stale");
+  // Submitting a move holds readiness below the move's slot until the signature
+  // is out, so a READY cannot overtake the move it is promising about. Signing
+  // is asynchronous and the world does not stop for it: the peer keeps
+  // simulating, and every announcement it makes in that window is capped away.
+  //
+  // Left there, the promise on record is stale the moment the ceiling lifts —
+  // and a peer whose promise is stale blocks the peer waiting on it, which
+  // stops announcing in turn. Two peers then wait on each other until the stall
+  // timer ejects one of them for a fault it did not have.
+  const t = await table({ seats: [1, 1], stallTimeout: 60_000 });
+  await run(t, 60, await clickAround(t, 20));
+
+  const peer = t.peers[0]!;
+  const other = t.peers[1]!;
+  const identity = peer.identity! as unknown as {
+    sign: (payload: Uint8Array) => Promise<string>;
+  };
+  const realSign = identity.sign.bind(identity);
+  let arming = false;
+  let release = (): void => {};
+  identity.sign = async (payload) => {
+    if (arming) {
+      arming = false;
+      await new Promise<void>((resolve) => (release = resolve));
+    }
+    return realSign(payload);
+  };
+
+  const claim = pickClaim(peer.driver.sim, peer.seat!.empire, peer.seat!.member);
+  ok("there is somewhere legal to click", claim !== null);
+  arming = true;
+  const pending = claim
+    ? peer.driver.submit(MOVE.CLAIM, claim.x, claim.y)
+    : Promise.resolve(false);
+
+  // Long enough that the peer overruns the ceiling it is holding.
+  await run(t, 12);
+  const held = other.driver.step;
+
+  release();
+  await pending;
+
+  // The promise on record must be current the moment the ceiling lifts. This is
+  // the whole fix: pump() only announces after a step it actually simulated, so
+  // a peer that is blocked when the ceiling lifts would otherwise sit on a
+  // promise it made several steps ago, and block whoever is waiting on it.
+  const promised = (peer.driver as unknown as { broadcastReady: number }).broadcastReady;
+  ok(
+    "the promise was renewed as soon as the signature was out",
+    promised >= peer.driver.step,
+    `promised ${promised}, standing at ${peer.driver.step}`,
+  );
+
+  await run(t, 60, await clickAround(t, 20));
+
+  ok(
+    "the table moved on once the signature landed",
+    other.driver.step > held,
+    `stuck at ${other.driver.step}, was ${held}`,
+  );
+  ok(
+    "nobody was ejected for waiting",
+    t.peers.every((each) => each.ejections.length === 0),
+    t.peers.flatMap((each) => each.ejections.map((e) => `${e.reason}@${e.atStep}`)).join(" "),
+  );
+  // A signature held for a full second is far past the input delay, so the move
+  // it was signing misses the slot it was addressed to and one peer applies
+  // what the other never received. That is not what this scenario is about, and
+  // it is not swept up either: the checkpoint machinery is what catches it, and
+  // it does.
+  ok(
+    "the move it missed its slot with was noticed, not swallowed",
+    t.peers.some((each) => each.desyncs.length > 0),
+  );
+}
+
+// --- a channel with a ceiling ------------------------------------------------
+
+/** PeerJS refuses an oversized JSON message outright: it raises on the *sender*
+ *  and the frame simply never leaves. Its ceiling is chunkedMTU, 16300 bytes,
+ *  and a snapshot of a real map is an order of magnitude past it — so PeerMesh
+ *  cuts a large frame into slices and puts it back together on the far side.
+ *
+ *  The loopback network above has no ceiling and so exercises none of that,
+ *  which is how a reassembly bug reached a browser: the slices all arrived, and
+ *  the frame rebuilt from the first of them alone. This fake is the smallest
+ *  thing that has the property the loopback lacks. */
+const FAKE_MTU = 16_300;
+
+type Handler = (arg: never) => void;
+
+class Emitter {
+  private readonly handlers = new Map<string, Handler[]>();
+  on(event: string, handler: Handler): void {
+    const list = this.handlers.get(event) ?? [];
+    list.push(handler);
+    this.handlers.set(event, list);
+  }
+  emit(event: string, arg?: unknown): void {
+    for (const handler of this.handlers.get(event) ?? []) (handler as (a: unknown) => void)(arg);
+  }
+}
+
+class FakeConnection extends Emitter {
+  other?: FakeConnection;
+  constructor(readonly peer: string) {
+    super();
+  }
+  send(data: unknown): void {
+    // Serialised before the check and again on delivery, exactly as a real
+    // channel does — a mesh that accidentally shared an object with the sender
+    // would otherwise pass this test and fail on the wire.
+    const text = JSON.stringify(data);
+    if (text.length > FAKE_MTU) throw new Error("Message too big for JSON channel");
+    queueMicrotask(() => this.other?.emit("data", JSON.parse(text)));
+  }
+  close(): void {
+    this.emit("close");
+  }
+}
+
+class FakePeer extends Emitter {
+  static readonly all = new Map<string, FakePeer>();
+  readonly id: string;
+  constructor(id?: string) {
+    super();
+    this.id = id ?? `peer${FakePeer.all.size}`;
+    FakePeer.all.set(this.id, this);
+    queueMicrotask(() => this.emit("open", this.id));
+  }
+  connect(to: string): FakeConnection {
+    const target = FakePeer.all.get(to)!;
+    const here = new FakeConnection(to);
+    const there = new FakeConnection(this.id);
+    here.other = there;
+    there.other = here;
+    queueMicrotask(() => {
+      target.emit("connection", there);
+      queueMicrotask(() => {
+        there.emit("open");
+        here.emit("open");
+      });
+    });
+    return here;
+  }
+  destroy(): void {}
+}
+
+async function largeFramesCrossTheChannel(): Promise<void> {
+  section("a frame larger than the channel arrives whole");
+  FakePeer.all.clear();
+  const PeerClass = FakePeer as unknown as PeerConstructor;
+  const errors: string[] = [];
+  const host = new PeerMesh(PeerClass, { onError: (e) => errors.push(e.message) });
+  await host.opening;
+  const guest = new PeerMesh(PeerClass, { join: host.id, onError: (e) => errors.push(e.message) });
+  await guest.opening;
+  await settle(4);
+
+  const heard: Frame[] = [];
+  guest.listen((_from, frame) => heard.push(frame));
+
+  host.broadcast({ t: FRAME.BYE, reason: "small" });
+  await settle(4);
+  eq("a small frame arrives unsliced", heard.length, 1);
+
+  // Ten times the ceiling, and every byte distinct, so a frame rebuilt out of
+  // order or from a subset of its slices cannot happen to compare equal.
+  const data = Array.from({ length: 168_000 }, (_, i) => "abcdefgh"[i % 8]!).join("");
+  host.broadcast({ t: FRAME.SNAPSHOT, step: 172, hash: 42, data });
+  await settle(8);
+
+  eq("the large frame arrives too", heard.length, 2);
+  const arrived = heard[1];
+  ok(
+    "as one snapshot, not a truncated one",
+    arrived?.t === FRAME.SNAPSHOT && arrived.data === data,
+    arrived?.t === FRAME.SNAPSHOT
+      ? `${arrived.data.length} of ${data.length} bytes`
+      : `got ${arrived?.t}`,
+  );
+  ok("and the sender never had a message refused", errors.length === 0, errors.join(" "));
+
+  host.close();
+  guest.close();
+}
+
 async function desyncIsNoticed(): Promise<void> {
   section("a divergent peer is noticed");
   const t = await table({ seats: [2, 1], checkpointInterval: 12 });
@@ -580,6 +836,9 @@ async function main(): Promise<void> {
   await equivocationIsCaught();
   await snapshotResume();
   await latecomerResumesByItself();
+  await aReloadKeepsItsSeat();
+  await largeFramesCrossTheChannel();
+  await readinessSurvivesASlowSignature();
   await desyncIsNoticed();
 
   console.log(

@@ -92,12 +92,16 @@ const EJECTION_DELAY = STEPS_PER_SECOND * 4;
  *  reconnecting phone should not cost someone their seat. */
 const DEFAULT_STALL_TIMEOUT = 15_000;
 
-/** How far behind wall-clock time a peer must be at start() before it treats
- *  itself as arriving late rather than starting fresh. Adopting a genesis takes
- *  a round trip or two, so a peer joining a game that is genuinely new is
- *  already a second or so behind; ten seconds is well clear of that and well
- *  under any real absence. */
-const RESUME_BEHIND = STEPS_PER_SECOND * 10;
+/** How far behind wall-clock time a peer may be at start() and still treat
+ *  itself as starting fresh rather than arriving late.
+ *
+ *  The gap is not a performance question, it is a correctness one: nobody sent
+ *  moves to a client that was not connected, so a peer behind by more than a
+ *  round trip is missing inputs it can never obtain, and replaying up from step
+ *  zero derives a state that agrees with nobody. Two seconds is slack for the
+ *  round trip that adopting a genesis costs and for clock skew between peers,
+ *  and nothing more. */
+const RESUME_BEHIND = STEPS_PER_SECOND * 2;
 
 /** How long a snapshot we asked for stays welcome. Long enough for a large map
  *  to cross a slow channel; short enough that a stale one arriving later is
@@ -184,6 +188,14 @@ export class Lockstep {
     return this.sim.step;
   }
 
+  /** The number the next move from this seat will carry. It counts within one
+   *  driver, not within a seat's whole career: a reload builds a new driver and
+   *  starts again at zero, which is why the equivocation slot is keyed on the
+   *  step as well as on this. */
+  get nextSeq(): number {
+    return this.seq;
+  }
+
   get stopped(): string | null {
     return this.halted;
   }
@@ -205,7 +217,12 @@ export class Lockstep {
     // The request names the wall-clock step rather than ours, because a peer
     // answers with the most recent snapshot it holds at or before the step it
     // is asked for — and ours is the one number known to be too old.
-    if (this.targetStep() - this.sim.step > RESUME_BEHIND) {
+    // Holding is only worth anything when somebody is there to answer. A host
+    // opening a room is behind its own genesis by however long the lobby took,
+    // and has nobody to ask, so it would sit out the whole wait and then
+    // simulate from step 0 regardless — which is the right answer for it.
+    const behind = this.targetStep() - this.sim.step;
+    if (behind > RESUME_BEHIND && this.transport.peers().length > 0) {
       this.holdingForResume = true;
       this.requestSnapshot(this.targetStep());
     }
@@ -256,6 +273,12 @@ export class Lockstep {
       const step = this.sim.step;
       const waiting = this.blocked(step);
       if (waiting.length > 0) {
+        // Say again what we are ready for before settling in to wait. Our own
+        // promise is a function of our own step and nobody else's, so being
+        // blocked is no reason to let it go stale — and if the peer we are
+        // waiting for is waiting on us in turn, this is the only thing that
+        // breaks the deadlock without ejecting an innocent seat.
+        this.announceReady();
         this.stalling(waiting);
         break;
       }
@@ -301,6 +324,14 @@ export class Lockstep {
       return true;
     } finally {
       this.readyCeiling = Number.MAX_SAFE_INTEGER;
+      // Signing is asynchronous, and the world does not stop for it: this peer
+      // may have simulated several steps while the ceiling was down, and every
+      // announcement it tried to make in that window was capped away. The
+      // promise on record is therefore stale the instant the ceiling lifts, and
+      // nothing else will refresh it — pump() only announces after a step it
+      // actually simulated, and a peer whose promise is stale is about to be
+      // blocked and stop simulating.
+      this.announceReady();
     }
   }
 
