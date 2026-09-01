@@ -97,6 +97,9 @@ export interface MapConfig {
   mountains: number;
   lakes: number;
   rivers: number;
+  /** Passable gaps punched through each river. Without them a river seals the
+   *  map and an empire is isolated until it can afford a bridge. */
+  riverGaps: number;
   walls: number;
   blobMin: number;
   blobMax: number;
