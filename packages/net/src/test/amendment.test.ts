@@ -210,3 +210,59 @@ describe("a proposal nobody answers", () => {
 
   it("and every peer still agrees", () => expect(agreed(t)).toBe(true));
 });
+
+// A snapshot carries the simulation, and the simulation knows members by index
+// and nothing about keys. A peer that resumed across an amendment would hold a
+// state with a seat in it and no idea whose key sits there — and would then
+// reject every move that player made.
+describe("a peer that resumes across an amendment", () => {
+  let t: Table;
+  let substitute: Identity;
+  let latecomer: Lockstep;
+
+  beforeAll(async () => {
+    t = await table({ seats: [1, 1], snapshotInterval: 24 });
+    substitute = await Identity.generate();
+    await run(t, 12);
+    await t.peers[0]!.driver.amend(substitute.key); // solo empire: its own quorum
+    await run(t, ROUND);
+
+    latecomer = new Lockstep({
+      genesis: t.genesis,
+      sim: new Sim(t.genesis),
+      roster: Roster.fromGenesis(t.genesis),
+      transport: t.net.connect("latecomer"),
+      now: t.clock.now,
+    });
+    latecomer.start();
+    for (let i = 0; i < 60; i++) {
+      t.clock.advance(1000 / 12);
+      await settleNetwork(t, () => latecomer.pump());
+    }
+  });
+
+  it("the table seated the substitute", () => {
+    expect(t.peers[0]!.driver.roster.has(substitute.key)).toBe(true);
+  });
+
+  it("the latecomer resumed to the table's state", () => {
+    const source = t.peers[0]!.driver;
+    expect([latecomer.step, latecomer.hash()]).toEqual([source.step, source.hash()]);
+  });
+
+  it("and knows whose seat the new one is", () => {
+    expect(latecomer.roster.seatOf(substitute.key)).toEqual({
+      empire: 1,
+      member: 1,
+      key: substitute.key,
+      kind: MEMBER.HUMAN,
+      joinedAt: expect.any(Number),
+    });
+  });
+
+  it("so the simulation and the roster agree on how many seats there are", () => {
+    expect(latecomer.roster.membersOf(1)).toHaveLength(
+      latecomer.sim.state.empires[0]!.members.length,
+    );
+  });
+});

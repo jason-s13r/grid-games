@@ -199,3 +199,62 @@ describe("a reload rejoins with its own seat intact", () => {
     expect(agreed(t, [...t.awake])).toBe(true);
   });
 });
+
+// The first request is the one most likely to go out to nobody: a mesh takes a
+// moment to form, and two peers that joined at the same instant can be playing
+// before their channel to each other opens. Giving up and replaying from step
+// zero would derive a state that agrees with nobody, because the moves that
+// built the real one were broadcast before this peer was listening.
+describe("a resume request that goes unanswered", () => {
+  let t: Table;
+  let latecomer: Lockstep;
+  /** Snapshots to this peer are lost until the clock passes this. */
+  let deafUntil = 0;
+  let stepWhileDeaf = 0;
+
+  const spin = async (rounds: number): Promise<void> => {
+    for (let i = 0; i < rounds; i++) {
+      t.clock.advance(MS_PER_STEP);
+      await settleNetwork(t, () => latecomer.pump());
+    }
+    await settleNetwork(t, () => latecomer.pump());
+  };
+
+  beforeAll(async () => {
+    t = await table({
+      seats: [2, 1],
+      snapshotInterval: 24,
+      loopback: {
+        drop: (_from, to, frame) =>
+          to === "deaf" && frame.t === "snapshot" && t.clock.ms < deafUntil,
+      },
+    });
+    await run(t, 120, await clickAround(t, 30));
+    // Past one whole SNAPSHOT_WAIT_MS window, so the first request and the
+    // first retry both go unanswered.
+    deafUntil = t.clock.ms + 12_000;
+
+    latecomer = new Lockstep({
+      genesis: t.genesis,
+      sim: new Sim(t.genesis),
+      roster: Roster.fromGenesis(t.genesis),
+      transport: t.net.connect("deaf"),
+      now: t.clock.now,
+      snapshotInterval: 24,
+    });
+    latecomer.start();
+
+    await spin(130); // ~10.8 s: two requests made, both lost
+    stepWhileDeaf = latecomer.step;
+    await spin(170); // the next try lands
+  });
+
+  it("it did not start replaying the game from the beginning", () => {
+    expect(stepWhileDeaf).toBe(0);
+  });
+
+  it("and it catches up as soon as an answer gets through", () => {
+    const source = t.peers[0]!.driver;
+    expect([latecomer.step, latecomer.hash()]).toEqual([source.step, source.hash()]);
+  });
+});

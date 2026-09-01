@@ -36,6 +36,7 @@ import {
   signMove,
   signReady,
   tallyAmendment,
+  verifyAmendment,
   verifyCheckpoint,
   verifyDrop,
   verifyEquivocation,
@@ -111,6 +112,15 @@ const DEFAULT_STALL_TIMEOUT = 15_000;
  *  round trip that adopting a genesis costs and for clock skew between peers,
  *  and nothing more. */
 const RESUME_BEHIND = STEPS_PER_SECOND * 2;
+
+/** How long a peer that arrived late keeps asking for the world before deciding
+ *  nobody is going to hand it over.
+ *
+ *  Long enough to outlast a mesh forming slowly — the first request is the one
+ *  most likely to go out to nobody at all, because a joiner is routinely
+ *  playing before its channels have finished opening — and short enough that a
+ *  peer alone in a room eventually starts playing rather than staring. */
+const RESUME_PATIENCE_MS = 45_000;
 
 /** How often a blocked peer repeats the promise it is already standing on.
  *
@@ -208,6 +218,12 @@ export class Lockstep {
   private readonly endorsedAmend = new Map<string, number>();
   /** Amendments that have their quorum, waiting for the step they name. */
   private readonly seating = new Map<number, SignedAmendment[]>();
+  /** Amendments already applied, in the order they were applied. Sent with a
+   *  snapshot, because the simulation inside one knows members by index and
+   *  nothing about keys. */
+  private readonly applied: SignedAmendment[] = [];
+  /** Drop records this peer has acted on, for the same reason. */
+  private readonly enforced: SignedDrop[] = [];
 
   readonly snapshots = new SnapshotStore();
 
@@ -236,6 +252,7 @@ export class Lockstep {
   /** Set only at start(), when the game turns out to have begun without us:
    *  the one case where there is nothing worth simulating until it is answered. */
   private holdingForResume = false;
+  private resumeDeadline = 0;
   private unlisten?: () => void;
 
   lateMoves = 0;
@@ -288,14 +305,22 @@ export class Lockstep {
     // The request names the wall-clock step rather than ours, because a peer
     // answers with the most recent snapshot it holds at or before the step it
     // is asked for — and ours is the one number known to be too old.
-    // Holding is only worth anything when somebody is there to answer. A host
-    // opening a room is behind its own genesis by however long the lobby took,
-    // and has nobody to ask, so it would sit out the whole wait and then
-    // simulate from step 0 regardless — which is the right answer for it.
+    // Behind the world at the moment of starting means the game began without
+    // us, and the moves that built it were broadcast before we were listening:
+    // nobody will send them again, so replaying from step 0 would derive a
+    // state that agrees with nobody. Wait for a snapshot instead.
+    //
+    // The wait covers a mesh that has not finished forming, not only an
+    // unanswered request. A joiner is routinely playing before its channels
+    // have opened, so requiring a peer to be connected *now* would send the
+    // request to nobody and give up. A host opening a room is behind its own
+    // genesis by however long the lobby took and will never find anyone to ask;
+    // it sits out the patience and then starts from the top, which is right.
     const behind = this.targetStep() - this.sim.step;
-    if (behind > RESUME_BEHIND && this.transport.peers().length > 0) {
+    if (behind > RESUME_BEHIND) {
       this.holdingForResume = true;
-      this.requestSnapshot(this.targetStep());
+      this.resumeDeadline = this.now() + RESUME_PATIENCE_MS;
+      if (this.transport.peers().length > 0) this.requestSnapshot(this.targetStep());
     }
 
     // Without this nobody ever speaks first, and every peer sits at step 0
@@ -303,12 +328,26 @@ export class Lockstep {
     this.announceReady();
   }
 
-  /** True while waiting for a snapshot of a game that started without us. */
+  /** True while waiting for a snapshot of a game that started without us.
+   *
+   *  An unanswered request is asked again rather than given up on. The mesh
+   *  takes a moment to form — two peers who joined at the same instant can be
+   *  playing before their channel to each other opens — so the first request
+   *  can easily go out to nobody. Replaying from step 0 instead would derive a
+   *  state that agrees with nobody, because the moves that built the real one
+   *  were broadcast before this peer was listening and will never be sent
+   *  again. Waiting is recoverable; guessing is not. */
   private resuming(): boolean {
     if (!this.holdingForResume) return false;
+    if (this.now() >= this.resumeDeadline) {
+      this.holdingForResume = false; // nobody is going to answer; play from the top
+      return false;
+    }
+    // Waiting on an outstanding request, or on a mesh that has not finished
+    // forming. Either way there is nothing worth simulating yet.
     if (this.now() < this.snapshotWantedUntil) return true;
-    this.holdingForResume = false; // nobody answered; replay from step 0 instead
-    return false;
+    if (this.transport.peers().length > 0) this.requestSnapshot(this.targetStep());
+    return true;
   }
 
   stop(): void {
@@ -550,7 +589,7 @@ export class Lockstep {
       case FRAME.SNAPSHOT_REQUEST:
         return this.onSnapshotRequest(from, frame.step);
       case FRAME.SNAPSHOT:
-        return this.onSnapshot(frame.step, frame.hash, frame.data);
+        return this.onSnapshot(frame.step, frame.hash, frame.data, frame);
       default:
         // Handshake and genesis frames belong to the session that built this
         // driver; by the time it exists they have already been settled.
@@ -758,6 +797,7 @@ export class Lockstep {
     if (grew) this.transport.broadcast({ t: FRAME.DROP, signed: record });
 
     if (await verifyDrop(this.roster, this.gameId, record)) {
+      if (!this.ejected.has(key)) this.enforced.push(record);
       this.eject(seat, record.drop.atStep, "stalled");
     }
   }
@@ -958,6 +998,7 @@ export class Lockstep {
       const move = amendmentMove(record.amendment, AMENDMENT_SEQ + i, 0);
       if (!this.sim.validate(move)) return;
       const member = this.roster.amend(empire, key, kind, step);
+      this.applied.push(record);
       moves.push(move);
       this.onSeated?.({ empire, member }, key);
       // The invitation was ours: take the seat and start playing it.
@@ -1016,13 +1057,20 @@ export class Lockstep {
       step: this.sim.step,
       hash: this.sim.hash(),
       data: encodeSnapshot(this.sim.snapshot()),
+      amendments: this.applied,
+      drops: this.enforced,
     });
     for (const moves of this.pending.values()) {
       for (const signed of moves) this.transport.send(from, { t: FRAME.MOVE, signed });
     }
   }
 
-  private async onSnapshot(step: number, hash: number, data: string): Promise<void> {
+  private async onSnapshot(
+    step: number,
+    hash: number,
+    data: string,
+    roster: { amendments?: SignedAmendment[]; drops?: SignedDrop[] },
+  ): Promise<void> {
     if (step === this.sim.step && this.sim.hash() === hash) return; // already there
     // Behind us, and we did not ask. Adopting it would throw away steps this
     // peer has correctly applied in order to help with someone else's rescue.
@@ -1030,7 +1078,56 @@ export class Lockstep {
     if (step < this.sim.step && this.ourHashes.get(step) === hash) return; // nothing to learn
     const buffer = decodeSnapshot(data);
     if (!buffer) return;
+    // The roster first: adopting a state whose seats we cannot attribute would
+    // leave us rejecting the moves of a player everyone else can see, and
+    // waiting forever on one they all stopped waiting for.
+    if (roster.amendments?.length) await this.catchUpRoster(roster.amendments);
+    if (roster.drops?.length) await this.catchUpDrops(roster.drops);
     this.adopt(buffer, hash);
+  }
+
+  /** Re-apply the amendments behind a snapshot, checking each quorum again.
+   *
+   *  In order, because an empire's quorum grows as it does: a record that
+   *  carried when the empire had two seats is checked against the roster as it
+   *  stood then, which is what re-applying in order reconstructs. Anything that
+   *  does not check out stops the walk — the records after it were verified
+   *  against a roster this peer is no longer reproducing, so continuing would
+   *  be guessing. */
+  private async catchUpRoster(amendments: SignedAmendment[]): Promise<void> {
+    for (const record of amendments) {
+      const { empire, key, kind, step } = record.amendment;
+      if (this.roster.has(key)) continue; // already have this one
+      if (!(await verifyAmendment(this.roster, this.gameId, record))) return;
+      // Checked again after the await. Verification is asynchronous and pump()
+      // runs in the gap, so the step this record belongs to can be simulated —
+      // and the seat added — while we are still checking the signatures on it.
+      if (this.roster.has(key)) continue;
+      const member = this.roster.amend(empire, key, kind, step);
+      this.applied.push(record);
+      this.onSeated?.({ empire, member }, key);
+      if (this.options.identity?.key === key && !this.options.seat) {
+        this.options.seat = { empire, member };
+        this.seq = 0;
+      }
+    }
+  }
+
+  /** Adopt the ejections behind a snapshot, checking each quorum again.
+   *
+   *  Quietly: an ejection changes who this peer waits for, never what it
+   *  computes, so there is nothing here to be late for and nothing to rebuild.
+   *  The state being adopted already reflects every move these records stopped. */
+  private async catchUpDrops(drops: SignedDrop[]): Promise<void> {
+    for (const record of drops) {
+      const seat: Seat = { empire: record.drop.empire, member: record.drop.member };
+      if (this.ejected.has(seatKey(seat))) continue;
+      if (!(await verifyDrop(this.roster, this.gameId, record))) continue;
+      if (this.ejected.has(seatKey(seat))) continue; // settled while verifying
+      this.enforced.push(record);
+      this.ejected.set(seatKey(seat), record.drop.atStep);
+      this.stalledSince.delete(seatKey(seat));
+    }
   }
 
   /** Safe from anyone: restore it, hash it, and put the old state back if the
@@ -1052,6 +1149,15 @@ export class Lockstep {
     for (const step of [...this.pending.keys()]) {
       if (step <= this.sim.step) this.pending.delete(step);
     }
+    // Seatings the adopted state already contains, and proposals whose step it
+    // has passed. Applying either now would append a member twice.
+    for (const step of [...this.seating.keys()]) {
+      if (step <= this.sim.step) this.seating.delete(step);
+    }
+    for (const [slot, record] of this.amendments) {
+      if (record.amendment.step <= this.sim.step) this.amendments.delete(slot);
+    }
+    this.hold();
     this.holdingForResume = false;
     this.snapshotWantedUntil = 0;
     this.ourHashes.clear();
