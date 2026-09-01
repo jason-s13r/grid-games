@@ -39,6 +39,8 @@ export interface EmpireSummary {
   diamonds: number;
   bridges: number;
   ladders: number;
+  /** Tiles taken by capturing a capital rather than one at a time. */
+  annexed: number;
   members: Array<{
     index: number;
     kind: number;
@@ -72,6 +74,7 @@ export function summarise(state: State): EmpireSummary[] {
     diamonds: empire.stats[STAT.DIAMONDS]!,
     bridges: empire.stats[STAT.BRIDGES]!,
     ladders: empire.stats[STAT.LADDERS]!,
+    annexed: empire.stats[STAT.ANNEXED]!,
     members: empire.members.map((m, i) => ({
       index: i,
       kind: m.kind,

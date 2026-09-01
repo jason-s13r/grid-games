@@ -31,6 +31,7 @@ export const STAT = {
   MOVES: 11,
   POP_SPENT: 12,
   TILES_TAKEN: 13,
+  ANNEXED: 14,
 } as const;
 export const STAT_SLOTS = 16;
 

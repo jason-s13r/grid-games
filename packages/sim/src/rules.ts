@@ -2,7 +2,7 @@
 // run by every peer, so an illegal move dies identically everywhere with no
 // trust and no negotiation.
 
-import { MOVE, ITEM, TERRAIN, MEMBER, PHASE } from "./types.js";
+import { MOVE, ITEM, TERRAIN, MEMBER, PHASE, ELIMINATION } from "./types.js";
 import type { Empire, Member, Move, EmpireId, Item } from "./types.js";
 import { PASSABLE, COIN_RADIUS, STAT } from "./constants.js";
 import { ORTHO, vonNeumannBall, idx, xOf, yOf, inBounds } from "./geometry.js";
@@ -85,7 +85,62 @@ export function place(
   }
 
   dirty.add(i);
+  if (captured && prev > 0) {
+    const victim = state.empires[prev - 1]!;
+    if (victim.alive && victim.capital === i) annex(state, victim, empireId, dirty);
+  }
   return captured;
+}
+
+/** Taking a capital takes the empire with it.
+ *
+ *  Under CAPITAL elimination the victim is finished the moment its capital
+ *  falls — checkVictory would mark it dead on this same step. Leaving its
+ *  tiles on the board as an ownerless rump made the decisive blow feel like
+ *  nothing: the map barely changed and the population was simply deleted.
+ *  Annexing pays the attacker the whole empire, which is what makes a capital
+ *  worth the assault and worth defending.
+ *
+ *  Under ANNIHILATION the capital is an ordinary tile and none of this
+ *  applies. */
+function annex(
+  state: State,
+  victim: Empire,
+  toId: EmpireId,
+  dirty: DirtySet,
+): void {
+  if (state.genesis.rules.elimination !== ELIMINATION.CAPITAL) return;
+  const heir = state.empires[toId - 1];
+  if (!heir) return;
+
+  let taken = 0;
+  let population = 0;
+  for (let i = 0; i < state.owner.length; i++) {
+    if (state.owner[i] !== victim.id) continue;
+    population += state.pop[i]!;
+    setOwner(state, i, toId);
+    dirty.add(i);
+    taken++;
+  }
+
+  victim.popTotal = Math.max(0, victim.popTotal - population);
+  heir.popTotal += population;
+
+  // Unspent stock is spoils too — a hoard of diamonds should not evaporate
+  // with the empire that never got to spend it.
+  heir.diamonds += victim.diamonds;
+  heir.bridges += victim.bridges;
+  heir.ladders += victim.ladders;
+  victim.diamonds = 0;
+  victim.bridges = 0;
+  victim.ladders = 0;
+
+  victim.alive = 0;
+  victim.eliminatedAt = state.step;
+
+  bump(heir, null, STAT.ANNEXED, taken);
+  raise(heir, null, STAT.PEAK_TILES, heir.tilesOwned);
+  raise(heir, null, STAT.PEAK_POP, heir.popTotal);
 }
 
 /** Count of the target's orthogonal neighbours owned by the acting empire,
