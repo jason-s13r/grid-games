@@ -430,21 +430,52 @@ export async function endorseAmendment(
   return { member, sig: await identity.sign(encodeAmendment(gameId, amendment)) };
 }
 
-/** True when a quorum of *distinct existing* seats of that empire have signed,
- *  and the key being added is not already seated somewhere. */
-export async function verifyAmendment(
+/** Merge what two peers have each collected. Endorsements are a set, so
+ *  gossiping partial tallies converges without anyone coordinating — the same
+ *  property mergeDrop relies on, and for the same reason. Both records must
+ *  name the same amendment; the caller keys them by one, so this trusts it. */
+export function mergeAmendment(a: SignedAmendment, b: SignedAmendment): SignedAmendment {
+  const seen = new Map<number, { member: number; sig: string }>();
+  for (const signature of [...a.signatures, ...b.signatures]) {
+    seen.set(signature.member, signature);
+  }
+  return { amendment: a.amendment, signatures: [...seen.values()] };
+}
+
+export interface Tally {
+  /** Distinct existing seats of that empire whose signature checks out. */
+  endorsed: number;
+  /** How many of them it takes. Zero means the record can never pass — the
+   *  empire is not there, or the key it names is already seated. */
+  needed: number;
+}
+
+/** How far along an amendment is.
+ *
+ *  Separate from the yes/no answer because a peer has to act on a record that
+ *  is not finished yet: one valid signature is what tells it a proposal is real
+ *  rather than noise, and worth holding a step open for. Counting is the
+ *  expensive part either way — one verification per signature — so the two
+ *  questions share it. */
+export async function tallyAmendment(
   roster: Roster,
   gameId: string,
   signed: SignedAmendment,
-): Promise<boolean> {
-  if (!signed?.amendment || !Array.isArray(signed.signatures)) return false;
-  if (roster.has(signed.amendment.key)) return false;
+): Promise<Tally> {
+  const nothing: Tally = { endorsed: 0, needed: 0 };
+  if (!signed?.amendment || !Array.isArray(signed.signatures)) return nothing;
+  // Already seated. Not a failure of the signatures — a second seat for one key
+  // would give its holder two population timers, which is the whole point of
+  // the rule against it.
+  if (roster.has(signed.amendment.key)) return nothing;
+  const needed = roster.quorum(signed.amendment.empire);
+  if (roster.membersOf(signed.amendment.empire).length === 0) return nothing;
 
   let payload: Uint8Array;
   try {
     payload = encodeAmendment(gameId, signed.amendment);
   } catch {
-    return false;
+    return nothing;
   }
 
   const endorsed = new Set<number>();
@@ -454,8 +485,18 @@ export async function verifyAmendment(
     if (!key) continue;
     if (await verify(key, sig, payload)) endorsed.add(member);
   }
+  return { endorsed: endorsed.size, needed };
+}
 
-  return endorsed.size >= roster.quorum(signed.amendment.empire);
+/** True when a quorum of *distinct existing* seats of that empire have signed,
+ *  and the key being added is not already seated somewhere. */
+export async function verifyAmendment(
+  roster: Roster,
+  gameId: string,
+  signed: SignedAmendment,
+): Promise<boolean> {
+  const tally = await tallyAmendment(roster, gameId, signed);
+  return tally.needed > 0 && tally.endorsed >= tally.needed;
 }
 
 /** The simulation move an accepted amendment produces. The sim reads the new

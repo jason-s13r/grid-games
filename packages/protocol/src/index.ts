@@ -19,6 +19,7 @@ export {
   encodeReady,
   endorseAmendment,
   endorseDrop,
+  mergeAmendment,
   mergeDrop,
   messageInRange,
   moveInRange,
@@ -28,6 +29,7 @@ export {
   signMessage,
   signMove,
   signReady,
+  tallyAmendment,
   verifyAmendment,
   verifyDrop,
   verifyCheckpoint,
@@ -51,6 +53,7 @@ export type {
   SignedMessage,
   SignedReady,
   SignedMove,
+  Tally,
 } from "./records.js";
 export { FRAME, encodeFrame, decodeFrame } from "./wire.js";
 export type {

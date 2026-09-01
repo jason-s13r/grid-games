@@ -6,7 +6,15 @@
 
 import { beforeAll, describe, expect, it } from "vitest";
 import { MEMBER, Sim } from "@tessera/sim";
-import { amendmentMove, endorseAmendment, signMove, verifyAmendment, verifyMove } from "../records.js";
+import {
+  amendmentMove,
+  endorseAmendment,
+  mergeAmendment,
+  signMove,
+  tallyAmendment,
+  verifyAmendment,
+  verifyMove,
+} from "../records.js";
 import type { Amendment, SignedAmendment } from "../records.js";
 import { claim, fixture } from "./fixture.js";
 import type { Fixture } from "./fixture.js";
@@ -57,6 +65,63 @@ describe("endorsing an amendment", () => {
       ],
     };
     await expect(verifyAmendment(f.roster, f.gameId, forged)).resolves.toBe(false);
+  });
+});
+
+// A partial tally is what a peer actually holds most of the time: the driver
+// gossips endorsements as they arrive rather than waiting for the whole set.
+describe("collecting endorsements", () => {
+  let g: Fixture;
+
+  beforeAll(async () => {
+    g = await fixture();
+  });
+
+  const alone = async (who: "alice" | "bob", at: Fixture) => ({
+    amendment,
+    signatures: [await endorseAmendment(at[who], at.gameId, amendment, who === "alice" ? 0 : 1)],
+  });
+
+  it("merges two partial tallies into a quorum", async () => {
+    const merged = mergeAmendment(await alone("alice", g), await alone("bob", g));
+    expect(merged.signatures).toHaveLength(2);
+    await expect(verifyAmendment(g.roster, g.gameId, merged)).resolves.toBe(true);
+  });
+
+  it("counts a seat once however often it signs", async () => {
+    const one = await alone("alice", g);
+    const merged = mergeAmendment(one, one);
+    expect(merged.signatures).toHaveLength(1);
+  });
+
+  it("reports how far along a proposal is", async () => {
+    await expect(tallyAmendment(g.roster, g.gameId, await alone("alice", g))).resolves.toEqual({
+      endorsed: 1,
+      needed: 2,
+    });
+  });
+
+  // One real signature is what tells a peer a proposal is worth holding a step
+  // open for. Without that check, anyone at all could stall the game by
+  // broadcasting noise.
+  it("finds nothing to hold a step open for in an unsigned record", async () => {
+    const noise = { amendment, signatures: [{ member: 0, sig: "not-a-signature" }] };
+    await expect(tallyAmendment(g.roster, g.gameId, noise)).resolves.toEqual({
+      endorsed: 0,
+      needed: 2,
+    });
+  });
+
+  it("reports an empire that does not exist as impossible rather than merely short", async () => {
+    const nowhere = { empire: 9, step: 500, key: g.mallory.key, kind: MEMBER.HUMAN };
+    const signed = {
+      amendment: nowhere,
+      signatures: [await endorseAmendment(g.alice, g.gameId, nowhere, 0)],
+    };
+    await expect(tallyAmendment(g.roster, g.gameId, signed)).resolves.toEqual({
+      endorsed: 0,
+      needed: 0,
+    });
   });
 });
 
