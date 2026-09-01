@@ -18,13 +18,16 @@
 // browser, a loop in a test — which is what makes six peers in one process a
 // deterministic experiment rather than a race.
 
-import { MOVE, STEPS_PER_SECOND } from "@tessera/sim";
-import type { Genesis, Move, Sim } from "@tessera/sim";
+import { MEMBER, MOVE, STEPS_PER_SECOND } from "@tessera/sim";
+import type { Genesis, MemberKind, Move, Sim } from "@tessera/sim";
 import {
   CHANNEL,
   EquivocationWatch,
   FRAME,
+  amendmentMove,
+  endorseAmendment,
   endorseDrop,
+  mergeAmendment,
   mergeDrop,
   signCheckpoint,
   openTeamBody,
@@ -32,6 +35,7 @@ import {
   signMessage,
   signMove,
   signReady,
+  tallyAmendment,
   verifyCheckpoint,
   verifyDrop,
   verifyEquivocation,
@@ -40,12 +44,15 @@ import {
   verifyReady,
 } from "@tessera/protocol";
 import type {
+  Amendment,
   Channel,
   EquivocationProof,
   Frame,
   Identity,
+  MemberKey,
   Message,
   Roster,
+  SignedAmendment,
   SignedDrop,
   SignedMove,
 } from "@tessera/protocol";
@@ -116,6 +123,33 @@ const RESUME_BEHIND = STEPS_PER_SECOND * 2;
  *  hear it, and no stopwatch but the stall timer ever breaks it. */
 const READY_REPEAT_MS = 1000;
 
+/** How far ahead a proposed amendment is dated.
+ *
+ *  It has to outlast the gossip that collects the signatures, because every
+ *  peer must know the outcome before it simulates the step the new seat appears
+ *  on — the roster append is hashed state, and a peer that learns of it a step
+ *  late has already computed a different world. Three seconds is several round
+ *  trips on any connection that was going to work at all, and the cost of
+ *  overshooting is only that a substitute waits a moment longer to play. */
+const AMENDMENT_DELAY = STEPS_PER_SECOND * 3;
+
+/** Sequence number the injected ROSTER_AMEND move carries.
+ *
+ *  Moves are applied in `(empire, member, seq)` order, so this has to be a
+ *  number no signed move can also be carrying, or two peers holding the same
+ *  inputs could still order them differently. Real seqs count up from zero
+ *  within one driver's lifetime; nothing reaches four billion. */
+const AMENDMENT_SEQ = 0xffff_ffff;
+
+/** A proposal is given up on when the game reaches the step it named.
+ *
+ *  Without that, one invitation nobody answers stops the game for everyone: the
+ *  hold that keeps peers from running past the step is exactly what would
+ *  freeze them at it. The deadline is a step number rather than a stopwatch on
+ *  purpose — every peer gives up on the same step, so giving up cannot itself
+ *  become the thing peers disagree about. The three seconds of gossip before it
+ *  is the window; a quorum that has not formed by then was not going to. */
+
 /** How long a snapshot we asked for stays welcome. Long enough for a large map
  *  to cross a slow channel; short enough that a stale one arriving later is
  *  refused rather than rewinding a peer that has since recovered on its own. */
@@ -141,6 +175,13 @@ export class Lockstep {
   onStalled?: (seats: Seat[], waitedMs: number) => void;
   onViolation?: (seat: Seat, what: string) => void;
   onHalt?: (reason: string) => void;
+  /** A new seat has been added to the roster and to the simulation. Fires on
+   *  every peer at the same step, including on the newcomer — who by then holds
+   *  the seat and can act. */
+  onSeated?: (seat: Seat, key: MemberKey) => void;
+  /** Somebody has proposed seating a key on our empire and it is short of a
+   *  quorum. Our signature is one of the ones it is waiting for. */
+  onInvitation?: (amendment: Amendment, endorsed: number, needed: number) => void;
 
   private readonly options: LockstepOptions;
   private readonly transport: Transport;
@@ -159,6 +200,15 @@ export class Lockstep {
   private readonly stalledSince = new Map<string, number>();
   private readonly drops = new Map<string, SignedDrop>();
   private readonly endorsedDrop = new Map<string, number>();
+  /** Proposals in flight, keyed by empire, key and step. */
+  private readonly amendments = new Map<string, SignedAmendment>();
+  /** At most one endorsement per empire-and-key, ever. Two records naming
+   *  different steps then cannot both reach a quorum, so the mesh cannot split
+   *  over which step the newcomer's seat appeared on. */
+  private readonly endorsedAmend = new Map<string, number>();
+  /** Amendments that have their quorum, waiting for the step they name. */
+  private readonly seating = new Map<number, SignedAmendment[]>();
+
   readonly snapshots = new SnapshotStore();
 
   /** One serial lane per peer. Verification is asynchronous, and a READY that
@@ -173,6 +223,10 @@ export class Lockstep {
   /** While a move is being signed its slot is reserved: readiness must not
    *  climb past a step we are about to speak for. */
   private readyCeiling = Number.MAX_SAFE_INTEGER;
+  /** Held below a proposed amendment's step while the vote is still out. A
+   *  separate number from readyCeiling because the two overlap freely: a peer
+   *  can be signing a claim while an invitation is being counted. */
+  private amendCeiling = Number.MAX_SAFE_INTEGER;
   private lastBeat = -Infinity;
   private lastReadyAt = -Infinity;
   private halted: string | null = null;
@@ -287,6 +341,7 @@ export class Lockstep {
     let budget = MAX_STEPS_PER_PUMP;
 
     while (this.sim.step < target && budget-- > 0) {
+      this.expireAmendments();
       const step = this.sim.step;
       const waiting = this.blocked(step);
       if (waiting.length > 0) {
@@ -302,7 +357,7 @@ export class Lockstep {
       }
       this.stalledSince.clear();
 
-      const moves = this.drain(step);
+      const moves = [...this.drain(step), ...this.seatArrivals(step)];
       for (const index of this.sim.advance(moves)) dirty.add(index);
 
       this.checkpoint(this.sim.step);
@@ -407,7 +462,11 @@ export class Lockstep {
     const seat = this.options.seat;
     if (!identity || !seat) return;
 
-    const upTo = Math.min(this.sim.step + this.inputDelay - 1, this.readyCeiling);
+    const upTo = Math.min(
+      this.sim.step + this.inputDelay - 1,
+      this.readyCeiling,
+      this.amendCeiling,
+    );
     if (upTo <= this.broadcastReady) return;
 
     this.ourReady = upTo;
@@ -484,6 +543,8 @@ export class Lockstep {
         return this.onCheckpoint(frame.signed);
       case FRAME.DROP:
         return this.onDrop(frame.signed);
+      case FRAME.AMENDMENT:
+        return this.onAmendment(frame.signed);
       case FRAME.EQUIVOCATION:
         return this.onEquivocation(frame.proof);
       case FRAME.SNAPSHOT_REQUEST:
@@ -699,6 +760,213 @@ export class Lockstep {
     if (await verifyDrop(this.roster, this.gameId, record)) {
       this.eject(seat, record.drop.atStep, "stalled");
     }
+  }
+
+  // --- roster amendments -----------------------------------------------------
+
+  /** Invite a key onto our own empire.
+   *
+   *  Not one member's decision. A quorum of the empire's existing seats has to
+   *  sign the same record, or one compromised key could walk an accomplice into
+   *  the team — and since teammates share territory, that is the whole game.
+   *  This peer signs first and gossips; the rest has to be granted, seat by
+   *  seat, by the people already holding them.
+   *
+   *  A single-seat empire is its own quorum, which is what lets a solo player
+   *  recruit a first teammate without needing one already. */
+  async amend(key: MemberKey, kind: MemberKind = MEMBER.HUMAN): Promise<boolean> {
+    const seat = this.options.seat;
+    if (!seat || !this.options.identity || this.halted) return false;
+    if (this.roster.has(key)) return false; // already playing, somewhere
+
+    const amendment: Amendment = {
+      empire: seat.empire,
+      step: this.sim.step + AMENDMENT_DELAY,
+      key,
+      kind,
+    };
+    await this.considerAmendment({ amendment, signatures: [] }, true);
+    return true;
+  }
+
+  /** Add our signature to a proposal somebody else made.
+   *
+   *  Deliberately not automatic. Endorsing a drop is an observation — the seat
+   *  did go silent, and any peer can see it — but endorsing an amendment is a
+   *  decision about who joins the team, and a peer that signed whatever reached
+   *  it would turn a quorum into a formality. So this is called by the player,
+   *  from the invitation `onInvitation` announced.
+   *
+   *  The record is looked up rather than passed in, so what gets signed is the
+   *  record this peer actually holds — including its step. Signing a caller's
+   *  copy would let a malformed one through on a technicality. */
+  async endorse(empire: number, key: MemberKey): Promise<boolean> {
+    const held = this.invitation(empire, key);
+    if (!held) return false;
+    await this.considerAmendment(held, true);
+    return true;
+  }
+
+  /** A proposal this peer is holding for that empire and key, if any. */
+  invitation(empire: number, key: MemberKey): SignedAmendment | undefined {
+    for (const record of this.amendments.values()) {
+      if (record.amendment.empire === empire && record.amendment.key === key) return record;
+    }
+    return undefined;
+  }
+
+  /** Everything currently being voted on. Drives the invitation list in the UI. */
+  invitations(): SignedAmendment[] {
+    return [...this.amendments.values()];
+  }
+
+  private async onAmendment(signed: SignedAmendment): Promise<void> {
+    if (!signed?.amendment) return;
+    await this.considerAmendment(signed, false);
+  }
+
+  /** Merge, gossip what grew, and seat it when it carries.
+   *
+   *  Endorsements are a set, so partial tallies converge without anyone
+   *  counting for everyone else: a peer that hears only half of them still ends
+   *  up with the whole record, and nobody has to be the returning officer. */
+  private async considerAmendment(incoming: SignedAmendment, sign: boolean): Promise<void> {
+    const { empire, key, step } = incoming.amendment;
+    if (this.roster.has(key)) return; // already applied, here
+    // Dated in the past. The step it belongs to is spent, and a roster append
+    // cannot be applied to a world that has already moved on. If it carried
+    // anyway then peers who did apply it are ahead of us in a way no further
+    // move will reconcile, and the honest answer is to rebuild from theirs.
+    if (step <= this.sim.step) {
+      const late = await tallyAmendment(this.roster, this.gameId, incoming);
+      if (late.needed > 0 && late.endorsed >= late.needed) {
+        this.desyncs++;
+        this.requestSnapshot();
+      }
+      return;
+    }
+
+    const proposal = `${empire}:${key}`;
+    const slot = `${proposal}@${step}`;
+    const held = this.amendments.get(slot);
+    let record = held ? mergeAmendment(held, incoming) : incoming;
+
+    const identity = this.options.identity;
+    const ours = this.options.seat;
+    // At most one endorsement per empire-and-key, ever. Two records naming
+    // different steps then cannot both reach a quorum, so the mesh cannot split
+    // over which step the newcomer's seat appeared on.
+    if (sign && identity && ours && ours.empire === empire && !this.endorsedAmend.has(proposal)) {
+      this.endorsedAmend.set(proposal, step);
+      record = mergeAmendment(record, {
+        amendment: record.amendment,
+        signatures: [await endorseAmendment(identity, this.gameId, record.amendment, ours.member)],
+      });
+    }
+
+    const tally = await tallyAmendment(this.roster, this.gameId, record);
+    // Nothing valid in it. A stranger's forgery must not be stored, gossiped,
+    // or — worst of all — allowed to hold the game open at its named step.
+    if (tally.needed === 0 || tally.endorsed === 0) return;
+
+    const grew = !held || record.signatures.length > held.signatures.length;
+    this.amendments.set(slot, record);
+    this.hold();
+    if (grew) this.transport.broadcast({ t: FRAME.AMENDMENT, signed: record });
+
+    if (tally.endorsed >= tally.needed) {
+      this.accept(record);
+      return;
+    }
+    // Still short, and it is our empire being asked. Whoever is watching this
+    // driver is one of the votes it is waiting for.
+    if (grew && ours?.empire === empire && !this.endorsedAmend.has(proposal)) {
+      this.onInvitation?.(record.amendment, tally.endorsed, tally.needed);
+    }
+  }
+
+  /** Book a carried amendment onto the step it names. */
+  private accept(signed: SignedAmendment): void {
+    const step = signed.amendment.step;
+    const booked = this.seating.get(step) ?? [];
+    if (booked.some((held) => held.amendment.key === signed.amendment.key)) return;
+    booked.push(signed);
+    this.seating.set(step, booked);
+    this.amendments.delete(`${signed.amendment.empire}:${signed.amendment.key}@${step}`);
+    this.hold();
+  }
+
+  /** Hold readiness below the earliest undecided proposal.
+   *
+   *  A seat appearing in the roster is hashed state, so every peer has to know
+   *  the outcome before it simulates that step — a peer that ran ahead and
+   *  learned a step later has already computed a different world. Promising
+   *  only up to the step before costs a moment of latency and removes the race
+   *  entirely. Nothing is retracted: readiness is cumulative, and this only ever
+   *  declines to promise further. */
+  private hold(): void {
+    let earliest = Number.MAX_SAFE_INTEGER;
+    for (const record of this.amendments.values()) {
+      earliest = Math.min(earliest, record.amendment.step - 1);
+    }
+    this.amendCeiling = earliest;
+  }
+
+  /** Let go of a proposal nobody finished answering.
+   *
+   *  Called at the top of every step, so the game is parked at the step the
+   *  proposal named for exactly as long as it takes to notice, and then moves
+   *  on. Releasing the endorsement lock is safe here and nowhere else: the step
+   *  is spent, and a seating for a spent step is one no peer will accept, so
+   *  the empire can propose again without two live records for one key ever
+   *  being able to both carry. */
+  private expireAmendments(): void {
+    if (this.amendments.size === 0) return;
+    let expired = false;
+    for (const [slot, record] of this.amendments) {
+      if (this.sim.step < record.amendment.step) continue;
+      this.amendments.delete(slot);
+      this.endorsedAmend.delete(`${record.amendment.empire}:${record.amendment.key}`);
+      expired = true;
+    }
+    if (expired) {
+      this.hold();
+      this.announceReady();
+    }
+  }
+
+  /** The ROSTER_AMEND moves for this step, applied to the roster as they go.
+   *
+   *  Roster and simulation append in lockstep — the sim pushes a member, this
+   *  pushes the key that authorises it — so the index the sim assigns and the
+   *  index the roster assigns are the same number on every peer. The sim is
+   *  asked first, because an amendment it would refuse must not seat a key that
+   *  can then sign moves nothing will accept. */
+  private seatArrivals(step: number): Move[] {
+    const booked = this.seating.get(step);
+    if (!booked) return [];
+    this.seating.delete(step);
+    this.hold();
+
+    // Key order, so two amendments landing on one step are applied in the same
+    // order by everyone. Nothing else about a record is guaranteed to differ.
+    const moves: Move[] = [];
+    booked.sort((a, b) => (a.amendment.key < b.amendment.key ? -1 : 1));
+    booked.forEach((record, i) => {
+      const { empire, key, kind } = record.amendment;
+      if (this.roster.has(key)) return;
+      const move = amendmentMove(record.amendment, AMENDMENT_SEQ + i, 0);
+      if (!this.sim.validate(move)) return;
+      const member = this.roster.amend(empire, key, kind, step);
+      moves.push(move);
+      this.onSeated?.({ empire, member }, key);
+      // The invitation was ours: take the seat and start playing it.
+      if (this.options.identity?.key === key && !this.options.seat) {
+        this.options.seat = { empire, member };
+        this.seq = 0;
+      }
+    });
+    return moves;
   }
 
   /** Stop waiting for a seat, and stop accepting its moves, from exactly
