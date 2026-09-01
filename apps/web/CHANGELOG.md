@@ -1,5 +1,87 @@
 # Changelog
 
+## web@0.4.0 (2026-09-01)
+
+### Features
+
+- put people on the same empire
+  Until now the lobby handed every player their own empire, one member
+  each — so the thing the whole design exists for could not be set up. An
+  empire is a set of seats sharing territory with a population timer each,
+  which is what makes three people on one empire meaningfully stronger
+  than one, and what makes shift rotation need no handover mechanism at
+  all: the incoming player simply has their own timer.
+
+  The host arranges it, because the host is the one composing the genesis
+  record. That is not authority — once the record is sealed and broadcast,
+  every peer verifies it independently and the host has no further say in
+  anything.
+
+  The picker offers exactly one empire beyond those in use, so there is
+  always somewhere to move a player to and never a list of empty choices.
+  Assignments are compacted on every read: a host who puts everyone on
+  empire 3 has made one empire, not four, and the colour beside a name has
+  to be the colour that player will actually hold.
+
+  Players are identified by eight hex characters of their key's digest.
+  The peer id would have been free, but it belongs to the connection
+  rather than the person, and it changes on reload.
+
+  The composition and the validation moved to src/net/teams.ts, away from
+  both the panel that renders them and the lobby that seals them. They are
+  the only logic in the app that is neither DOM nor network, and a mistake
+  in either would stay invisible until a game started with the wrong
+  people on the wrong side. They are now the app's first tests.
+
+- hand a mid-game arrival the genesis record
+  A peer that connects after the game has started cannot ask for the genesis,
+  because until it has one it does not know the game id every other frame is
+  signed against. So every peer now keeps the record it agreed to play and
+  offers it to anyone who turns up later — every peer and not only the host,
+  because by the time someone reloads the host may be long gone.
+
+  Also exposes the live driver and lobby on window.tessera. The state that
+  decides whether a rejoin is working is all private to Lockstep, and reading
+  it from a browser test beats inferring it from the step counter.
+
+- say something to the other peers
+  The chat records have been in the protocol since the mesh landed — signed,
+  ordered, verified against the roster and deliberately left out of the state
+  hash — but nothing in the browser could send or show one. This is the panel.
+
+  Chat goes straight to the Lockstep driver rather than through Driver: a solo
+  game has nobody to talk to, so there is nothing for LocalGame to implement
+  and no reason to widen the interface for it. The box says as much until a
+  game exists, instead of quietly swallowing what someone types.
+
+  Every body on the wire is another player's text, so lines are built with
+  textContent and never innerHTML. A signature proves who wrote a message, not
+  that it is safe to hand to a parser.
+
+  Stamps come from the step number rather than the local clock, because the
+  step is the one reading every peer already agrees on.
+
+  Verified with two browser contexts over the public broker: both directions
+  delivered, `<b>` arrived as characters rather than markup, emoji survived the
+  round trip, and the two peers still agreed on step and hash afterwards —
+  which is the point of chat being outside consensus.
+
+### Fixes
+
+- let a status note lapse
+  A note is news, not state. A peer that resumed from a snapshot repairs
+  the disagreement that prompted it within a step or two, but the notice
+  stayed up for the rest of the game, telling every player the game was
+  broken long after it was fine. Everything but a halt now expires after
+  twelve seconds of game time; a halt is permanent because a halt is still
+  true a minute later.
+
+### Dependencies
+
+- net: 0.2.0 -> 0.3.0
+- protocol: 0.2.0 -> 0.3.0
+
+
 ## web@0.3.0 (2026-08-31)
 
 ### Features

@@ -1,6 +1,6 @@
 {
   "name": "@tessera/protocol",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "private": true,
   "description": "Genesis records, member identity and signed wire records. The root of trust for the mesh.",
   "license": "MIT",

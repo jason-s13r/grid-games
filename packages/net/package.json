@@ -1,6 +1,6 @@
 {
   "name": "@tessera/net",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "private": true,
   "description": "Lockstep driver and peer transports. Moves in, agreed state hashes out.",
   "license": "MIT",
