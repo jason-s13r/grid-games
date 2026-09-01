@@ -11,8 +11,8 @@ import { CONTROL, MEMBER, MOVE, STEPS_PER_SECOND, Sim, makeGenesis, validate } f
 import type { EmpireSpec, Genesis, MemberKind, Move } from "@tessera/sim";
 import { Identity, Roster, sealGenesis } from "@tessera/protocol";
 import type { Message } from "@tessera/protocol";
-import { LoopbackNetwork, Lockstep, PeerBot } from "../index.js";
-import type { LoopbackOptions, Seat } from "../index.js";
+import { LoopbackNetwork, Lockstep, LocalHub, PeerBot } from "../index.js";
+import type { LoopbackOptions, Seat, Transport } from "../index.js";
 
 /** Web Crypto resolves on the event loop, and a verified frame is three
  *  promises deep. Yielding a handful of times is what makes the harness
@@ -56,6 +56,8 @@ export interface Peer {
 
 export interface Table {
   net: LoopbackNetwork;
+  /** Local hubs in play, one per page that holds more than one driver. */
+  hubs: LocalHub[];
   clock: Clock;
   genesis: Genesis;
   gameId: string;
@@ -75,6 +77,10 @@ export interface TableOptions {
   /** Steps between bot actions. Set it past the length of a run to seat a bot
    *  that never spends, which is how a test watches one accrue. */
   botInterval?: number;
+  /** Seat each empire's bots in the same page as its first human seat, sharing
+   *  one connection through a LocalHub — what the lobby does when a team asks
+   *  for night cover rather than opening a second tab for it. */
+  hosted?: boolean;
   simbots?: number;
   observer?: boolean;
   loopback?: LoopbackOptions;
@@ -124,13 +130,31 @@ export async function table(options: TableOptions): Promise<Table> {
   const clock = new Clock();
   const net = new LoopbackNetwork(options.loopback);
   const peers: Peer[] = [];
+  const hubs: LocalHub[] = [];
+
+  // One hub per empire that hosts its own bots. The empire's first seat takes
+  // the hub's main port, so it keeps the connection it would have had anyway.
+  const pages = new Map<number, LocalHub>();
+  if (options.hosted) {
+    kinds.forEach((empire, e) => {
+      if (!empire.some((kind) => kind === MEMBER.BOT)) return;
+      const hub = new LocalHub(net.connect(`page${e + 1}`));
+      hubs.push(hub);
+      pages.set(e + 1, hub);
+    });
+  }
+
+  const wire = (name: string, seat?: Seat): Transport => {
+    const hub = seat ? pages.get(seat.empire) : undefined;
+    return hub ? hub.port() : net.connect(name);
+  };
 
   const build = (name: string, identity?: Identity, seat?: Seat, isBot = false): Peer => {
     const driver = new Lockstep({
       genesis,
       sim: new Sim(genesis),
       roster: Roster.fromGenesis(genesis),
-      transport: net.connect(name),
+      transport: wire(name, seat),
       identity,
       seat,
       now: clock.now,
@@ -177,6 +201,7 @@ export async function table(options: TableOptions): Promise<Table> {
 
   return {
     net,
+    hubs,
     clock,
     genesis,
     gameId: genesis.gameId!,
