@@ -1,6 +1,8 @@
 // Connectivity upkeep: what a capital still reaches, and what it does not.
 //
-// Territory cut off from its capital used to sit on the board forever.
+// Two mechanics fall out of one sweep, which is why they live together.
+//
+// DECAY. Territory cut off from its capital used to sit on the board forever.
 // A pocket carved out behind enemy lines was permanent, so encircling an
 // opponent achieved nothing until every one of their tiles was individually
 // overwhelmed, and a dead empire's islands littered the map for the rest of
@@ -8,6 +10,13 @@
 // isolated tile now loses a fraction of its population each pass and goes
 // neutral when it runs out, so a pincer is a real move and a relief column is
 // a real answer.
+//
+// GROWTH. The other half of the same walk. Once an empire has bought the
+// upgrade, every tile the capital can still reach gains a little population on
+// every pass, for the rest of the game — a defensive boost, and the one thing
+// that rewards a consolidated, connected empire over a sprawl of disconnected
+// raids. It is deliberately a standing property rather than a timed buff: what
+// it pays for is staying joined up.
 //
 // One pass over the ownership layer per upkeep interval, not per step. On the
 // default 96x64 map that is ~6k tiles every 20 s of game time, so a six-hour
@@ -60,11 +69,19 @@ export function upkeep(state: State, dirty: DirtySet): void {
     if (!empire.alive) continue;
 
     const seen = reachable(state, empire);
+    const growing = empire.growthUnlocked !== 0;
     let delta = 0;
 
     for (let i = 0; i < state.owner.length; i++) {
       if (state.owner[i] !== empire.id) continue;
-      if (seen[i]) continue;
+
+      if (seen[i]) {
+        if (!growing) continue;
+        state.pop[i] = state.pop[i]! + rules.growthAmount;
+        delta += rules.growthAmount;
+        dirty.add(i);
+        continue;
+      }
 
       // Cut off. Integer division with a floor of decayMin, so a tile holding
       // one population still reaches zero rather than rounding its way to

@@ -31,7 +31,8 @@ export const STAT = {
   MOVES: 11,
   POP_SPENT: 12,
   TILES_TAKEN: 13,
-  ANNEXED: 14,
+  MARCHES: 14,
+  ANNEXED: 15,
 } as const;
 export const STAT_SLOTS = 16;
 
@@ -58,8 +59,8 @@ export const DEFAULT_RULES: Rules = {
   botCascadeDepth: 0,
   coinIntervalMin: seconds(1.5),
   coinIntervalMax: seconds(4),
-  // Diamonds buy every item in the shop, so the replacement rate has to keep
-  // up with spending or the shop is decoration.
+  // Diamonds buy every item in the shop at three apiece, so the replacement
+  // rate has to keep up with spending or the shop is decoration.
   coinWeights: [
     [ITEM.BRONZE, 52],
     [ITEM.SILVER, 24],
@@ -70,6 +71,9 @@ export const DEFAULT_RULES: Rules = {
 
   bridgeCost: 3,
   ladderCost: 3,
+  marchCost: 6,
+  growthCost: 6,
+  growthAmount: 1,
 
   upkeepInterval: seconds(20),
   // An eighth per pass: a pocket cut off behind enemy lines withers over a

@@ -26,10 +26,12 @@ export {
   isProtected,
   passable,
   accrue,
+  marchVia,
 } from "./rules.js";
 export type { DirtySet } from "./rules.js";
 export { checkVictory, isLive } from "./victory.js";
 export { policy } from "./policy.js";
+export type { Mode } from "./policy.js";
 export { summarise } from "./stats.js";
 export type { EmpireSummary } from "./stats.js";
 export { Sim, makeGenesis, CLAIM, HEARTBEAT } from "./sim.js";

@@ -16,6 +16,7 @@ describe("taking a capital annexes the empire", () => {
     victimTiles = sim.state.empires[1]!.tilesOwned;
     sim.state.empires[1]!.diamonds = 4;
     sim.state.empires[1]!.bridges = 2;
+    sim.state.empires[1]!.marchUnlocked = 1;
     sim.state.empires[0]!.members[0]!.popTimer = 500;
     sim.advance([CLAIM(sim.step, 1, 0, 0, 4, 0)]);
   });
@@ -48,6 +49,10 @@ describe("taking a capital annexes the empire", () => {
     expect(sim.state.empires[0]!.diamonds).toBe(4);
     expect(sim.state.empires[0]!.bridges).toBe(2);
     expect(sim.state.empires[1]!.diamonds).toBe(0);
+  });
+
+  it("and so is what they had learned", () => {
+    expect(sim.state.empires[0]!.marchUnlocked).toBe(1);
   });
 
   it("and the victim is out", () => {

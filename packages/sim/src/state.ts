@@ -17,7 +17,7 @@ import { Rng } from "./rng.js";
 import { fnv1a } from "./hash.js";
 
 const MAGIC = 0x54455353; // "TESS"
-const LAYOUT_VERSION = 1;
+const LAYOUT_VERSION = 2;
 
 export interface State {
   width: number;
@@ -62,6 +62,8 @@ export function createState(genesis: Genesis): State {
       capital: 0,
       bridges: 0,
       ladders: 0,
+      marchUnlocked: 0,
+      growthUnlocked: 0,
       diamonds: 0,
       tilesOwned: 0,
       popTotal: 0,
@@ -98,7 +100,7 @@ function byteLength(state: State): number {
   let size = 4 + 2 + 2 + 2 + 4 + 4 + 4 + 1 + 1 + 1 + 1 + 4 + 4;
   size += n * 3 + n * 4; // owner, terrain, item (1 byte each) + pop (4)
   for (const e of state.empires) {
-    size += 4 + 2 + 2 + 2 + 4 + 4 + 1 + 1 + 4 + 1 + STAT_SLOTS * 4;
+    size += 4 + 2 + 2 + 2 + 2 + 2 + 4 + 4 + 1 + 1 + 4 + 1 + STAT_SLOTS * 4;
     size += e.members.length * (1 + 4 + 4 + 4 + 4 + STAT_SLOTS * 4);
   }
   size += state.events.size * (4 + 4 + 1 + 4);
@@ -140,7 +142,9 @@ export function snapshot(state: State): ArrayBuffer {
     u32(e.capital);
     u16(e.bridges);
     u16(e.ladders);
+    u16(e.marchUnlocked);
     u16(e.diamonds);
+    u16(e.growthUnlocked);
     u32(e.tilesOwned);
     u32(e.popTotal);
     u8(e.alive);
@@ -210,7 +214,9 @@ export function restore(state: State, buffer: ArrayBuffer): State {
       capital: u32(),
       bridges: u16(),
       ladders: u16(),
+      marchUnlocked: u16(),
       diamonds: u16(),
+      growthUnlocked: u16(),
       tilesOwned: u32(),
       popTotal: u32(),
       alive: u8(),

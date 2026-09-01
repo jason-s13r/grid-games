@@ -21,7 +21,7 @@ import type { Rng } from "./rng.js";
 import type { State } from "./state.js";
 
 const MODES = ["expand", "attack", "defend", "home"] as const;
-type Mode = (typeof MODES)[number];
+export type Mode = (typeof MODES)[number];
 
 const PHASE_STEPS = 240; // ~20s of game time per coherent phase
 
@@ -36,6 +36,9 @@ interface Scan {
   owned: number[];
   frontier: number[];
   coins: number[];
+  /** Owned tiles with an enemy tile orthogonally beside them — the only tiles
+   *  where reinforcement does anything. */
+  threatened: number[];
 }
 
 /** One pass over the ownership layer. Called at most once per bot action
@@ -45,6 +48,7 @@ function scan(state: State, empire: Empire): Scan {
   const owned: number[] = [];
   const frontier: number[] = [];
   const coins: number[] = [];
+  const threatened: number[] = [];
   const seen = new Set<number>();
 
   for (let i = 0; i < owner.length; i++) {
@@ -53,21 +57,24 @@ function scan(state: State, empire: Empire): Scan {
 
     const x = xOf(i, width);
     const y = yOf(i, width);
+    let contested = false;
     for (const [dx, dy] of ORTHO) {
       const nx = x + dx;
       const ny = y + dy;
       if (!inBounds(nx, ny, width, height)) continue;
       const ni = idx(nx, ny, width);
       if (owner[ni] === empire.id) continue;
+      if (owner[ni]! > 0) contested = true;
       if (!PASSABLE[terrain[ni]!]) continue;
       if (seen.has(ni)) continue;
       seen.add(ni);
       frontier.push(ni);
       if (item[ni] !== ITEM.NONE) coins.push(ni);
     }
+    if (contested) threatened.push(i);
   }
 
-  return { owned, frontier, coins };
+  return { owned, frontier, coins, threatened };
 }
 
 function nearestEnemyCapital(state: State, empire: Empire): number {
@@ -94,19 +101,24 @@ export function policy(
   empire: Empire,
   memberIndex: number,
   rng: Rng,
+  forced?: Mode,
 ): Move | null {
   const member = empire.members[memberIndex];
   if (!member || member.popTimer <= 0) return null;
 
-  const { owned, frontier, coins } = scan(state, empire);
+  const { owned, frontier, coins, threatened } = scan(state, empire);
   if (owned.length === 0) return null;
 
-  const mode = pickMode(state, empire, rng);
+  // A forced mode draws nothing here — a caller that pins the mode has already
+  // made the decision this draw would have made.
+  const mode = forced ?? pickMode(state, empire, rng);
   let target = -1;
 
   // A coin is worth far more than a plain tile, so take one when adjacent
-  // regardless of the current phase.
-  if (coins.length > 0 && rng.int(100) < 70) {
+  // regardless of the current phase — but a coin sits on neutral ground by
+  // definition, so taking one is expansion, and a bot pinned to defence does
+  // not expand.
+  if (!forced && coins.length > 0 && rng.int(100) < 70) {
     target = coins[rng.int(coins.length)]!;
   } else if (mode === "expand" && frontier.length > 0) {
     target = weakest(state, frontier, rng);
@@ -114,12 +126,21 @@ export function policy(
     const capital = nearestEnemyCapital(state, empire);
     target = capital < 0 ? weakest(state, frontier, rng) : closestTo(state, frontier, capital, rng);
   } else if (mode === "defend") {
-    target = owned[rng.int(owned.length)]!;
+    // Reinforce where the line actually is. Piling population onto a random
+    // interior tile looked like defence and achieved nothing; the thinnest
+    // tile with an enemy beside it is the one about to fall.
+    target =
+      threatened.length > 0
+        ? weakest(state, threatened, rng)
+        : (nearCapital(state, empire, rng) ?? owned[rng.int(owned.length)]!);
   } else {
     target = nearCapital(state, empire, rng) ?? owned[rng.int(owned.length)]!;
   }
 
   if (target < 0) {
+    // A defender never falls back onto neutral ground: with nothing to hold it
+    // banks its population instead.
+    if (forced === "defend") return null;
     if (frontier.length === 0) return null;
     target = frontier[rng.int(frontier.length)]!;
   }

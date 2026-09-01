@@ -1,7 +1,8 @@
-// Supply lines: what a capital still reaches, and what happens to the rest.
+// Supply lines: what a capital still reaches, what it feeds, and what it loses.
 
 import { beforeAll, describe, expect, it } from "vitest";
 import { Sim, makeGenesis } from "../sim.js";
+import { MOVE } from "../types.js";
 import { EVENT } from "../events.js";
 import { upkeep } from "../upkeep.js";
 import { idx } from "../geometry.js";
@@ -71,6 +72,65 @@ describe("population decay", () => {
   });
 });
 
+describe("population growth", () => {
+  let sim: Sim;
+
+  beforeAll(() => {
+    sim = arena([humans(1), humans(1)]);
+    supply(sim, 1, 8, 6);
+    own(sim, 8, 7, 1, 40);
+    own(sim, 18, 18, 1, 40); // cut off: growth must not reach it
+  });
+
+  it("does nothing before the buff is bought", () => {
+    upkeep(sim.state, new Set());
+    expect(popAt(sim, 8, 7)).toBe(40);
+  });
+
+  it("one purchase unlocks it for good", () => {
+    const empire = sim.state.empires[0]!;
+    empire.diamonds = sim.state.genesis.rules.growthCost;
+    sim.advance([{ step: sim.step, empire: 1, member: 0, seq: 0, type: MOVE.BUY_GROWTH, x: 0, y: 0 }]);
+    expect(empire.growthUnlocked).toBe(1);
+    expect(empire.diamonds).toBe(0);
+  });
+
+  it("and buying it twice is refused rather than wasted", () => {
+    const empire = sim.state.empires[0]!;
+    empire.diamonds = 99;
+    expect(
+      sim.validate({ step: sim.step, empire: 1, member: 0, seq: 0, type: MOVE.BUY_GROWTH, x: 0, y: 0 }),
+    ).toBe(false);
+    expect(empire.diamonds).toBe(99);
+  });
+
+  it("and every reached tile grows", () => {
+    upkeep(sim.state, new Set());
+    expect(popAt(sim, 8, 7)).toBe(41);
+  });
+
+  it("but a cut-off tile decays regardless", () => {
+    expect(popAt(sim, 18, 18)).toBeLessThan(40);
+  });
+
+  it("the empire total tracks both", () => {
+    const empire = sim.state.empires[0]!;
+    let sum = 0;
+    for (let i = 0; i < sim.state.owner.length; i++) {
+      if (sim.state.owner[i] === empire.id) sum += sim.state.pop[i]!;
+    }
+    expect(empire.popTotal).toBe(sum);
+  });
+
+  // Permanent, so it is still running many passes later — the point of it is
+  // that a joined-up empire keeps thickening while nobody is watching.
+  it("and it keeps running", () => {
+    const before = popAt(sim, 8, 7);
+    for (let i = 0; i < 10; i++) upkeep(sim.state, new Set());
+    expect(popAt(sim, 8, 7)).toBe(before + 10);
+  });
+});
+
 describe("upkeep runs on its own schedule", () => {
   it("the sweep is scheduled and reschedules itself", () => {
     const sim = new Sim(
@@ -94,4 +154,3 @@ describe("upkeep runs on its own schedule", () => {
     expect(pending.length).toBe(1);
   });
 });
-

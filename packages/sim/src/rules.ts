@@ -131,6 +131,9 @@ function annex(
   heir.diamonds += victim.diamonds;
   heir.bridges += victim.bridges;
   heir.ladders += victim.ladders;
+  // What they learned outlives the empire that learned it.
+  heir.marchUnlocked = heir.marchUnlocked || victim.marchUnlocked;
+  heir.growthUnlocked = heir.growthUnlocked || victim.growthUnlocked;
   victim.diamonds = 0;
   victim.bridges = 0;
   victim.ladders = 0;
@@ -141,6 +144,29 @@ function annex(
   bump(heir, null, STAT.ANNEXED, taken);
   raise(heir, null, STAT.PEAK_TILES, heir.tilesOwned);
   raise(heir, null, STAT.PEAK_POP, heir.popTotal);
+}
+
+/** The tile a march passes through: orthogonally beside the target, passable,
+ *  and itself on the empire's border. Lowest flat index wins, so two peers
+ *  never pick different halves of the same move. */
+export function marchVia(
+  state: State,
+  x: number,
+  y: number,
+  empireId: EmpireId,
+): number {
+  let best = -1;
+  for (const [dx, dy] of ORTHO) {
+    const nx = x + dx;
+    const ny = y + dy;
+    if (!inBounds(nx, ny, state.width, state.height)) continue;
+    const ni = idx(nx, ny, state.width);
+    if (!passable(state, ni)) continue;
+    if (isShielded(state, ni, empireId)) continue;
+    if (!adjacentToOwned(state, nx, ny, empireId)) continue;
+    if (best < 0 || ni < best) best = ni;
+  }
+  return best;
 }
 
 /** Count of the target's orthogonal neighbours owned by the acting empire,
@@ -193,6 +219,14 @@ export function validate(state: State, move: Move): boolean {
   if (move.type === MOVE.ROSTER_AMEND) return empire.members.length < 32;
   if (move.type === MOVE.BUY_BRIDGE) return empire.diamonds >= rules.bridgeCost;
   if (move.type === MOVE.BUY_LADDER) return empire.diamonds >= rules.ladderCost;
+  // Refused once it is already owned: it is permanent, and letting an empire
+  // spend six diamonds on nothing is a trap, not a decision.
+  if (move.type === MOVE.BUY_MARCH) {
+    return !empire.marchUnlocked && empire.diamonds >= rules.marchCost;
+  }
+  if (move.type === MOVE.BUY_GROWTH) {
+    return !empire.growthUnlocked && empire.diamonds >= rules.growthCost;
+  }
 
   if (!inBounds(move.x, move.y, state.width, state.height)) return false;
   const i = idx(move.x, move.y, state.width);
@@ -218,6 +252,17 @@ export function validate(state: State, move: Move): boolean {
     if (isShielded(state, i, empire.id)) return false;
     if (state.owner[i] === empire.id) return true;
     return adjacentToOwned(state, move.x, move.y, empire.id);
+  }
+
+  if (move.type === MOVE.MARCH) {
+    if (!empire.marchUnlocked) return false;
+    if (member.popTimer <= 0) return false;
+    if (!passable(state, i)) return false;
+    if (isShielded(state, i, empire.id)) return false;
+    // Strictly a reach extender. A tile already on the border is an ordinary
+    // claim, and spending a march on one would be a silent waste.
+    if (adjacentToOwned(state, move.x, move.y, empire.id)) return false;
+    return marchVia(state, move.x, move.y, empire.id) >= 0;
   }
 
   return false;
@@ -248,6 +293,16 @@ export function applyMove(state: State, move: Move, dirty: DirtySet): void {
     case MOVE.BUY_LADDER:
       empire.diamonds -= rules.ladderCost;
       empire.ladders++;
+      return;
+
+    case MOVE.BUY_MARCH:
+      empire.diamonds -= rules.marchCost;
+      empire.marchUnlocked = 1;
+      return;
+
+    case MOVE.BUY_GROWTH:
+      empire.diamonds -= rules.growthCost;
+      empire.growthUnlocked = 1;
       return;
 
     case MOVE.PLACE_BRIDGE: {
@@ -284,7 +339,54 @@ export function applyMove(state: State, move: Move, dirty: DirtySet): void {
     case MOVE.CLAIM:
       claim(state, move, empire, member, dirty);
       return;
+
+    case MOVE.MARCH:
+      march(state, move, empire, member, dirty);
+      return;
   }
+}
+
+/** Two tiles from one spend.
+ *
+ *  The population is shared, not doubled: the same base is split between the
+ *  tile passed through and the tile landed on, so a march buys reach rather
+ *  than force — permanently, which is why it costs twice what a bridge does. The multiplier is read at the intermediate tile because that is
+ *  where the empire's border actually is — the target has no owned neighbours
+ *  by construction.
+ *
+ *  Items are left where they lie. A march onto a coin ends with the coin on a
+ *  tile the empire now owns, claimable next turn for a full cascade, which is
+ *  a better play than a cascade the march would have spent half its population
+ *  on. */
+function march(
+  state: State,
+  move: Move,
+  empire: Empire,
+  member: Member,
+  dirty: DirtySet,
+): void {
+  const target = idx(move.x, move.y, state.width);
+  const via = marchVia(state, move.x, move.y, empire.id);
+  if (via < 0) return;
+
+  const mult = multiplier(state, xOf(via, state.width), yOf(via, state.width), empire.id);
+  const spent = member.popTimer;
+  const base = spent * mult;
+
+  bump(empire, member, STAT.POP_SPENT, spent);
+  bump(empire, member, STAT.MARCHES);
+  member.popTimer = 0;
+  member.popAcc = 0;
+
+  const half = Math.floor(base / 2);
+  let captured = 0;
+  if (place(state, via, empire.id, half, dirty)) captured++;
+  if (place(state, target, empire.id, base - half, dirty)) captured++;
+
+  bump(empire, member, STAT.TILES_TAKEN, captured);
+  raise(empire, member, STAT.TILES_ONE_MOVE, captured);
+  raise(empire, null, STAT.PEAK_TILES, empire.tilesOwned);
+  raise(empire, null, STAT.PEAK_POP, empire.popTotal);
 }
 
 function claim(

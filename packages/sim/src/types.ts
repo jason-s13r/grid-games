@@ -37,6 +37,11 @@ export const MOVE = {
   PLACE_LADDER: 5,
   ROSTER_AMEND: 6,
   HEARTBEAT: 7,
+  /** Claim a tile two steps out, filling the tile in between from the same
+   *  population spend. Available once the empire has bought the upgrade. */
+  MARCH: 8,
+  BUY_MARCH: 9,
+  BUY_GROWTH: 10,
 } as const;
 export type MoveType = (typeof MOVE)[keyof typeof MOVE];
 
@@ -78,8 +83,16 @@ export interface Rules {
 
   bridgeCost: number;
   ladderCost: number;
+  /** One purchase, unlocked forever — a march is a change to how the empire
+   *  moves, not a thing it carries. Priced accordingly. */
+  marchCost: number;
+  /** Also a one-off unlock. Population growth is a standing property of a
+   *  connected empire, not a potion that wears off. */
+  growthCost: number;
+  growthAmount: number;
 
-  /** Steps between upkeep passes: one connectivity sweep per empire. */
+  /** Steps between upkeep passes: one connectivity sweep per empire that both
+   *  decays what is cut off and grows what is not. */
   upkeepInterval: number;
   /** Fraction of a disconnected tile's population lost per upkeep pass. */
   decayNum: number;
@@ -166,6 +179,12 @@ export interface Empire {
   capital: TileIndex;
   bridges: number;
   ladders: number;
+  /** 1 once the empire has bought the march upgrade. Permanent, and inherited
+   *  by whoever takes the capital. */
+  marchUnlocked: number;
+  /** 1 once the empire has bought population growth. Permanent, and inherited
+   *  by whoever takes the capital. */
+  growthUnlocked: number;
   diamonds: number;
   tilesOwned: number;
   popTotal: number;
