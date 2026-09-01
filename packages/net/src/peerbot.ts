@@ -16,12 +16,20 @@
 // fire without triggering the coins they land on. A bot holds the line; it
 // cannot execute the big farming play. Cascade mastery stays the human skill.
 //
+// It also only ever defends. A night-shift bot that attacked would take ground
+// its team never chose to take, on a front nobody was awake to hold, and would
+// hand the empire a war it had to wake up to. Pinned to defence it reinforces
+// the thinnest contested tile and nothing else — it does not expand, it does
+// not grab coins, and with no line to hold it banks its population for the
+// morning. Cover, not initiative.
+//
 // Its randomness is its own business. A SimBot must draw from the shared seeded
 // stream because every peer re-derives its moves; a PeerBot's moves are
 // validated rather than derived, so it must NOT touch that stream — a draw made
 // on one peer and nowhere else is a desync.
 
 import { Rng, policy, seedFrom } from "@tessera/sim";
+import type { Mode } from "@tessera/sim";
 import type { Move } from "@tessera/sim";
 import type { Lockstep } from "./lockstep.js";
 
@@ -33,12 +41,16 @@ export interface PeerBotOptions {
   /** Where its decisions come from. Anything will do; the default is seeded
    *  from the seat so a replay of a test reproduces the same bot. */
   rng?: Rng;
+  /** What it is allowed to do. Defence is the default and the point; the field
+   *  exists so a test can put a bot on the attack deliberately. */
+  mode?: Mode;
 }
 
 export class PeerBot {
   private readonly lockstep: Lockstep;
   private readonly rng: Rng;
   private readonly interval: number;
+  private readonly mode: Mode;
   /** The step it last acted on, rather than a modulo of the current step: a
    *  pump can cross several steps at once, and a bot that only fires on an
    *  exact multiple would skip its turn whenever it did. */
@@ -55,6 +67,7 @@ export class PeerBot {
       options.rng ?? new Rng(seedFrom(`peerbot:${seat?.empire ?? 0}:${seat?.member ?? 0}`));
     this.interval =
       options.interval ?? this.lockstep.sim.state.genesis.rules.botActionInterval;
+    this.mode = options.mode ?? "defend";
   }
 
   /** Advance the game and take a turn if one is due. Returns what pump()
@@ -74,7 +87,7 @@ export class PeerBot {
     const state = this.lockstep.sim.state;
     const empire = state.empires[seat.empire - 1];
     if (!empire?.alive) return null;
-    return policy(state, empire, seat.member, this.rng);
+    return policy(state, empire, seat.member, this.rng, this.mode);
   }
 
   private async act(): Promise<void> {
