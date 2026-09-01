@@ -13,6 +13,7 @@ import { OnlineGame } from "./game/Online";
 import type { Driver } from "./game/Driver";
 import { Lobby, myIdentity } from "./net/Lobby";
 import { LobbyPanel } from "./view/LobbyPanel";
+import type { RosterView } from "./view/LobbyPanel";
 import { ChatPanel } from "./view/Chat";
 import { Camera, MIN_ZOOM, MAX_ZOOM, DOM_MIN_ZOOM } from "./view/Camera";
 import { MapImage } from "./view/MapImage";
@@ -181,8 +182,10 @@ viewportEl.addEventListener(
 const PAN_FRACTION = 0.35;
 
 function centreOnCapital(): void {
-  const capital = game.sim.state.empires[game.empire - 1]!.capital;
-  camera.centreOn(capital % MAP.width, Math.floor(capital / MAP.width));
+  // An observer has no capital to go home to; leave the camera where it is.
+  const empire = game.sim.state.empires[game.empire - 1];
+  if (!empire) return;
+  camera.centreOn(empire.capital % MAP.width, Math.floor(empire.capital / MAP.width));
 }
 
 pick<HTMLElement>(".mapctl").addEventListener("click", (event) => {
@@ -260,6 +263,7 @@ function frame(now: number): void {
     zoomInEl.disabled = !camera.canZoomIn;
     zoomOutEl.disabled = !camera.canZoomOut;
     panel.setStatus(game.status());
+    panel.setRoster(mesh ? rosterView(mesh) : null);
     minimapDue = now + 200;
   }
 
@@ -290,7 +294,41 @@ const panel = new LobbyPanel(lobbyEl, {
     chat.close();
     panel.detach();
   },
+  invite: (key) => void mesh?.amend(key),
+  endorse: (empire, key) => void mesh?.endorse(empire, key),
 });
+
+/** Chat needs a seat: which empire the team channel is sealed to, and whether
+ *  there is anyone on it to seal to. */
+function openChat(seat: { empire: number; member: number }): void {
+  const empires = mesh?.sim.state.empires ?? [];
+  chat.open(seat, (empires[seat.empire - 1]?.members.length ?? 1) - 1);
+  chat.note(`You are ${empireTheme(seat.empire).name}. Say hello.`);
+}
+
+/** Who is here without a seat, and what our empire is being asked to sign.
+ *
+ *  Recomputed rather than remembered: the roster changes underneath this — a
+ *  vote carries, somebody arrives — and a cached answer would be wrong in
+ *  exactly the moments it matters. The panel drops it when nothing changed. */
+function rosterView(driver: Lockstep): RosterView {
+  const here = lobby?.players() ?? [];
+  const ours = driver.seat?.empire;
+  return {
+    watching: !driver.seat,
+    waiting: here.filter((who) => !who.you && !driver.roster.has(who.key)),
+    asks: driver
+      .invitations()
+      .filter((record) => record.amendment.empire === ours)
+      .map((record) => ({
+        key: record.amendment.key,
+        empire: record.amendment.empire,
+        label: here.find((who) => who.key === record.amendment.key)?.label ?? "someone",
+        endorsed: record.signatures.length,
+        needed: driver.roster.quorum(record.amendment.empire),
+      })),
+  };
+}
 
 async function begin(code?: string): Promise<void> {
   if (lobby) return;
@@ -341,13 +379,20 @@ async function begin(code?: string): Promise<void> {
       return new PeerBot({ lockstep: own });
     });
     driver.onMessage = (message, text) => chat.add(message, text);
+    // Being voted a seat mid-game is the moment an observer becomes a player.
+    // Nothing about the driver changes — it was already verifying every move —
+    // so all that is left is to open the parts of the UI that need a seat.
+    driver.onSeated = (given, key) => {
+      if (key !== identity.key) return;
+      openChat(given);
+      panel.setStatus(`You have been seated as ${empireTheme(given.empire).name}.`);
+    };
     driver.start();
 
     mesh = driver;
-    chat.open(seat, genesis.empires[seat.empire - 1]!.members.length - 1);
-    chat.note(`You are ${empireTheme(seat.empire).name}. Say hello.`);
+    if (seat) openChat(seat);
 
-    mount(new OnlineGame(driver, lobby!.mesh, seat, bots));
+    mount(new OnlineGame(driver, lobby!.mesh, bots));
     pick<HTMLButtonElement>('[data-action="pause"]').disabled = true;
     pick<HTMLButtonElement>('[data-action="new"]').disabled = true;
   };

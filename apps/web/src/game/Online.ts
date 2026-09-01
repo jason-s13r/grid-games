@@ -6,7 +6,7 @@
 
 import { MOVE, STEPS_PER_SECOND } from "@tessera/sim";
 import type { Move, Sim } from "@tessera/sim";
-import type { Lockstep, PeerBot, PeerMesh, Seat } from "@tessera/net";
+import type { Lockstep, PeerBot, PeerMesh } from "@tessera/net";
 import type { Driver, MoveKind } from "./Driver";
 
 export class OnlineGame implements Driver {
@@ -22,7 +22,6 @@ export class OnlineGame implements Driver {
   constructor(
     private readonly lockstep: Lockstep,
     private readonly mesh: PeerMesh,
-    private readonly seat: Seat,
     /** Bot seats this page happens to be playing. They are ordinary peers with
      *  ordinary drivers; they ride the animation frame only because a tab needs
      *  something to call them, not because they are part of this game. */
@@ -57,12 +56,21 @@ export class OnlineGame implements Driver {
     return this.lockstep.sim;
   }
 
+  /** Read from the driver rather than stored, because it can change: a peer
+   *  that arrived mid-game holds no seat until an empire votes it one, and
+   *  from that step onwards it is an ordinary player. Empire 0 is neutral, so
+   *  an observer highlights nothing and owns nothing. */
   get empire(): number {
-    return this.seat.empire;
+    return this.lockstep.seat?.empire ?? 0;
   }
 
   get member(): number {
-    return this.seat.member;
+    return this.lockstep.seat?.member ?? 0;
+  }
+
+  /** True while this peer is watching rather than playing. */
+  get watching(): boolean {
+    return !this.lockstep.seat;
   }
 
   pause(): void {
@@ -81,10 +89,12 @@ export class OnlineGame implements Driver {
    *  What actually decides is the same check running on every peer when the
    *  step comes round. */
   act(type: MoveKind, x = 0, y = 0): boolean {
+    const seat = this.lockstep.seat;
+    if (!seat) return false; // watching, not playing
     const probe: Move = {
       step: this.sim.step,
-      empire: this.seat.empire,
-      member: this.seat.member,
+      empire: seat.empire,
+      member: seat.member,
       seq: 0,
       type,
       x,
@@ -110,6 +120,9 @@ export class OnlineGame implements Driver {
     if (waiting.length > 0) {
       const who = waiting.map((seat) => `E${seat.empire}·${seat.member}`).join(", ");
       return `Waiting for ${who}`;
+    }
+    if (!this.lockstep.seat) {
+      return `Watching · ${this.mesh.peers().length} peers · step ${this.lockstep.step}`;
     }
     const peers = this.mesh.peers().length;
     const covering = this.bots.length > 0 ? ` · covering ${this.bots.length} bot seat${this.bots.length === 1 ? "" : "s"}` : "";

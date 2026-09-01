@@ -52,7 +52,14 @@ export class Controls {
   }
 
   render(state: State): void {
-    const empire = state.empires[this.game.empire - 1]!;
+    // An observer holds no empire, and empire 0 is neutral. It has a clock and
+    // a board like everyone else; what it does not have is a seat to describe.
+    const empire = state.empires[this.game.empire - 1];
+    if (!empire) {
+      this.els.clock.textContent = `${clock(state.step)} · step ${state.step}`;
+      this.els.you.innerHTML = `<div class="you-head"><strong>Watching</strong></div>`;
+      return;
+    }
     const member = empire.members[this.game.member]!;
     const rules = state.genesis.rules;
     const theme = empireTheme(empire.id);

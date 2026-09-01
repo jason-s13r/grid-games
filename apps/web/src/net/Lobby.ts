@@ -100,7 +100,15 @@ export class Lobby {
   readonly members = new Map<string, MemberKey>();
 
   onChange?: () => void;
-  onStart?: (genesis: Genesis, seat: Seat, transport: Transport, bots: BotSeat[]) => void;
+  /** `seat` is undefined for an observer — a peer whose key is not in the
+   *  roster. It follows, verifies and archives the game like anyone else, and
+   *  can be voted a seat later by ROSTER_AMEND. */
+  onStart?: (
+    genesis: Genesis,
+    seat: Seat | undefined,
+    transport: Transport,
+    bots: BotSeat[],
+  ) => void;
 
   private handler?: FrameHandler;
   /** The record we agreed to play, kept so a peer that arrives after the game
@@ -332,11 +340,12 @@ export class Lobby {
         if (member.key === this.identity.key) seat = { empire: offset + 1, member: index };
       });
     });
-    if (!seat) {
-      this.fail("this game's roster does not include you");
-      return;
-    }
 
+    // No seat is not a failure. Anyone may connect and watch: an observer
+    // validates and stores the game exactly as a player does, and simply holds
+    // nothing, which is why an uninvited peer is harmless without any mechanism
+    // for keeping it out. It can be voted a seat later, and that is how someone
+    // joins a game already in progress.
     this.clearWatchdog();
     this.sealed = genesis;
     this.phase = "playing";

@@ -19,6 +19,21 @@ export interface LobbyHandlers {
   /** Tear the lobby down and go back to the opening choice. Every dead end
    *  needs one, or the only way out of a failed join is a page reload. */
   leave: () => void;
+  /** Propose seating this key on our own empire. */
+  invite: (key: MemberKey) => void;
+  /** Add our signature to somebody else's proposal. */
+  endorse: (empire: number, key: MemberKey) => void;
+}
+
+/** The living roster of a game in progress: who is here without a seat, and
+ *  what our empire is being asked to sign. */
+export interface RosterView {
+  /** True while we hold no seat ourselves. */
+  watching: boolean;
+  /** People connected to this game who hold no seat. */
+  waiting: Array<{ key: MemberKey; label: string }>;
+  /** Proposals our empire has been asked to endorse and has not yet. */
+  asks: Array<{ key: MemberKey; label: string; empire: number; endorsed: number; needed: number }>;
 }
 
 const escape = (text: string): string =>
@@ -41,6 +56,11 @@ export class LobbyPanel {
    *  every time somebody joined would be worse than useless. */
   private readonly botsFor = new Map<MemberKey, number>();
   private simbots = 1;
+  private roster: RosterView | null = null;
+  /** What the roster looked like when it was last drawn. A game in progress
+   *  offers this several times a second; redrawing an unchanged list would
+   *  cancel the click the player is in the middle of making. */
+  private drawn = "";
 
   constructor(
     private readonly root: HTMLElement,
@@ -53,6 +73,10 @@ export class LobbyPanel {
       if (action === "host") this.handlers.host();
       if (action === "start") this.handlers.start(this.plan());
       if (action === "leave") this.handlers.leave();
+      if (action === "invite" && button.dataset.key) this.handlers.invite(button.dataset.key);
+      if (action === "endorse" && button.dataset.key) {
+        this.handlers.endorse(Number(button.dataset.empire), button.dataset.key);
+      }
       if (action === "join") {
         const input = this.root.querySelector<HTMLInputElement>("[data-lobby-code]");
         const code = input?.value.trim();
@@ -106,6 +130,15 @@ export class LobbyPanel {
     if (el) el.textContent = text;
   }
 
+  /** The roster as the driver sees it, offered continuously while playing. */
+  setRoster(view: RosterView | null): void {
+    const shape = view ? JSON.stringify(view) : "";
+    if (shape === this.drawn) return;
+    this.drawn = shape;
+    this.roster = view;
+    this.render();
+  }
+
   render(): void {
     this.root.innerHTML = this.body();
     const el = this.root.querySelector("[data-lobby-status]");
@@ -142,7 +175,8 @@ export class LobbyPanel {
     if (lobby.phase === "playing") {
       return `
         <p class="hint">Room <code>${escape(lobby.code)}</code></p>
-        <p class="hint" data-lobby-status></p>`;
+        <p class="hint" data-lobby-status></p>
+        ${this.rosterBody()}`;
     }
     if (lobby.phase === "waiting") {
       return `
@@ -209,6 +243,54 @@ export class LobbyPanel {
         )}${player.you ? " (you)" : ""}</span>
         <select class="lobby-team" data-lobby-team="${escape(player.key)}">${choices.join("")}</select>
       </li>`;
+  }
+
+  /** Who is here without a seat, and what we are being asked to sign.
+   *
+   *  Both live in the panel that is already on screen during a game, because
+   *  both are answers to the same question — who is playing — and a marathon
+   *  game changes its answer while you watch. */
+  private rosterBody(): string {
+    const view = this.roster;
+    if (!view) return "";
+
+    const asks = view.asks
+      .map(
+        (ask) => `
+        <li class="lobby-seat">
+          <span class="lobby-who" style="color:${empireTheme(ask.empire).c1}">${escape(ask.label)}
+            <span class="lobby-tally">${ask.endorsed}/${ask.needed}</span></span>
+          <button class="btn btn-small" data-lobby-action="endorse"
+            data-key="${escape(ask.key)}" data-empire="${ask.empire}">Agree</button>
+        </li>`,
+      )
+      .join("");
+
+    // An observer cannot invite anyone: it holds no seat, so it is not part of
+    // any empire's quorum and has nothing to offer.
+    const waiting = view.watching
+      ? ""
+      : view.waiting
+          .map(
+            (who) => `
+        <li class="lobby-seat">
+          <span class="lobby-who">${escape(who.label)}</span>
+          <button class="btn btn-small" data-lobby-action="invite"
+            data-key="${escape(who.key)}">Offer a seat</button>
+        </li>`,
+          )
+          .join("");
+
+    return `
+      ${
+        view.watching
+          ? `<p class="hint">You are watching this game. Your browser is checking
+             every move like everyone else's — you just hold no seat. Ask a
+             player to offer you one.</p>`
+          : ""
+      }
+      ${asks ? `<p class="hint">Asked to join your empire:</p><ul class="lobby-teams">${asks}</ul>` : ""}
+      ${waiting ? `<p class="hint">Watching, and not playing:</p><ul class="lobby-teams">${waiting}</ul>` : ""}`;
   }
 
   /** Bot seats for one empire, named by whoever leads it. */

@@ -437,6 +437,19 @@ body {
   border-radius: 4px;
   background: #fffdf6;
 }
+// A row in the living roster: someone watching who could be offered a seat, or
+// a proposal waiting on our signature. Small, because it appears beside a game
+// in progress rather than instead of one.
+.btn.btn-small {
+  padding: 3px 8px;
+  font-size: 12px;
+}
+.lobby-tally {
+  margin-left: 6px;
+  opacity: 0.6;
+  font-size: 11px;
+}
+
 // Bot seats read as an addition to an empire rather than as another player, so
 // the name is set in the empire's own colour and the row is quieter than a
 // person's.
