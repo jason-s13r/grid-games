@@ -16,6 +16,7 @@ import type { EmpireSpec, Genesis } from "@tessera/sim";
 import {
   FRAME,
   Identity,
+  fingerprint,
   inspectGenesis,
   randomBytes,
   sealGenesis,
@@ -23,6 +24,7 @@ import {
 } from "@tessera/protocol";
 import type { Frame, MemberKey } from "@tessera/protocol";
 import { createMesh } from "@tessera/net";
+import { checkPlan } from "./teams";
 import type { PeerMesh, Transport, FrameHandler, Seat } from "@tessera/net";
 
 const IDENTITY_STORE = "tessera.identity";
@@ -60,6 +62,27 @@ export interface LobbyMember {
   key: MemberKey;
 }
 
+/** A player as the host's team picker sees them. */
+export interface LobbyPlayer {
+  /** The mesh peer id. Empty for us: we have no connection to ourselves. */
+  peer: string;
+  key: MemberKey;
+  /** Eight hex characters of the key's digest — short enough to read aloud,
+   *  long enough to tell two strangers apart. */
+  label: string;
+  you: boolean;
+}
+
+/** How the host wants the game composed: one entry per human empire, listing
+ *  its member keys in seat order, plus however many whole SimBot empires
+ *  should be in the world. */
+export interface HostPlan {
+  empires: MemberKey[][];
+  simbots: number;
+  width: number;
+  height: number;
+}
+
 export class Lobby {
   phase: LobbyPhase = "connecting";
   code = "";
@@ -76,6 +99,9 @@ export class Lobby {
   private sealed?: Genesis;
   private readonly backlog: Array<{ from: string; frame: Frame }> = [];
   private watchdog?: ReturnType<typeof setTimeout>;
+  /** Key digests, computed once each. Deriving one is async and the panel
+   *  renders synchronously, so they are cached as they arrive. */
+  private readonly labels = new Map<MemberKey, string>();
 
   private constructor(
     readonly identity: Identity,
@@ -85,6 +111,7 @@ export class Lobby {
     this.code = join ?? mesh.id;
     this.phase = join ? "waiting" : "hosting";
     this.mesh.listen((from, frame) => this.route(from, frame));
+    void this.label(identity.key);
 
     if (join) {
       this.watchdog = setTimeout(() => {
@@ -153,6 +180,33 @@ export class Lobby {
     return [...this.members.entries()].map(([peer, key]) => ({ peer, key }));
   }
 
+  /** Everyone the host can seat, us first and the rest in peer-id order.
+   *  The order has to be stable, or a team picker rearranges itself under the
+   *  host's cursor every time somebody joins. */
+  players(): LobbyPlayer[] {
+    const mine: LobbyPlayer = {
+      peer: "",
+      key: this.identity.key,
+      label: this.labels.get(this.identity.key) ?? "you",
+      you: true,
+    };
+    const others = [...this.members.entries()]
+      .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
+      .map(([peer, key]) => ({
+        peer,
+        key,
+        label: this.labels.get(key) ?? peer.slice(0, 8),
+        you: false,
+      }));
+    return [mine, ...others];
+  }
+
+  private async label(key: MemberKey): Promise<void> {
+    if (this.labels.has(key)) return;
+    this.labels.set(key, await fingerprint(key));
+    this.changed();
+  }
+
   /** Announce who we are. The game id is empty because there is no game yet:
    *  this is the one moment in the protocol where that is true, and it is why
    *  a lobby hello proves nothing beyond "here is a key to seat me under".
@@ -172,6 +226,7 @@ export class Lobby {
       if (frame.protocol !== PROTOCOL_VERSION) return; // a build we cannot play with
       if (frame.key) {
         this.members.set(from, frame.key);
+        void this.label(frame.key);
         this.changed();
       }
       return;
@@ -185,15 +240,29 @@ export class Lobby {
     else if (this.backlog.length < 4096) this.backlog.push({ from, frame });
   }
 
-  /** Compose the game and tell everyone. One empire per human, plus however
-   *  many SimBot empires the host wants in the world. */
-  async host(options: { bots: number; width: number; height: number }): Promise<void> {
-    const keys = [this.identity.key, ...this.members.values()];
-    const empires: EmpireSpec[] = keys.map((key) => ({
+  /** Compose the game and tell everyone.
+   *
+   *  Teams are the host's to arrange, because the host is the one composing the
+   *  genesis record — and once it is sealed and broadcast, every peer verifies
+   *  it for itself and the host has no further authority over anything.
+   *
+   *  An empire is a set of seats sharing territory, with a population timer
+   *  each. That is what makes three people on one empire meaningfully stronger
+   *  than one, and it is what shift rotation is for: the incoming player simply
+   *  has their own timer, and needs no handover mechanism at all. */
+  async host(plan: HostPlan): Promise<boolean> {
+    const problem = checkPlan(plan, [this.identity.key, ...this.members.values()]);
+    if (problem) {
+      this.problem = problem;
+      this.changed();
+      return false;
+    }
+
+    const empires: EmpireSpec[] = plan.empires.map((keys) => ({
       control: CONTROL.HUMAN,
-      members: [{ kind: MEMBER.HUMAN, key }],
+      members: keys.map((key) => ({ kind: MEMBER.HUMAN, key })),
     }));
-    for (let i = 0; i < options.bots; i++) {
+    for (let i = 0; i < plan.simbots; i++) {
       empires.push({ control: CONTROL.SIMBOT, members: [{ kind: MEMBER.BOT }] });
     }
 
@@ -203,13 +272,14 @@ export class Lobby {
       // peer whose clock runs fast simply waits for the others. Skew costs
       // responsiveness, never agreement.
       startedAt: Date.now(),
-      map: { width: options.width, height: options.height },
+      map: { width: plan.width, height: plan.height },
       empires,
     });
 
     const sealed = await sealGenesis(genesis);
     this.mesh.broadcast({ t: FRAME.GENESIS, genesis: sealed });
     await this.adopt(sealed);
+    return true;
   }
 
   /** Check the record before agreeing to play it, then find our own seat. An

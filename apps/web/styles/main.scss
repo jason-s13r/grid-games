@@ -406,6 +406,46 @@ body {
 }
 .lobby-problem { color: #9a3412; }
 
+// The team picker. One row per player: who they are on the left, the empire
+// they will hold on the right.
+.lobby-teams {
+  list-style: none;
+  margin: 8px 0;
+  padding: 0;
+  display: grid;
+  gap: 4px;
+}
+.lobby-seat {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.lobby-who {
+  // The key digest is monospace so two of them line up and can be compared at
+  // a glance, which is the only thing it is for.
+  flex: 1;
+  min-width: 0;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+.lobby-team {
+  font: inherit;
+  font-size: 12px;
+  padding: 3px 6px;
+  border: 1px solid #c8c0aa;
+  border-radius: 4px;
+  background: #fffdf6;
+}
+.lobby-field {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 8px;
+  font-size: 12px;
+}
+
 // --- chat --------------------------------------------------------------------
 
 .chat-log {

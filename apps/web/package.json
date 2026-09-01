@@ -8,7 +8,7 @@
     "dev": "parcel",
     "build": "parcel build --public-url ./",
     "typecheck": "tsc --noEmit -p tsconfig.json",
-    "test": "pnpm typecheck"
+    "test": "vitest run"
   },
   "dependencies": {
     "@tessera/sim": "workspace:*",

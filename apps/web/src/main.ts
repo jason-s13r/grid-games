@@ -282,7 +282,7 @@ const chat = new ChatPanel(chatEl, {
 const panel = new LobbyPanel(lobbyEl, {
   host: () => void begin(),
   join: (code) => void begin(code),
-  start: () => void lobby?.host({ bots: 1, ...SOLO_MAP }),
+  start: (plan) => void lobby?.host({ ...plan, ...SOLO_MAP }),
   leave: () => {
     lobby?.close();
     lobby = undefined;
