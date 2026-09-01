@@ -122,6 +122,22 @@ export interface SnapshotFrame {
   step: number;
   hash: number;
   data: string;
+  /** The roster amendments already applied to that state, in the order they
+   *  were applied.
+   *
+   *  The snapshot carries the simulation, and the simulation knows members by
+   *  index and nothing about keys — so a peer that adopted one across an
+   *  amendment would hold a state with a seat in it and no idea whose key sits
+   *  there, and would reject that player's every move. These are the records
+   *  themselves rather than a list of keys, so the receiver re-checks each
+   *  quorum for itself: a snapshot stays safe to take from anyone. */
+  amendments?: SignedAmendment[];
+  /** The seats already dropped from that game, with the records that dropped
+   *  them. Not part of the state hash — an ejection changes who a peer waits
+   *  for, not what the world looks like — but a peer that adopted a snapshot
+   *  without them would sit waiting on a seat everyone else stopped waiting for
+   *  long ago, which is indistinguishable from being broken. */
+  drops?: SignedDrop[];
 }
 
 export interface ByeFrame {
@@ -205,7 +221,10 @@ export function decodeFrame(text: string): Frame | null {
       return isStep(parsed.step) ? (parsed as unknown as SnapshotRequestFrame) : null;
 
     case FRAME.SNAPSHOT:
-      return isStep(parsed.step) && typeof parsed.hash === "number" && isString(parsed.data)
+      return isStep(parsed.step) &&
+        typeof parsed.hash === "number" &&
+        isString(parsed.data) &&
+        (parsed.amendments === undefined || Array.isArray(parsed.amendments))
         ? (parsed as unknown as SnapshotFrame)
         : null;
 
