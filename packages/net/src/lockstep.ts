@@ -103,6 +103,17 @@ const DEFAULT_STALL_TIMEOUT = 15_000;
  *  and nothing more. */
 const RESUME_BEHIND = STEPS_PER_SECOND * 2;
 
+/** How often a blocked peer repeats the promise it is already standing on.
+ *
+ *  A READY is cumulative and idempotent, so repeating one costs a signature and
+ *  nothing else. It is also the only way a peer that was not connected when we
+ *  last spoke ever learns what we are ready for: a full mesh takes a second hop
+ *  to form, and two peers who joined a host at the same moment can easily be
+ *  playing before their channel to each other has opened. Without this they
+ *  wait on each other for a promise that was broadcast before either could
+ *  hear it, and no stopwatch but the stall timer ever breaks it. */
+const READY_REPEAT_MS = 1000;
+
 /** How long a snapshot we asked for stays welcome. Long enough for a large map
  *  to cross a slow channel; short enough that a stale one arriving later is
  *  refused rather than rewinding a peer that has since recovered on its own. */
@@ -158,6 +169,7 @@ export class Lockstep {
    *  climb past a step we are about to speak for. */
   private readyCeiling = Number.MAX_SAFE_INTEGER;
   private lastBeat = -Infinity;
+  private lastReadyAt = -Infinity;
   private halted: string | null = null;
   /** How long a snapshot we asked for stays welcome. Outside this window a
    *  snapshot is only adopted when it is strictly ahead of us. */
@@ -279,6 +291,7 @@ export class Lockstep {
         // waiting for is waiting on us in turn, this is the only thing that
         // breaks the deadlock without ejecting an innocent seat.
         this.announceReady();
+        this.repeatReady();
         this.stalling(waiting);
         break;
       }
@@ -375,6 +388,27 @@ export class Lockstep {
 
     this.ourReady = upTo;
     this.broadcastReady = upTo;
+    this.sendReady(upTo);
+  }
+
+  /** Repeat the standing promise to whoever may not have heard it.
+   *
+   *  Blocked is exactly the situation where this matters and exactly the
+   *  situation where it is free: a peer that is waiting is not advancing, so it
+   *  has nothing new to say and nothing else to spend bandwidth on. Throttled,
+   *  because pump() runs on every animation frame. */
+  private repeatReady(): void {
+    if (this.broadcastReady < 0) return; // nothing promised yet
+    const now = this.now();
+    if (now - this.lastReadyAt < READY_REPEAT_MS) return;
+    this.sendReady(this.broadcastReady);
+  }
+
+  private sendReady(upTo: number): void {
+    const identity = this.options.identity;
+    const seat = this.options.seat;
+    if (!identity || !seat) return;
+    this.lastReadyAt = this.now();
     void signReady(identity, this.gameId, { upTo, empire: seat.empire, member: seat.member }).then(
       (signed) => this.transport.broadcast({ t: FRAME.READY, signed }),
     );

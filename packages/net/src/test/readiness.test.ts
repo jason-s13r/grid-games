@@ -13,7 +13,9 @@
 
 import { beforeAll, describe, expect, it } from "vitest";
 import { MOVE } from "@tessera/sim";
-import { clickAround, pickClaim, run, table } from "./harness.js";
+import { FRAME } from "@tessera/protocol";
+import type { Frame } from "@tessera/protocol";
+import { agreed, clickAround, pickClaim, run, table } from "./harness.js";
 import type { Table } from "./harness.js";
 
 describe("a promise made while signing is renewed, not left stale", () => {
@@ -80,4 +82,48 @@ describe("a promise made while signing is renewed, not left stale", () => {
   it("the move that missed its slot was noticed, not swallowed", () => {
     expect(t.peers.some((peer) => peer.desyncs.length > 0)).toBe(true);
   });
+});
+
+describe("a peer that was not listening when we last spoke", () => {
+  // A full mesh takes a second hop to form. Two players who join a host at the
+  // same moment are talking to the host long before their channel to each other
+  // opens — and readiness is announced once, when it advances. Each then waits
+  // on a promise the other made before either could hear it, and nothing but
+  // the stall timer ever breaks it: neither is advancing, so neither has
+  // anything new to announce.
+  let t: Table;
+  let isolated = true;
+
+  beforeAll(async () => {
+    t = await table({
+      seats: [1, 1, 1],
+      stallTimeout: 60_000,
+      loopback: {
+        drop: (from, to, frame: Frame) =>
+          isolated &&
+          frame.t === FRAME.READY &&
+          [from, to].every((peer) => peer === "e2m0" || peer === "e3m0"),
+      },
+    });
+    // Long enough for everyone to announce, and for the two isolated seats to
+    // miss each other doing it.
+    await run(t, 8);
+    isolated = false;
+    await run(t, 96, await clickAround(t, 24));
+  });
+
+  it("hears the standing promise once the channel opens", () => {
+    expect(t.net.dropped).toBeGreaterThan(0);
+    expect(t.peers[1]!.driver.step).toBeGreaterThan(60);
+  });
+
+  it("so the table gets going", () => {
+    expect(t.peers[0]!.driver.step).toBeGreaterThan(60);
+  });
+
+  it("with nobody ejected for it", () => {
+    expect(t.peers.flatMap((peer) => peer.ejections)).toEqual([]);
+  });
+
+  it("and everyone on the same state", () => expect(agreed(t)).toBe(true));
 });
