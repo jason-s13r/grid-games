@@ -56,9 +56,19 @@ jobs:
             *) exit "$rc" ;;
           esac
 
+  # A release is the one moment the suites must have run: dispat tags, pushes
+  # and publishes in a single unattended pass, and there is no reviewing step
+  # after it. Gated on the plan so a dispatch that releases nothing does not pay
+  # for a run nobody reads.
+  test:
+    name: Test
+    needs: plan
+    if: needs.plan.outputs.releasing == 'true'
+    uses: ./.github/workflows/test.yml
+
   release:
     name: Release
-    needs: plan
+    needs: [plan, test]
     if: needs.plan.outputs.releasing == 'true'
     runs-on: ubuntu-latest
     permissions:

@@ -1,0 +1,49 @@
+name: Test
+
+# The suites run here rather than only on whoever last touched them.
+#
+# Callable as well as triggered, so the release workflow gates on exactly this
+# job instead of keeping a second copy of the same steps that could drift.
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_call:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: test-${{ github.ref }}
+  # Superseding a pull request's run is free; superseding the run a release is
+  # waiting on is not. When this workflow is called, the event is the caller's,
+  # so a release run never matches.
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  test:
+    name: Suites and types
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+
+      # Vitest reads the packages straight from src, but apps/web resolves
+      # @tessera/* through their manifests, which point at dist. So the
+      # libraries have to be emitted before the app can be typechecked — and
+      # building them is worth doing on its own, since tsc is the only thing
+      # that ever looks at the declaration output.
+      - name: Build the libraries
+        run: pnpm --filter "./packages/*" build
+
+      - name: Run the suites
+        run: pnpm test
+
+      - name: Typecheck, tests included
+        run: pnpm typecheck
