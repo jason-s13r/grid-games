@@ -12,6 +12,7 @@ import { PHASE, WIN, MEMBER, CONTROL } from "./types.js";
 import type { Empire, Genesis, Phase, WinReason, EmpireId, MemberIndex, Member } from "./types.js";
 import { STAT_SLOTS } from "./constants.js";
 import { EventQueue } from "./events.js";
+import type { EventType } from "./events.js";
 import { Rng } from "./rng.js";
 import { fnv1a } from "./hash.js";
 
@@ -240,7 +241,7 @@ export function restore(state: State, buffer: ArrayBuffer): State {
   for (let i = 0; i < eventCount; i++) {
     const step = u32();
     const seq = u32();
-    const type = u8() as 0;
+    const type = u8() as EventType;
     const payload = u32();
     events.push({ step, seq, type, payload });
   }

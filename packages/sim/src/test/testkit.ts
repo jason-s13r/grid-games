@@ -11,19 +11,30 @@ import { idx } from "../geometry.js";
 
 export { humans, simbot } from "../specs.js";
 
-/** A blank arena: no terrain features, no spawns, so a test controls the board
- *  completely.
+/** A blank arena: no terrain features, no spawns, no upkeep, so a test
+ *  controls the board completely.
  *
  *  Every empire keeps an owned capital parked in row 0, well clear of the
  *  working area. Without one, elimination fires on the first advance and the
- *  game ends before the test does anything. */
+ *  game ends before the test does anything.
+ *
+ *  Parked well clear also means disconnected, so the upkeep sweep would decay
+ *  every tile a test placed. Suppressed here the same way spawning is — these
+ *  are world processes, and the tests that care about them build their own
+ *  board. See upkeep.test.ts. */
 export function arena(empires: EmpireSpec[], seed = 1): Sim {
   const sim = new Sim(
     makeGenesis({
       seed,
       empires,
       map: { width: 24, height: 24, mountains: 0, lakes: 0, rivers: 0, walls: 0 },
-      rules: { coinIntervalMin: 1 << 28, coinIntervalMax: 1 << 28, noobSteps: 0, noobTiles: 0 },
+      rules: {
+        coinIntervalMin: 1 << 28,
+        coinIntervalMax: 1 << 28,
+        upkeepInterval: 1 << 28,
+        noobSteps: 0,
+        noobTiles: 0,
+      },
     }),
   );
   const s = sim.state;

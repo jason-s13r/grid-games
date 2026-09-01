@@ -16,6 +16,7 @@ export {
 } from "./state.js";
 export type { State } from "./state.js";
 export { generate } from "./mapgen.js";
+export { upkeep } from "./upkeep.js";
 export {
   validate,
   applyMove,

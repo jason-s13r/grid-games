@@ -8,7 +8,7 @@
 // Ordering is by (step, seq) with a monotonic seq, a total order — so heap
 // tie-breaks can never differ between peers.
 
-export const EVENT = { SPAWN: 0 } as const;
+export const EVENT = { SPAWN: 0, UPKEEP: 1 } as const;
 export type EventType = (typeof EVENT)[keyof typeof EVENT];
 
 export interface ScheduledEvent {

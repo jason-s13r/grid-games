@@ -79,6 +79,13 @@ export interface Rules {
   bridgeCost: number;
   ladderCost: number;
 
+  /** Steps between upkeep passes: one connectivity sweep per empire. */
+  upkeepInterval: number;
+  /** Fraction of a disconnected tile's population lost per upkeep pass. */
+  decayNum: number;
+  decayDen: number;
+  decayMin: number;
+
   noobTiles: number;
   noobSteps: number;
 

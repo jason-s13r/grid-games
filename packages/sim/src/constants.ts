@@ -68,6 +68,13 @@ export const DEFAULT_RULES: Rules = {
   bridgeCost: 3,
   ladderCost: 3,
 
+  upkeepInterval: seconds(20),
+  // An eighth per pass: a pocket cut off behind enemy lines withers over a
+  // couple of minutes rather than vanishing, so it can still be relieved.
+  decayNum: 1,
+  decayDen: 8,
+  decayMin: 1,
+
   noobTiles: 40,
   noobSteps: minutes(3),
 

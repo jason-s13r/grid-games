@@ -14,7 +14,8 @@ import { PASSABLE } from "./constants.js";
 import { EVENT } from "./events.js";
 import { createState, snapshot, restore, hashState } from "./state.js";
 import type { State } from "./state.js";
-import { generate, scheduleSpawn } from "./mapgen.js";
+import { generate, scheduleSpawn, scheduleUpkeep } from "./mapgen.js";
+import { upkeep } from "./upkeep.js";
 import { accrue, applyMove, validate } from "./rules.js";
 import type { DirtySet } from "./rules.js";
 import { checkVictory } from "./victory.js";
@@ -139,6 +140,9 @@ export class Sim {
       if (event.type === EVENT.SPAWN) {
         this.spawnItem(dirty);
         scheduleSpawn(state, state.step);
+      } else if (event.type === EVENT.UPKEEP) {
+        upkeep(state, dirty);
+        scheduleUpkeep(state, state.step);
       }
     }
   }

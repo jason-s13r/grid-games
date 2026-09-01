@@ -20,6 +20,7 @@ export function generate(state: State): State {
 
   placeCapitals(state, mainland(state));
   scheduleSpawn(state, 0);
+  scheduleUpkeep(state, 0);
   return state;
 }
 
@@ -240,4 +241,10 @@ export function scheduleSpawn(state: State, from: number): void {
   const { rules } = state.genesis;
   const delay = state.rng.range(rules.coinIntervalMin, rules.coinIntervalMax);
   state.events.push(from + delay, EVENT.SPAWN, 0);
+}
+
+/** Fixed interval, no RNG: upkeep is a metronome, and drawing for it would put
+ *  a third consumer on the shared stream for no gain. */
+export function scheduleUpkeep(state: State, from: number): void {
+  state.events.push(from + state.genesis.rules.upkeepInterval, EVENT.UPKEEP, 0);
 }
