@@ -1,5 +1,43 @@
 # Changelog
 
+## sim@1.0.0 (2026-09-01)
+
+### Breaking Changes
+
+- raise the protocol to 2
+  Every rule change in this release moves the state hash. A peer refuses a
+  genesis whose major it does not share, so a v1 and a v2 client decline
+  each other at the lobby instead of desyncing hours in.
+
+### Features
+
+- march and growth as standing modifiers
+  Two permanent upgrades, six diamonds each, inherited with a captured
+  capital. March claims two tiles out and fills the tile between from the
+  same spend; growth adds population to every tile the capital reaches, on
+  every upkeep pass — it scales with tile count, so it compounds over a
+  long game. Snapshot layout 1 to 2.
+
+- coins spawn faster and near the fighting
+  Interval 4-10s to 1.5-4s, diamonds weighted roughly double, and most
+  spawns land just outside somebody's border instead of uniformly across
+  the map.
+
+- taking a capital annexes the empire behind it
+  Its tiles, population and unspent stock go to the attacker rather than
+  sitting on the board as an ownerless rump. CAPITAL elimination only.
+
+- territory cut off from its capital decays
+  A tile the capital cannot reach loses an eighth of its population per
+  upkeep pass and goes neutral at zero, so cutting a supply line is worth
+  something on its own.
+
+- rivers can be forded, and capitals start on the mainland
+  Rivers get passable gaps, so one is a detour rather than a wall.
+  Capitals are placed only on the largest connected region, so no empire
+  starts sealed in a pocket it cannot leave.
+
+
 ## sim@0.2.0 (2026-08-31)
 
 ### Features

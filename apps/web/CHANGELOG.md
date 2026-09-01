@@ -1,5 +1,27 @@
 # Changelog
 
+## web@0.6.0 (2026-09-01)
+
+### Features
+
+- an upgrades panel, and march as a click mode
+  March and growth get their own section rather than sitting in the shop
+  beside the consumables. Marching arms the board like a bridge does, but
+  stays armed, since nothing is spent.
+
+### Fixes
+
+- a placed bridge no longer locks the board
+  Placing left the board armed with an empty stock, so every later click
+  was a failing PLACE_BRIDGE and the player could never claim again. A
+  placement disarms; so does Escape.
+
+### Dependencies
+
+- sim: 0.2.0 -> 1.0.0
+- net: 0.4.0 -> 0.5.0
+
+
 ## web@0.5.0 (2026-09-01)
 
 ### Features

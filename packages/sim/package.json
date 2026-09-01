@@ -1,6 +1,6 @@
 {
   "name": "@tessera/sim",
-  "version": "0.2.0",
+  "version": "1.0.0",
   "private": true,
   "description": "Deterministic Empire Attack simulation core. The state hash is the compatibility contract.",
   "license": "MIT",

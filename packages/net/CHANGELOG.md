@@ -1,5 +1,19 @@
 # Changelog
 
+## net@0.5.0 (2026-09-01)
+
+### Features
+
+- the night shift only defends
+  A PeerBot covering a sleeping seat reinforces the thinnest contested
+  tile and nothing else: no expanding, no coin grabs, and it banks its
+  population when there is no line to hold.
+
+### Dependencies
+
+- sim: 0.2.0 -> 1.0.0
+
+
 ## net@0.4.0 (2026-09-01)
 
 ### Features
