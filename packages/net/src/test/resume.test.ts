@@ -74,7 +74,9 @@ describe("a peer arriving late resumes without being told to", () => {
   let storedStep: number;
   let stepAfterOneRound: number;
 
-  // One round of the world with the latecomer pumped alongside the table.
+  // One round of the world with the latecomer pumped alongside the table, then
+  // a drain: signing is asynchronous, so a round that ends the moment the clock
+  // stops leaves frames in flight and an assertion reading a table mid-sentence.
   const spin = async (rounds: number): Promise<void> => {
     for (let i = 0; i < rounds; i++) {
       t.clock.advance(MS_PER_STEP);
@@ -85,6 +87,13 @@ describe("a peer arriving late resumes without being told to", () => {
         t.net.flush();
         await settle(2);
       }
+    }
+    for (let pass = 0; pass < 8; pass++) {
+      for (const peer of t.peers) peer.driver.pump();
+      latecomer.pump();
+      await settle(2);
+      t.net.flush();
+      await settle(2);
     }
   };
 
@@ -170,6 +179,7 @@ describe("a reload rejoins with its own seat intact", () => {
       seat,
       identity: gone.identity,
       chat: [],
+      heard: [],
       desyncs: [],
       ejections: [],
       violations: [],

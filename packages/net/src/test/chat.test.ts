@@ -45,3 +45,52 @@ describe("chat cannot desync a game", () => {
 
   it("and every peer still holds the same state", () => expect(agreed(t)).toBe(true));
 });
+
+describe("team chat is private to the empire", () => {
+  // The mesh broadcasts everything, so an opponent and an observer both receive
+  // every team message and store it. What separates them from a teammate is
+  // only whether the bytes open.
+  const PLAN = "push their capital at 3:20, I have 900 banked";
+  let t: Table;
+  let mate: Table["peers"][number];
+  let opponent: Table["peers"][number];
+  let observer: Table["peers"][number];
+
+  beforeAll(async () => {
+    t = await table({ seats: [2, 1], observer: true });
+    await run(t, 24);
+    await t.peers[0]!.driver.say(PLAN, CHANNEL.TEAM);
+    await run(t, 24);
+    [, mate, opponent, observer] = t.peers;
+  });
+
+  it("the teammate reads it", () => {
+    expect(mate.heard.at(-1)).toBe(PLAN);
+  });
+
+  it("the sender sees what it typed, not what it sent", () => {
+    expect(t.peers[0]!.heard.at(-1)).toBe(PLAN);
+    expect(t.peers[0]!.chat.at(-1)!.body).not.toBe(PLAN);
+  });
+
+  it("an opponent receives it and cannot read it", () => {
+    expect(opponent.chat).toHaveLength(1);
+    expect(opponent.heard.at(-1)).toBeNull();
+  });
+
+  it("an observer receives it and cannot read it", () => {
+    expect(observer.chat).toHaveLength(1);
+    expect(observer.heard.at(-1)).toBeNull();
+  });
+
+  // Attribution survives encryption on purpose: an opponent should be able to
+  // see that empire 1 is talking, and how much. Only the words are private.
+  it("but everyone can see who said it and when", () => {
+    const seen = opponent.chat[0]!;
+    expect(seen.empire).toBe(1);
+    expect(seen.member).toBe(0);
+    expect(seen.channel).toBe(CHANNEL.TEAM);
+  });
+
+  it("and nothing about it touched the state", () => expect(agreed(t)).toBe(true));
+});

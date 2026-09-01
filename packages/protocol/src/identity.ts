@@ -14,6 +14,20 @@ import { fromBase64Url, toBase64Url, toHex } from "./bytes.js";
 const KEY_ALGORITHM = { name: "ECDSA", namedCurve: "P-256" } as const;
 const SIGN_ALGORITHM = { name: "ECDSA", hash: "SHA-256" } as const;
 
+/** The same curve, read as an agreement key rather than a signing one.
+ *
+ *  Web Crypto fixes the algorithm at generation: an ECDSA key can sign and
+ *  nothing else. But a P-256 point is a P-256 point, so the keypair can be
+ *  exported and read back in as ECDH — which is what lets two teammates derive
+ *  a shared secret from the very keys the roster already names them by, with no
+ *  second keypair to distribute, persist, or lose.
+ *
+ *  Using one keypair for two algorithms is worth a moment's thought. It is safe
+ *  here because the two uses are cryptographically separated: ECDSA signs
+ *  domain-tagged payloads, and every derived secret goes through HKDF with its
+ *  own tag, so neither can be made to produce something the other would accept. */
+const AGREE_ALGORITHM = { name: "ECDH", namedCurve: "P-256" } as const;
+
 /** Base64url of the 65-byte uncompressed point. This string is the member id
  *  everywhere: in the genesis roster, in an amendment, in the UI. */
 export type MemberKey = string;
@@ -47,6 +61,10 @@ export function randomBytes(size: number): Uint8Array {
  *  through export(), which exists so a browser can persist a seat across a
  *  reload — losing it means losing the seat, since the roster names the key. */
 export class Identity {
+  /** Derived once and kept: the export-and-reimport below is not cheap, and a
+   *  chat message would otherwise pay for it on every line. */
+  private agreeing?: Promise<CryptoKey>;
+
   private constructor(
     readonly key: MemberKey,
     private readonly privateKey: CryptoKey,
@@ -85,6 +103,21 @@ export class Identity {
     return JSON.stringify(await subtle().exportKey("jwk", this.privateKey));
   }
 
+  /** This keypair as an agreement key. The JWK's `alg` and `key_ops` name
+   *  ECDSA, and an import that contradicts the algorithm it is asked for is
+   *  rejected — so they are dropped rather than overridden. */
+  async agreementKey(): Promise<CryptoKey> {
+    if (!this.agreeing) {
+      const jwk = (await subtle().exportKey("jwk", this.privateKey)) as JsonWebKey & {
+        alg?: string;
+      };
+      delete jwk.alg;
+      delete jwk.key_ops;
+      this.agreeing = subtle().importKey("jwk", jwk, AGREE_ALGORITHM, false, ["deriveBits"]);
+    }
+    return this.agreeing;
+  }
+
   async sign(payload: Uint8Array): Promise<string> {
     const signature = await subtle().sign(
       SIGN_ALGORITHM,
@@ -93,6 +126,27 @@ export class Identity {
     );
     return toBase64Url(new Uint8Array(signature));
   }
+}
+
+/** Someone else's public key, read as an agreement key. Cached like the
+ *  verifiers above and for the same reason. */
+const agreers = new Map<MemberKey, CryptoKey | null>();
+
+export async function agreementPublicKey(key: MemberKey): Promise<CryptoKey | null> {
+  const cached = agreers.get(key);
+  if (cached !== undefined) return cached;
+
+  let imported: CryptoKey | null = null;
+  try {
+    const raw = fromBase64Url(key);
+    if (raw && raw.length === PUBLIC_KEY_BYTES) {
+      imported = await subtle().importKey("raw", raw as BufferSource, AGREE_ALGORITHM, false, []);
+    }
+  } catch {
+    imported = null;
+  }
+  agreers.set(key, imported);
+  return imported;
 }
 
 /** Never throws. Every call is checking something a peer sent, and a bad key,

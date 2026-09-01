@@ -10,7 +10,8 @@
 // not that what they wrote is safe to hand to a parser.
 
 import { STEPS_PER_SECOND } from "@tessera/sim";
-import type { Message } from "@tessera/protocol";
+import { CHANNEL } from "@tessera/protocol";
+import type { Channel, Message } from "@tessera/protocol";
 import { empireTheme } from "./palette";
 
 /** Long enough to scroll back through a fight, short enough that a multi-day
@@ -22,7 +23,7 @@ const MAX_LINES = 200;
 const MAX_BODY = 280;
 
 export interface ChatHooks {
-  send: (body: string) => void;
+  send: (body: string, channel: Channel) => void;
 }
 
 /** Game time, not wall-clock time: the step number is the one clock every peer
@@ -38,6 +39,7 @@ export class ChatPanel {
   private readonly log: HTMLDivElement;
   private readonly form: HTMLFormElement;
   private readonly input: HTMLInputElement;
+  private readonly channel: HTMLSelectElement;
   private you?: { empire: number; member: number };
 
   constructor(
@@ -53,6 +55,15 @@ export class ChatPanel {
     this.input.maxLength = MAX_BODY;
     this.input.autocomplete = "off";
 
+    // Only offered once the empire has someone else on it. A team channel with
+    // an audience of one is a box that swallows what you type.
+    this.channel = document.createElement("select");
+    this.channel.className = "chat-channel";
+    this.channel.append(
+      new Option("All", String(CHANNEL.PUBLIC)),
+      new Option("Team", String(CHANNEL.TEAM)),
+    );
+
     const send = document.createElement("button");
     send.className = "btn";
     send.type = "submit";
@@ -60,7 +71,7 @@ export class ChatPanel {
 
     this.form = document.createElement("form");
     this.form.className = "chat-form";
-    this.form.append(this.input, send);
+    this.form.append(this.channel, this.input, send);
     this.form.addEventListener("submit", (event) => {
       event.preventDefault();
       this.submit();
@@ -77,19 +88,23 @@ export class ChatPanel {
     this.input.disabled = true;
     this.input.value = "";
     this.input.placeholder = "Chat opens when you host or join a game";
+    this.channel.disabled = true;
+    this.channel.value = String(CHANNEL.PUBLIC);
   }
 
-  open(seat: { empire: number; member: number }): void {
+  open(seat: { empire: number; member: number }, teammates = 0): void {
     this.you = seat;
     this.input.disabled = false;
     this.input.placeholder = "Say something";
+    this.channel.disabled = teammates === 0;
+    this.channel.title = teammates === 0 ? "You are the only seat on this empire" : "";
   }
 
   private submit(): void {
     const body = this.input.value.trim().slice(0, MAX_BODY);
     this.input.value = "";
     if (!body || !this.you) return;
-    this.hooks.send(body);
+    this.hooks.send(body, Number(this.channel.value) as Channel);
   }
 
   /** A line nobody said: connection notices and the like. Local to this client,
@@ -101,13 +116,17 @@ export class ChatPanel {
     this.append(line);
   }
 
-  add(message: Message): void {
+  /** `text` is what the message says to us, and null when it says nothing:
+   *  another empire's team traffic arrives here as ciphertext by design, and
+   *  showing that it happened is better than pretending it did not. */
+  add(message: Message, text: string | null): void {
     const theme = empireTheme(message.empire);
     const mine =
       this.you?.empire === message.empire && this.you?.member === message.member;
+    const team = message.channel === CHANNEL.TEAM;
 
     const line = document.createElement("div");
-    line.className = mine ? "chat-line chat-mine" : "chat-line";
+    line.className = `chat-line${mine ? " chat-mine" : ""}${team ? " chat-team" : ""}`;
 
     const when = document.createElement("span");
     when.className = "chat-when";
@@ -121,10 +140,18 @@ export class ChatPanel {
     who.textContent = message.member > 0 ? `${theme.name}·${message.member}` : theme.name;
 
     const body = document.createElement("span");
-    body.className = "chat-body";
-    body.textContent = message.body;
+    body.className = text === null ? "chat-body chat-sealed" : "chat-body";
+    // Never message.body: on a team line that is the ciphertext, and on any
+    // line it is a string another player chose.
+    body.textContent = text ?? "sealed to their empire";
 
     line.append(when, who, body);
+    if (team) {
+      const mark = document.createElement("span");
+      mark.className = "chat-mark";
+      mark.textContent = "team";
+      line.insertBefore(mark, body);
+    }
     this.append(line);
   }
 

@@ -490,6 +490,33 @@ body {
   color: var(--muted);
   font-style: italic;
 }
+// A team line is marked, not hidden: knowing an exchange is private is part of
+// reading the game, and a message you cannot open still tells you it happened.
+.chat-mark {
+  flex: none;
+  align-self: flex-start;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  padding: 1px 4px;
+  border-radius: 3px;
+  background: #efe9d8;
+  color: #6b6250;
+}
+.chat-sealed {
+  color: #8a8272;
+  font-style: italic;
+}
+.chat-channel {
+  flex: none;
+  font: inherit;
+  font-size: 12px;
+  padding: 4px 5px;
+  border: 1px solid #c8c0aa;
+  border-radius: 4px;
+  background: #fffdf6;
+  &:disabled { opacity: 0.55; }
+}
 .chat-form {
   display: flex;
   gap: 6px;

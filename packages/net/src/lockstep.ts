@@ -27,6 +27,8 @@ import {
   endorseDrop,
   mergeDrop,
   signCheckpoint,
+  openTeamBody,
+  sealTeamBody,
   signMessage,
   signMove,
   signReady,
@@ -130,7 +132,10 @@ export class Lockstep {
   readonly inputDelay: number;
 
   onDirty?: (dirty: Set<number>) => void;
-  onMessage?: (message: Message) => void;
+  /** A chat line. `text` is what it says when we could read it, and null when
+   *  we could not: a team message from another empire is ciphertext to us by
+   *  design, and that is worth showing rather than hiding. */
+  onMessage?: (message: Message, text: string | null) => void;
   onDesync?: (step: number, ours: number, theirs: number, seat: Seat) => void;
   onEjection?: (seat: Seat, atStep: number, reason: EjectionReason, late: boolean) => void;
   onStalled?: (seats: Seat[], waitedMs: number) => void;
@@ -350,11 +355,28 @@ export class Lockstep {
 
   /** Chat. Signed and ordered like everything else, and deliberately outside
    *  the state hash: a message that arrives late, out of order or not at all
-   *  must never be able to desync a game. */
+   *  must never be able to desync a game.
+   *
+   *  A TEAM line is encrypted to the empire's other seats before it is signed,
+   *  so what goes on the wire — and into an archive peer's copy of the log — is
+   *  ciphertext to everyone but them. The signature still names the sender, so
+   *  an opponent can see that somebody on empire 2 said something; only the
+   *  words are private. */
   async say(body: string, channel: Channel = CHANNEL.PUBLIC): Promise<boolean> {
     const seat = this.options.seat;
     const identity = this.options.identity;
     if (!seat || !identity) return false;
+
+    let wire = body;
+    if (channel === CHANNEL.TEAM) {
+      const mates = this.roster
+        .membersOf(seat.empire)
+        .filter((mate) => mate.member !== seat.member)
+        .map((mate) => ({ member: mate.member, key: mate.key }));
+      const sealed = await sealTeamBody(identity, this.gameId, seat.empire, mates, body);
+      if (!sealed) return false;
+      wire = sealed;
+    }
 
     const message: Message = {
       step: this.sim.step,
@@ -362,11 +384,13 @@ export class Lockstep {
       empire: seat.empire,
       member: seat.member,
       channel,
-      body,
+      body: wire,
     };
     const signed = await signMessage(identity, this.gameId, message);
     this.transport.broadcast({ t: FRAME.MESSAGE, signed });
-    this.onMessage?.(message);
+    // Our own line comes back as what we typed. The sender is not among its own
+    // recipients, so it could not decrypt what it just sent.
+    this.onMessage?.(message, body);
     return true;
   }
 
@@ -523,7 +547,28 @@ export class Lockstep {
 
   private async onChat(signed: { message: Message; sig: string }): Promise<void> {
     if (!(await verifyMessage(this.roster, this.gameId, signed))) return;
-    this.onMessage?.(signed.message);
+    this.onMessage?.(signed.message, await this.read(signed.message));
+  }
+
+  /** What a message says to us, or null when it does not say anything to us.
+   *  Another empire's team traffic is the ordinary case, not an error. */
+  private async read(message: Message): Promise<string | null> {
+    if (message.channel !== CHANNEL.TEAM) return message.body;
+
+    const seat = this.options.seat;
+    const identity = this.options.identity;
+    if (!seat || !identity || seat.empire !== message.empire) return null;
+
+    const sender = this.roster.keyOf(message.empire, message.member);
+    if (!sender) return null;
+    return openTeamBody(
+      identity,
+      this.gameId,
+      message.empire,
+      sender,
+      seat.member,
+      message.body,
+    );
   }
 
   private async onCheckpoint(signed: {

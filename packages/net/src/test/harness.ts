@@ -41,6 +41,9 @@ export interface Peer {
   seat?: Seat;
   identity?: Identity;
   chat: Message[];
+  /** What each of those lines actually said to this peer. null where it could
+   *  not be read — another empire's team traffic, which is the point. */
+  heard: Array<string | null>;
   desyncs: Array<{ step: number; seat: Seat }>;
   ejections: Array<{ seat: Seat; atStep: number; reason: string; late: boolean }>;
   violations: string[];
@@ -136,11 +139,15 @@ export async function table(options: TableOptions): Promise<Table> {
       seat,
       identity,
       chat: [],
+      heard: [],
       desyncs: [],
       ejections: [],
       violations: [],
     };
-    driver.onMessage = (message) => peer.chat.push(message);
+    driver.onMessage = (message, text) => {
+      peer.chat.push(message);
+      peer.heard.push(text);
+    };
     driver.onDesync = (step, _ours, _theirs, from) => peer.desyncs.push({ step, seat: from });
     driver.onEjection = (from, atStep, reason, late) =>
       peer.ejections.push({ seat: from, atStep, reason, late });

@@ -276,7 +276,7 @@ let lobby: Lobby | undefined;
 let mesh: Lockstep | undefined;
 
 const chat = new ChatPanel(chatEl, {
-  send: (body) => void mesh?.say(body),
+  send: (body, channel) => void mesh?.say(body, channel),
 });
 
 const panel = new LobbyPanel(lobbyEl, {
@@ -325,11 +325,11 @@ async function begin(code?: string): Promise<void> {
       identity,
       seat,
     });
-    driver.onMessage = (message) => chat.add(message);
+    driver.onMessage = (message, text) => chat.add(message, text);
     driver.start();
 
     mesh = driver;
-    chat.open(seat);
+    chat.open(seat, genesis.empires[seat.empire - 1]!.members.length - 1);
     chat.note(`You are ${empireTheme(seat.empire).name}. Say hello.`);
 
     mount(new OnlineGame(driver, lobby!.mesh, seat));

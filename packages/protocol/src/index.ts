@@ -71,3 +71,5 @@ export type {
   SnapshotRequestFrame,
   WelcomeFrame,
 } from "./wire.js";
+export { sealTeamBody, openTeamBody } from "./secrets.js";
+export type { Teammate } from "./secrets.js";
