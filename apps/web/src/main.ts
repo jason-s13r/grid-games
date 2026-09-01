@@ -6,7 +6,7 @@
 
 import { seedFrom, PROTOCOL_VERSION, Sim } from "@tessera/sim";
 import { Roster } from "@tessera/protocol";
-import { Lockstep } from "@tessera/net";
+import { Lockstep, PeerBot } from "@tessera/net";
 import pkg from "../package.json";
 import { LocalGame } from "./game/Local";
 import { OnlineGame } from "./game/Online";
@@ -316,7 +316,7 @@ async function begin(code?: string): Promise<void> {
 
   lobby = opened;
   panel.attach(lobby);
-  lobby.onStart = (genesis, seat, transport) => {
+  lobby.onStart = (genesis, seat, transport, botSeats) => {
     const driver = new Lockstep({
       genesis,
       sim: new Sim(genesis),
@@ -325,6 +325,21 @@ async function begin(code?: string): Promise<void> {
       identity,
       seat,
     });
+
+    // A bot seat is a whole peer: its own simulation, its own driver, its own
+    // signatures. It only shares a page — and a connection — with this one.
+    const bots = botSeats.map((bot) => {
+      const own = new Lockstep({
+        genesis,
+        sim: new Sim(genesis),
+        roster: Roster.fromGenesis(genesis),
+        transport: bot.transport,
+        identity: bot.identity,
+        seat: bot.seat,
+      });
+      own.start();
+      return new PeerBot({ lockstep: own });
+    });
     driver.onMessage = (message, text) => chat.add(message, text);
     driver.start();
 
@@ -332,7 +347,7 @@ async function begin(code?: string): Promise<void> {
     chat.open(seat, genesis.empires[seat.empire - 1]!.members.length - 1);
     chat.note(`You are ${empireTheme(seat.empire).name}. Say hello.`);
 
-    mount(new OnlineGame(driver, lobby!.mesh, seat));
+    mount(new OnlineGame(driver, lobby!.mesh, seat, bots));
     pick<HTMLButtonElement>('[data-action="pause"]').disabled = true;
     pick<HTMLButtonElement>('[data-action="new"]').disabled = true;
   };

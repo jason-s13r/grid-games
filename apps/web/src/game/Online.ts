@@ -6,7 +6,7 @@
 
 import { MOVE, STEPS_PER_SECOND } from "@tessera/sim";
 import type { Move, Sim } from "@tessera/sim";
-import type { Lockstep, PeerMesh, Seat } from "@tessera/net";
+import type { Lockstep, PeerBot, PeerMesh, Seat } from "@tessera/net";
 import type { Driver, MoveKind } from "./Driver";
 
 export class OnlineGame implements Driver {
@@ -23,6 +23,10 @@ export class OnlineGame implements Driver {
     private readonly lockstep: Lockstep,
     private readonly mesh: PeerMesh,
     private readonly seat: Seat,
+    /** Bot seats this page happens to be playing. They are ordinary peers with
+     *  ordinary drivers; they ride the animation frame only because a tab needs
+     *  something to call them, not because they are part of this game. */
+    private readonly bots: PeerBot[] = [],
   ) {
     lockstep.onEjection = (who, atStep, reason) => {
       this.say(
@@ -92,6 +96,10 @@ export class OnlineGame implements Driver {
   }
 
   tick(): Set<number> {
+    // Bots first: what they broadcast reaches this page's own driver through
+    // the hub straight away, so their moves land in the same frame rather than
+    // the next one.
+    for (const bot of this.bots) bot.tick();
     return this.lockstep.pump();
   }
 
@@ -104,6 +112,7 @@ export class OnlineGame implements Driver {
       return `Waiting for ${who}`;
     }
     const peers = this.mesh.peers().length;
-    return `${peers} peer${peers === 1 ? "" : "s"} · step ${this.lockstep.step}`;
+    const covering = this.bots.length > 0 ? ` · covering ${this.bots.length} bot seat${this.bots.length === 1 ? "" : "s"}` : "";
+    return `${peers} peer${peers === 1 ? "" : "s"} · step ${this.lockstep.step}${covering}`;
   }
 }

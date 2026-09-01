@@ -53,7 +53,15 @@ export function composeTeams(
 export interface Plan {
   empires: MemberKey[][];
   simbots: number;
+  /** Bot seats to add to each empire, parallel to `empires`. A bot seat is a
+   *  full member with its own keypair, not a mode the empire is in: it accrues,
+   *  it signs, and it can be left holding the line overnight. */
+  bots?: number[];
 }
+
+/** Bot seats one empire may hold. Enough for a team to cover a night shift,
+ *  few enough that "add bots" is not a way to out-populate everyone else. */
+export const MAX_BOTS_PER_EMPIRE = 3;
 
 /** Why this plan cannot be played, or "" if it can.
  *
@@ -69,6 +77,16 @@ export function checkPlan(plan: Plan, expected: Iterable<MemberKey>): string {
   const waiting = new Set(expected);
   for (const key of seated) if (!waiting.delete(key)) return "a stranger is seated";
   if (waiting.size > 0) return "somebody here has no seat";
+
+  const bots = plan.bots ?? [];
+  if (bots.length > plan.empires.length) return "a bot is seated in no empire";
+  if (bots.some((n) => !Number.isInteger(n) || n < 0 || n > MAX_BOTS_PER_EMPIRE)) {
+    return `an empire may hold up to ${MAX_BOTS_PER_EMPIRE} bot seats`;
+  }
+  // Empire and member ids ride in single bytes of every signed move.
+  if (plan.empires.some((keys, e) => keys.length + (bots[e] ?? 0) > 255)) {
+    return "an empire has too many seats";
+  }
 
   // One empire is last-empire-standing on the first step: a game nobody plays.
   if (plan.empires.length + plan.simbots < 2) return "a game needs at least two empires";

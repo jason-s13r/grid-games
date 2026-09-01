@@ -6,15 +6,16 @@
 
 import type { MemberKey } from "@tessera/protocol";
 import type { Lobby, LobbyPlayer } from "../net/Lobby";
-import { composeTeams } from "../net/teams";
+import { MAX_BOTS_PER_EMPIRE, composeTeams } from "../net/teams";
 import { empireTheme } from "./palette";
 
 export interface LobbyHandlers {
   host: () => void;
   join: (code: string) => void;
   /** Empires as the host has arranged them, each a list of member keys, plus
-   *  however many whole SimBot empires to put in the world. */
-  start: (plan: { empires: MemberKey[][]; simbots: number }) => void;
+   *  the bot seats to add to each and however many whole SimBot empires to put
+   *  in the world. */
+  start: (plan: { empires: MemberKey[][]; simbots: number; bots: number[] }) => void;
   /** Tear the lobby down and go back to the opening choice. Every dead end
    *  needs one, or the only way out of a failed join is a page reload. */
   leave: () => void;
@@ -34,6 +35,11 @@ export class LobbyPanel {
   /** Which empire each player is on, by key. Sparse on purpose: a player with
    *  no entry gets an empire of their own. */
   private readonly teams = new Map<MemberKey, number>();
+  /** Bot seats per empire, keyed by the first member seated in it. Keyed by a
+   *  person rather than by an empire number because the numbers are compacted
+   *  as people move around, and a bot count that slid to a different empire
+   *  every time somebody joined would be worse than useless. */
+  private readonly botsFor = new Map<MemberKey, number>();
   private simbots = 1;
 
   constructor(
@@ -58,7 +64,9 @@ export class LobbyPanel {
       const select = event.target as HTMLSelectElement;
       if (!(select instanceof HTMLSelectElement)) return;
       const key = select.dataset.lobbyTeam;
+      const lead = select.dataset.lobbyBots;
       if (key !== undefined) this.teams.set(key, Number(select.value));
+      else if (lead !== undefined) this.botsFor.set(lead, Number(select.value));
       else if (select.dataset.lobbySimbots !== undefined) {
         this.simbots = Number(select.value);
       } else return;
@@ -165,6 +173,12 @@ export class LobbyPanel {
       <ul class="lobby-teams">
         ${players.map((player, i) => this.seatRow(player, teamOf[i]!, empires.length)).join("")}
       </ul>
+      <p class="hint">A bot seat holds an empire while its people are asleep. It
+      accrues at half rate, caps lower, and its coin claims never chain — it can
+      hold the line, but the big cascade stays yours to play.</p>
+      <ul class="lobby-teams lobby-bots">
+        ${empires.map((keys, e) => this.botRow(keys[0]!, e)).join("")}
+      </ul>
       <label class="lobby-field">Bot empires
         <select class="lobby-team" data-lobby-simbots>
           ${Array.from({ length: MAX_SIMBOTS + 1 }, (_, n) => option(String(n), String(n), n === this.simbots)).join("")}
@@ -197,6 +211,23 @@ export class LobbyPanel {
       </li>`;
   }
 
+  /** Bot seats for one empire, named by whoever leads it. */
+  private botRow(lead: MemberKey, empire: number): string {
+    const theme = empireTheme(empire + 1);
+    const choices = Array.from({ length: MAX_BOTS_PER_EMPIRE + 1 }, (_, n) =>
+      option(String(n), n === 0 ? "no bots" : `${n} bot seat${n === 1 ? "" : "s"}`, n === this.botsOf(lead)),
+    );
+    return `
+      <li class="lobby-seat lobby-botseat">
+        <span class="lobby-who" style="color:${theme.c1}">${escape(theme.name)}</span>
+        <select class="lobby-team" data-lobby-bots="${escape(lead)}">${choices.join("")}</select>
+      </li>`;
+  }
+
+  private botsOf(lead: MemberKey): number {
+    return this.botsFor.get(lead) ?? 0;
+  }
+
   /** Compose, then write the compacted numbers back, so the empire a player is
    *  on is always the empire they will actually hold. */
   private compose(): { players: LobbyPlayer[]; teamOf: number[]; empires: MemberKey[][] } {
@@ -206,8 +237,13 @@ export class LobbyPanel {
     return { players, teamOf, empires };
   }
 
-  private plan(): { empires: MemberKey[][]; simbots: number } {
-    return { empires: this.compose().empires, simbots: this.simbots };
+  private plan(): { empires: MemberKey[][]; simbots: number; bots: number[] } {
+    const { empires } = this.compose();
+    return {
+      empires,
+      simbots: this.simbots,
+      bots: empires.map((keys) => this.botsOf(keys[0]!)),
+    };
   }
 }
 

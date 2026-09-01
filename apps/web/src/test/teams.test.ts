@@ -3,7 +3,7 @@
 // started with the wrong people on the wrong side.
 
 import { describe, expect, it } from "vitest";
-import { checkPlan, composeTeams } from "../net/teams";
+import { MAX_BOTS_PER_EMPIRE, checkPlan, composeTeams } from "../net/teams";
 import type { Seated } from "../net/teams";
 
 const players = (...keys: string[]): Seated[] => keys.map((key) => ({ key }));
@@ -85,5 +85,41 @@ describe("checking a plan", () => {
 
   it("refuses an empty plan", () => {
     expect(checkPlan({ empires: [], simbots: 2 }, here)).toMatch(/nobody is seated/);
+  });
+});
+
+describe("bot seats in a plan", () => {
+  const a = "ka";
+  const b = "kb";
+
+  it("accepts a bot seat alongside a person", () => {
+    expect(checkPlan({ empires: [[a], [b]], simbots: 0, bots: [1, 0] }, [a, b])).toBe("");
+  });
+
+  it("accepts a solo empire covering itself overnight", () => {
+    expect(checkPlan({ empires: [[a]], simbots: 1, bots: [MAX_BOTS_PER_EMPIRE] }, [a])).toBe("");
+  });
+
+  it("refuses more bot seats than an empire may hold", () => {
+    const plan = { empires: [[a], [b]], simbots: 0, bots: [MAX_BOTS_PER_EMPIRE + 1, 0] };
+    expect(checkPlan(plan, [a, b])).toContain("bot seats");
+  });
+
+  it("refuses a fractional or negative count", () => {
+    expect(checkPlan({ empires: [[a], [b]], simbots: 0, bots: [-1, 0] }, [a, b])).not.toBe("");
+    expect(checkPlan({ empires: [[a], [b]], simbots: 0, bots: [1.5, 0] }, [a, b])).not.toBe("");
+  });
+
+  it("refuses a count with no empire to sit in", () => {
+    expect(checkPlan({ empires: [[a], [b]], simbots: 0, bots: [0, 0, 1] }, [a, b])).toBe(
+      "a bot is seated in no empire",
+    );
+  });
+
+  // Bot seats are seats, not empires: three of them do not make a game.
+  it("does not let bot seats stand in for a second empire", () => {
+    expect(checkPlan({ empires: [[a, b]], simbots: 0, bots: [3] }, [a, b])).toBe(
+      "a game needs at least two empires",
+    );
   });
 });
