@@ -8,10 +8,10 @@
 // verification, in arrival order.
 
 import { CONTROL, MEMBER, MOVE, STEPS_PER_SECOND, Sim, makeGenesis, validate } from "@tessera/sim";
-import type { EmpireSpec, Genesis, Move } from "@tessera/sim";
+import type { EmpireSpec, Genesis, MemberKind, Move } from "@tessera/sim";
 import { Identity, Roster, sealGenesis } from "@tessera/protocol";
 import type { Message } from "@tessera/protocol";
-import { LoopbackNetwork, Lockstep } from "../index.js";
+import { LoopbackNetwork, Lockstep, PeerBot } from "../index.js";
 import type { LoopbackOptions, Seat } from "../index.js";
 
 /** Web Crypto resolves on the event loop, and a verified frame is three
@@ -34,6 +34,8 @@ export const MS_PER_STEP = 1000 / STEPS_PER_SECOND;
 // --- a table of peers --------------------------------------------------------
 
 export interface Peer {
+  /** Set when this seat is played by a bot rather than by the test. */
+  bot?: PeerBot;
   name: string;
   driver: Lockstep;
   seat?: Seat;
@@ -59,6 +61,12 @@ export interface TableOptions {
   /** Human seats per empire, in order. A trailing SimBot empire is added so the
    *  world has something in it besides the test's own clicking. */
   seats: number[];
+  /** Bot seats per empire, alongside the human ones — a PeerBot covering a
+   *  seat in a human empire, which is what a sleeping teammate looks like. */
+  bots?: number[];
+  /** Steps between bot actions. Set it past the length of a run to seat a bot
+   *  that never spends, which is how a test watches one accrue. */
+  botInterval?: number;
   simbots?: number;
   observer?: boolean;
   loopback?: LoopbackOptions;
@@ -69,16 +77,28 @@ export interface TableOptions {
 }
 
 export async function table(options: TableOptions): Promise<Table> {
+  // Human seats first, then bot seats, so a member index is stable whatever the
+  // mix is: e1m0 is a human whether or not e1m1 turns out to be a bot.
   const identities: Identity[][] = [];
-  for (const count of options.seats) {
+  const kinds: MemberKind[][] = [];
+  for (let e = 0; e < options.seats.length; e++) {
     const empire: Identity[] = [];
-    for (let i = 0; i < count; i++) empire.push(await Identity.generate());
+    const kind: MemberKind[] = [];
+    for (let i = 0; i < options.seats[e]!; i++) {
+      empire.push(await Identity.generate());
+      kind.push(MEMBER.HUMAN);
+    }
+    for (let i = 0; i < (options.bots?.[e] ?? 0); i++) {
+      empire.push(await Identity.generate());
+      kind.push(MEMBER.BOT);
+    }
     identities.push(empire);
+    kinds.push(kind);
   }
 
-  const empires: EmpireSpec[] = identities.map((members) => ({
+  const empires: EmpireSpec[] = identities.map((members, e) => ({
     control: CONTROL.HUMAN,
-    members: members.map((identity) => ({ kind: MEMBER.HUMAN, key: identity.key })),
+    members: members.map((identity, m) => ({ kind: kinds[e]![m]!, key: identity.key })),
   }));
   for (let i = 0; i < (options.simbots ?? 1); i++) {
     empires.push({ control: CONTROL.SIMBOT, members: [{ kind: MEMBER.BOT }] });
@@ -97,7 +117,7 @@ export async function table(options: TableOptions): Promise<Table> {
   const net = new LoopbackNetwork(options.loopback);
   const peers: Peer[] = [];
 
-  const build = (name: string, identity?: Identity, seat?: Seat): Peer => {
+  const build = (name: string, identity?: Identity, seat?: Seat, isBot = false): Peer => {
     const driver = new Lockstep({
       genesis,
       sim: new Sim(genesis),
@@ -125,6 +145,7 @@ export async function table(options: TableOptions): Promise<Table> {
     driver.onEjection = (from, atStep, reason, late) =>
       peer.ejections.push({ seat: from, atStep, reason, late });
     driver.onViolation = (_from, what) => peer.violations.push(what);
+    if (isBot) peer.bot = new PeerBot({ lockstep: driver, interval: options.botInterval });
     driver.start();
     peers.push(peer);
     return peer;
@@ -132,7 +153,12 @@ export async function table(options: TableOptions): Promise<Table> {
 
   identities.forEach((members, offset) => {
     members.forEach((identity, member) => {
-      build(`e${offset + 1}m${member}`, identity, { empire: offset + 1, member });
+      build(
+        `e${offset + 1}m${member}`,
+        identity,
+        { empire: offset + 1, member },
+        kinds[offset]![member] === MEMBER.BOT,
+      );
     });
   });
   if (options.observer) build("observer");
@@ -158,7 +184,12 @@ export async function run(
   for (let i = 0; i < steps; i++) {
     t.clock.advance(MS_PER_STEP);
     for (let pass = 0; pass < 3; pass++) {
-      for (const peer of t.peers) if (t.awake.has(peer.name)) peer.driver.pump();
+      for (const peer of t.peers) {
+        if (!t.awake.has(peer.name)) continue;
+        // A bot seat plays itself; everyone else is driven by the test.
+        if (peer.bot) peer.bot.tick();
+        else peer.driver.pump();
+      }
       await settle(2);
       t.net.flush();
       await settle(2);
@@ -167,7 +198,11 @@ export async function run(
   }
   // Let anything still in flight land, without advancing the world further.
   for (let pass = 0; pass < 8; pass++) {
-    for (const peer of t.peers) if (t.awake.has(peer.name)) peer.driver.pump();
+    for (const peer of t.peers) {
+      if (!t.awake.has(peer.name)) continue;
+      if (peer.bot) peer.bot.tick();
+      else peer.driver.pump();
+    }
     await settle(2);
     t.net.flush();
     await settle(2);
@@ -215,7 +250,7 @@ export async function clickAround(t: Table, every: number): Promise<(step: numbe
   return async (step: number) => {
     if (step % every !== 0) return;
     for (const peer of t.peers) {
-      if (!peer.seat || !t.awake.has(peer.name)) continue;
+      if (!peer.seat || peer.bot || !t.awake.has(peer.name)) continue;
       const move = pickClaim(peer.driver.sim, peer.seat.empire, peer.seat.member);
       if (move) await peer.driver.submit(MOVE.CLAIM, move.x, move.y);
     }
