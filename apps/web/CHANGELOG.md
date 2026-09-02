@@ -1,5 +1,31 @@
 # Changelog
 
+## web@0.7.0 (2026-09-02)
+
+### Features
+
+- the setup screen links to the original prototype
+  It carries the Empire Attack credit too, which had nowhere else to live
+  once the landing page went.
+
+- a sidebar layout, and a board with no modes
+  Clicking a river places a bridge, a wall places a ladder, and a tile two
+  out marches. The terrain decides, so nothing needs arming first — and a
+  mode left armed over an empty stock can no longer swallow every later
+  click in silence. Bought modifiers leave the shop and show on the HUD.
+
+  Empire status moves to the top bar. Map, standings and seats collapse in
+  a left sidebar; chat gets a right one, and only in a mesh game. The shop
+  is a drawer off the top bar. The board holds 4:3 on desktop and fills the
+  stage on a phone.
+
+  Lobby and setup are their own screen, with solo options on it. "Menu"
+  said nothing about what it did and is now "Leave", which leaves.
+
+  Pause stayed disabled for every solo game after a mesh one; it is derived
+  from the driver now.
+
+
 ## web@0.6.0 (2026-09-01)
 
 ### Features
