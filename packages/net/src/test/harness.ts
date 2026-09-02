@@ -86,6 +86,8 @@ export interface TableOptions {
   loopback?: LoopbackOptions;
   stallTimeout?: number;
   checkpointInterval?: number;
+  /** Checkpoints of disagreement before a seat is proposed for dropping. */
+  desyncTolerance?: number;
   snapshotInterval?: number;
   seed?: number;
 }
@@ -160,6 +162,9 @@ export async function table(options: TableOptions): Promise<Table> {
       now: clock.now,
       stallTimeout: options.stallTimeout ?? 500,
       checkpointInterval: options.checkpointInterval ?? 12,
+      ...(options.desyncTolerance === undefined
+        ? {}
+        : { desyncTolerance: options.desyncTolerance }),
       snapshotInterval: options.snapshotInterval ?? 24,
     });
     const peer: Peer = {

@@ -81,6 +81,12 @@ export interface LockstepOptions {
   /** Real milliseconds to wait on a silent seat before proposing that everyone
    *  stop waiting for it. */
   stallTimeout?: number;
+  /** Checkpoints a seat may disagree with the majority for before we propose
+   *  dropping it. Counted in checkpoints rather than steps because that is the
+   *  grain the evidence arrives on, and it has to leave room for the seat to
+   *  notice and rebuild: at the default interval this is about twenty seconds
+   *  of persistent disagreement. */
+  desyncTolerance?: number;
   now?: () => number;
 }
 
@@ -94,6 +100,10 @@ const DEFAULT_SNAPSHOT_INTERVAL = STEPS_PER_SECOND * 30;
 const DEFAULT_MOVE_HORIZON = STEPS_PER_SECOND * 60;
 /** A backgrounded tab must catch up without freezing the page when it returns. */
 const MAX_STEPS_PER_PUMP = 240;
+/** Checkpoints of disagreement before a seat is proposed for dropping. Three
+ *  is two chances to recover: the first tells it something is wrong, and a
+ *  rebuild from a checkpoint lands well inside the second. */
+const DEFAULT_DESYNC_TOLERANCE = 3;
 /** Steps between an equivocation and the seat falling silent. Derived from the
  *  proof rather than from when a peer happened to see it, so every peer ejects
  *  on exactly the same step. */
@@ -165,7 +175,7 @@ const AMENDMENT_SEQ = 0xffff_ffff;
  *  refused rather than rewinding a peer that has since recovered on its own. */
 const SNAPSHOT_WAIT_MS = 10_000;
 
-export type EjectionReason = "equivocation" | "stalled";
+export type EjectionReason = "equivocation" | "stalled" | "desync";
 
 const seatKey = (seat: Seat): string => `${seat.empire}:${seat.member}`;
 
@@ -221,6 +231,14 @@ export class Lockstep {
    *  fixed by the record, so peers with disagreeing stopwatches still stop
    *  waiting on the same step. */
   private readonly stalledSince = new Map<string, number>();
+  /** Checkpoint steps at which a seat disagreed with the majority, cleared the
+   *  moment it agrees again. A seat that rebuilt is not a cheat. */
+  private readonly disagreements = new Map<string, Set<number>>();
+  /** Why this peer thinks a seat is being dropped. Local, and deliberately not
+   *  in the record: a drop is agreed by majority, but the evidence that
+   *  prompted it is whatever each peer happened to see, and a UI string is not
+   *  worth a consensus field. */
+  private readonly dropReason = new Map<string, EjectionReason>();
   private readonly drops = new Map<string, SignedDrop>();
   private readonly endorsedDrop = new Map<string, number>();
   /** Proposals in flight, keyed by empire, key and step. */
@@ -709,11 +727,46 @@ export class Lockstep {
     const atStep = this.claims.get(step);
     if (ours === undefined || !atStep) return;
 
+    // Whether we are the odd one out, counting ourselves. A peer that
+    // disagrees with everybody is far likelier to be the broken one than
+    // everybody is, and a minority peer that started accusing would be
+    // accusing the honest majority — so the minority rebuilds and says
+    // nothing. Detection is symmetric; escalation is not.
+    let agreeing = 1;
+    for (const theirs of atStep.values()) if (theirs === ours) agreeing++;
+    const weAreTheMajority = agreeing * 2 > atStep.size + 1;
+
+    const tolerance = this.options.desyncTolerance ?? DEFAULT_DESYNC_TOLERANCE;
+
     for (const [key, theirs] of atStep) {
-      if (theirs === ours) continue;
-      this.desyncs++;
       const [empire, member] = key.split(":").map(Number);
-      this.onDesync?.(step, ours, theirs, { empire: empire!, member: member! });
+      const seat: Seat = { empire: empire!, member: member! };
+
+      if (theirs === ours) {
+        // Recovered, or never broken. Either way the count starts again, and
+        // a seat that later falls silent is a stall rather than a desync.
+        this.disagreements.delete(key);
+        this.dropReason.delete(key);
+        continue;
+      }
+
+      this.desyncs++;
+      this.onDesync?.(step, ours, theirs, seat);
+      if (!weAreTheMajority || this.ejected.has(key)) continue;
+
+      const at = this.disagreements.get(key) ?? new Set<number>();
+      at.add(step);
+      this.disagreements.set(key, at);
+      // Recorded on first sight rather than when proposing, so a peer that
+      // only ever endorses somebody else's proposal still says what it saw.
+      this.dropReason.set(key, "desync");
+
+      // Staggered the same way a stall proposal is, and for the same reason:
+      // two proposals naming different steps could each fall short of a
+      // majority and leave the seat neither dropped nor trusted. Whoever
+      // speaks first is endorsed by the rest, because a peer that has
+      // endorsed a drop never proposes its own.
+      if (at.size >= tolerance + this.proposerRank(seat)) void this.propose(seat);
     }
   }
 
@@ -815,7 +868,7 @@ export class Lockstep {
 
     if (await verifyDrop(this.roster, this.gameId, record)) {
       if (!this.ejected.has(key)) this.enforced.push(record);
-      this.eject(seat, record.drop.atStep, "stalled");
+      this.eject(seat, record.drop.atStep, this.dropReason.get(key) ?? "stalled");
     }
   }
 
@@ -1038,6 +1091,7 @@ export class Lockstep {
 
     this.ejected.set(key, atStep);
     this.stalledSince.delete(key);
+    this.disagreements.delete(key);
     for (const [step, moves] of this.pending) {
       if (step >= atStep) this.pending.set(step, moves.filter((m) => seatKey(m.move) !== key));
     }

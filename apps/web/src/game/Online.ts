@@ -28,11 +28,14 @@ export class OnlineGame implements Driver {
     private readonly bots: PeerBot[] = [],
   ) {
     lockstep.onEjection = (who, atStep, reason) => {
-      this.say(
+      const seat = `Empire ${who.empire} seat ${who.member}`;
+      const why =
         reason === "equivocation"
-          ? `A seat was caught sending conflicting moves and was removed at step ${atStep}.`
-          : `Empire ${who.empire} seat ${who.member} stopped responding and was dropped at step ${atStep}.`,
-      );
+          ? "was caught sending conflicting moves and was removed"
+          : reason === "desync"
+            ? "kept disagreeing about the state of the game and was dropped"
+            : "stopped responding and was dropped";
+      this.say(`${seat} ${why} at step ${atStep}.`);
     };
     lockstep.onDesync = (step) => {
       this.say(`State disagreement at step ${step} — rebuilding from a checkpoint.`);
