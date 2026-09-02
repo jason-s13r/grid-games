@@ -6,7 +6,7 @@
 
 import { beforeAll, describe, expect, it } from "vitest";
 import { Sim, makeGenesis, CLAIM } from "../sim.js";
-import { MOVE, MEMBER, CONTROL, TERRAIN, ITEM } from "../types.js";
+import { MOVE, MEMBER, CONTROL, TERRAIN, ITEM, WIN } from "../types.js";
 import { idx } from "../geometry.js";
 import { STEPS_PER_SECOND } from "../constants.js";
 import { arena, at, claimNow, held, humans, own, ownerAt, popAt } from "./testkit.js";
@@ -202,6 +202,40 @@ describe("noob protection", () => {
     sim.state.step = 100 * STEPS_PER_SECOND + 1;
     expect(sim.validate(CLAIM(sim.step, 1, 0, 0, cx, cy))).toBe(true);
   });
+
+  // The other half of "whichever lands first". An empire that grows quickly
+  // stops being a beginner long before the clock says so, and the shield has
+  // to come off on the tile count alone.
+  describe("growing out of it", () => {
+    let grown: Sim;
+    let victim: number;
+
+    beforeAll(() => {
+      grown = arena([humans(1), humans(1)], 7, {
+        noobTiles: 40,
+        noobSteps: 100 * STEPS_PER_SECOND,
+      });
+      victim = grown.state.empires[1]!.capital;
+      own(grown, 3, 0, 1); // adjacent to empire 2's parked capital
+      grown.state.empires[0]!.members[0]!.popTimer = 999;
+    });
+
+    it("a young empire's capital is shielded", () => {
+      expect(grown.state.empires[1]!.tilesOwned).toBeLessThan(40);
+      expect(grown.validate(CLAIM(grown.step, 1, 0, 0, 4, 0))).toBe(false);
+    });
+
+    it("and the shield lifts at the tile threshold, with the clock untouched", () => {
+      grown.state.empires[1]!.tilesOwned = 40;
+      expect(grown.step).toBeLessThan(grown.state.genesis.rules.noobSteps);
+      expect(grown.validate(CLAIM(grown.step, 1, 0, 0, 4, 0))).toBe(true);
+    });
+
+    it("and the capital can then actually be taken", () => {
+      grown.advance([CLAIM(grown.step, 1, 0, 0, 4, 0)]);
+      expect(grown.state.owner[victim]).toBe(1);
+    });
+  });
 });
 
 describe("team empires", () => {
@@ -312,5 +346,49 @@ describe("win conditions", () => {
       sim.advance([]);
       expect(sim.ended && sim.state.winner === 1).toBe(true);
     });
+  });
+
+  // The wall-clock model makes a timeout the natural end of a scheduled game:
+  // nobody has to be present for the last step, so the result has to fall out
+  // of the state rather than out of who was still watching.
+  describe("a timeout ends on score", () => {
+    const END = 50;
+    let sim: Sim;
+    let endedAt = -1;
+
+    beforeAll(() => {
+      sim = arena([humans(1), humans(1)], 1, { endStep: END });
+      own(sim, 5, 5, 1);
+      own(sim, 6, 5, 1); // empire 1 leads on tiles
+      own(sim, 15, 15, 2);
+      while (!sim.ended && sim.step < END * 2) {
+        sim.advance([]);
+        if (sim.ended && endedAt < 0) endedAt = sim.step;
+      }
+    });
+
+    it("runs to the step it was given", () => expect(endedAt).toBe(END + 1));
+    it("nobody was eliminated", () => expect(sim.state.empires[1]!.alive).toBe(1));
+    it("the leader on tiles wins", () => expect(sim.state.winner).toBe(1));
+    it("and it says why", () => expect(sim.state.winReason).toBe(WIN.TIMEOUT));
+  });
+
+  // Two empires level on tiles is not a tie: the ordering has to be total, or
+  // two peers reading the same state could name different winners.
+  describe("a tied timeout breaks on population", () => {
+    let sim: Sim;
+
+    beforeAll(() => {
+      sim = arena([humans(1), humans(1)], 1, { endStep: 20 });
+      own(sim, 5, 5, 1, 10);
+      own(sim, 15, 15, 2, 50); // level on tiles, ahead on population
+      while (!sim.ended && sim.step < 60) sim.advance([]);
+    });
+
+    it("the empires were level on tiles", () => {
+      expect(sim.state.empires[0]!.tilesOwned).toBe(sim.state.empires[1]!.tilesOwned);
+    });
+
+    it("and the bigger population takes it", () => expect(sim.state.winner).toBe(2));
   });
 });

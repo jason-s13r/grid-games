@@ -5,7 +5,7 @@
 // is worth reading on its own.
 
 import { Sim, makeGenesis, CLAIM } from "../sim.js";
-import type { EmpireSpec } from "../types.js";
+import type { EmpireSpec, Rules } from "../types.js";
 import { TERRAIN, ITEM } from "../types.js";
 import { idx } from "../geometry.js";
 
@@ -22,7 +22,7 @@ export { humans, simbot } from "../specs.js";
  *  every tile a test placed. Suppressed here the same way spawning is — these
  *  are world processes, and the tests that care about them build their own
  *  board. See upkeep.test.ts. */
-export function arena(empires: EmpireSpec[], seed = 1): Sim {
+export function arena(empires: EmpireSpec[], seed = 1, rules: Partial<Rules> = {}): Sim {
   const sim = new Sim(
     makeGenesis({
       seed,
@@ -34,6 +34,7 @@ export function arena(empires: EmpireSpec[], seed = 1): Sim {
         upkeepInterval: 1 << 28,
         noobSteps: 0,
         noobTiles: 0,
+        ...rules,
       },
     }),
   );
