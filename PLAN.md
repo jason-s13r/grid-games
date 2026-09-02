@@ -12,7 +12,9 @@ Determinism is therefore a hard prerequisite for the netcode, and it is also wha
 
 ### The one unavoidable server
 
-Signalling is not the problem: PeerJS's public broker introduces peers and never sees a move, and GitHub Pages serves over HTTPS so WebRTC is satisfied. But roughly 10–20% of peer pairs sit behind symmetric NAT and cannot form a direct connection without a **TURN relay**, which by definition forwards packets. Options: accept those failures, use a free-tier TURN (Metered's Open Relay), or self-host coturn. It never touches game logic — moves stay signed and state stays hash-verified through it, so a hostile relay can drop packets but cannot forge or alter a single move. "Zero servers" is really **"zero authority servers"**, and that property survives fully intact.
+Signalling is not the problem: PeerJS's public broker introduces peers and never sees a move, and GitHub Pages serves over HTTPS so WebRTC is satisfied. But roughly 10–20% of peer pairs sit behind symmetric NAT and cannot form a direct connection without a **TURN relay**, which by definition forwards packets. It never touches game logic — moves stay signed and state stays hash-verified through it, so a hostile relay can drop packets but cannot forge or alter a single move. "Zero servers" is really **"zero authority servers"**, and that property survives fully intact.
+
+> **Resolved.** PeerJS ships relays of its own and uses them unless it is handed an ICE configuration, so the default path needs nothing built. The trap is that its `config` option is merged one level deep: passing one *replaces* its defaults rather than adding to them, and this repository spent several versions handing it a lone STUN server and silently deleting the relays. `iceServers` now points the mesh at a coturn you run, and is unset otherwise. Self-hosting remains the answer to not depending on someone else's free tier.
 
 ---
 
@@ -222,8 +224,8 @@ Strategising with teammates and trash-talking opponents both matter, and they fi
 
 - **Public chat** — plaintext, signed, all-empire. Attribution is free, since every entry already carries a member key.
 - **Team chat** — the mesh broadcasts everything, so privacy has to be cryptographic. Each empire derives a shared team key at genesis via ECDH over the same P-256 member keypairs, and team messages are AES-GCM encrypted to it. Opponents and archive peers store the ciphertext without being able to read it. A `ROSTER_AMEND` that adds a member rewraps the team key for the new key set.
-- **Post-game reveal** — publishing the team key at game end makes an archived replay fully readable, banter and all. Optional, and a genuinely fun artefact of a multi-day game.
-- **Muting** is local view state. No consensus, no log entry, nothing to agree on.
+- **Post-game reveal** — ~~publishing the team key at game end makes an archived replay fully readable, banter and all~~. **Dropped.** The construction that shipped is per-message fanout rather than a group key: a random content key encrypts each message and is wrapped once per teammate over ECDH, which needs no live participant to distribute a key and lets an amended member be written to immediately. The cost is exactly this feature — there is no single team key to publish, so an archived team channel stays sealed. Worth naming as a trade rather than leaving as an unbuilt promise: P-256 cannot do group key agreement without someone online to run it.
+- **Muting** is local view state. No consensus, no log entry, nothing to agree on. Clicking a name hides that seat's lines; a bar under the log is the way back, and muting resets with the game, because a seat number is a different person in the next one.
 
 ### Checkpoints and resume
 
@@ -277,5 +279,7 @@ Move to pnpm. [package.json](package.json) currently has no `scripts` and no `pa
 - End-of-game stats (peak area, largest cascade, coins by type) are identical across two independent runs of the same log, and attribute to the right *member* in a shared empire.
 
 **Phase B** — the same game is playable on a 512×512 map: panning stays smooth, zooming out swaps to the block renderer, the minimap tracks ownership and moves the camera on click, and Node and browser agree on the hash for one seed and log.
+
+> The hash check runs against **four** engines, not two. Chromium is V8 as Node is, so that pairing catches a bundler or environment difference and never an engine one; WebKit and Firefox are the two that would actually disagree about a float or an iteration order. One environment-blind test file, replayed from a recorded game rather than a seeded one — a seeded game exercises the world's machinery and none of the move path.
 
 **Phase C** — two tabs, then two machines, play with matching hashes throughout; a deliberately corrupted client is caught within `K` steps; a reload rejoins by snapshot plus replay; a PeerBot covers a seat at reduced rate and cannot chain a cascade; a non-roster peer's moves are rejected by every peer. Public chat is readable by all; team chat is ciphertext to an opposing peer and to an observer; and dropping every chat message on one peer changes no state hash — the proof that chat is genuinely outside consensus.

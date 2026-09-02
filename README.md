@@ -35,19 +35,32 @@ even when no exported signature changed. See [`dispat.yaml`](dispat.yaml).
 ```sh
 pnpm install
 pnpm dev            # the game at http://localhost:1234
-pnpm test           # 46 determinism and rules checks
+pnpm test           # the suites: rules, determinism, protocol, mesh
 pnpm replay         # headless: run a game, print the state hash
 ```
 
 `pnpm replay` is the load-bearing tool. Two peers — or Node and a browser —
 must agree on the hash for the same seed and move log, and that check is what
-the whole networking design rests on.
+the whole networking design rests on. `--log <file>` replays a recorded game
+rather than a seeded one, and `--record <file>` writes one.
+
+That check is also a test. A recorded game is replayed in Node, Chromium,
+Firefox and WebKit, and all four must reach the same hash — Chromium alone
+would prove little, since it is V8 as Node is. The browsers come from
+Playwright; `pnpm --filter @tessera/web exec playwright install` fetches them,
+and `BROWSERS=chromium pnpm --filter @tessera/web test` narrows the loop.
 
 ## Status
 
-- [x] Deterministic simulation core, verified headlessly
+- [x] Deterministic simulation core, verified headlessly and in three browsers
 - [x] Browser client, local play against bots
-- [ ] P2P mesh: signed moves, hash voting, snapshot resume
+- [x] P2P mesh: signed moves, hash voting, snapshot resume, team chat
 - [ ] Observer/archive peers and verifiable rankings
+
+An observer already works in the browser: a peer whose key is not in the roster
+validates and follows the game and simply holds nothing. What is missing is the
+*durable* half — a headless peer that keeps a multi-day game alive while every
+player is asleep, and the recorded log that makes a leaderboard checkable
+rather than reported. Snapshots today are a short in-memory tail.
 
 See [PLAN.md](PLAN.md) for the full architecture.
