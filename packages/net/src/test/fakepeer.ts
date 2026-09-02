@@ -46,10 +46,14 @@ export class FakeConnection extends Emitter {
 export class FakePeer extends Emitter {
   static readonly all = new Map<string, FakePeer>();
   readonly id: string;
+  /** Kept because PeerJS merges `config` one level deep: what we pass is not
+   *  added to its defaults, it replaces them. See ice.test.ts. */
+  readonly options?: { config?: RTCConfiguration };
 
-  constructor(id?: string) {
+  constructor(id?: string, options?: { config?: RTCConfiguration }) {
     super();
     this.id = id ?? `peer${FakePeer.all.size}`;
+    this.options = options;
     FakePeer.all.set(this.id, this);
     queueMicrotask(() => this.emit("open", this.id));
   }

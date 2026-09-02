@@ -8,9 +8,19 @@
 //
 // The honest caveat is TURN. Roughly one peer pair in five sits behind
 // symmetric NAT and cannot form a direct connection without a relay, which by
-// definition forwards packets. Pass `iceServers` to use one. It still holds no
-// authority: every move through it is signed and every state is hash-verified,
-// so a hostile relay can drop packets but cannot forge or alter a single move.
+// definition forwards packets. PeerJS ships relays of its own and uses them
+// unless it is told otherwise, so the default path is covered; `iceServers`
+// replaces them with a relay you run. Either way it holds no authority: every
+// move through it is signed and every state is hash-verified, so a hostile
+// relay can drop packets but cannot forge or alter a single move.
+//
+// Which makes PeerJS's `config` a trap worth naming. It is merged one level
+// deep, so passing a `config` of our own does not add to its defaults — it
+// replaces them wholesale, relays included. This package did exactly that for
+// several versions, handing PeerJS a lone STUN server and quietly deleting the
+// TURN entries that were the only thing standing between a symmetric-NAT pair
+// and a game that never starts. So `config` is now sent only when a caller
+// actually asks for one.
 //
 // PeerJS is loaded on demand rather than imported at the top. The lockstep
 // driver has to stay runnable under Node for the harness, and PeerJS is a
@@ -36,6 +46,10 @@ export interface PeerMeshOptions {
   join?: string;
   /** Prefix for a generated host id, so a room code reads as a room code. */
   prefix?: string;
+  /** Replaces PeerJS's own STUN and TURN servers rather than adding to them.
+   *  Leave it unset to take PeerJS's, which include a relay; set it to point at
+   *  a coturn you control, and the relay stops being someone else's free tier
+   *  to lose. */
   iceServers?: RTCIceServer[];
   peerOptions?: PeerOptions;
   onOpen?: (id: string) => void;
@@ -117,12 +131,18 @@ export class PeerMesh implements Transport {
     private readonly options: PeerMeshOptions = {},
   ) {
     const id = options.join ? undefined : roomCode(options.prefix ?? "");
+
+    // Absent unless asked for: an undefined `config` leaves PeerJS's defaults
+    // whole, and any object at all would take their place.
+    const config =
+      options.iceServers || options.peerOptions?.config
+        ? { ...(options.iceServers ? { iceServers: options.iceServers } : {}),
+            ...options.peerOptions?.config }
+        : undefined;
+
     this.peer = new PeerClass(id, {
       ...options.peerOptions,
-      config: {
-        iceServers: options.iceServers ?? [{ urls: "stun:stun.l.google.com:19302" }],
-        ...options.peerOptions?.config,
-      },
+      ...(config ? { config } : {}),
     });
 
     this.opening = new Promise<string>((resolve, reject) => {
