@@ -30,11 +30,16 @@ const recorded = fixture as unknown as {
   moveLog: Move[];
 };
 
-/** Named in the failure output, so a red run says which engine disagreed. */
+/** Named in the failure output, so a red run says which engine disagreed.
+ *  Read off globalThis rather than the globals themselves: this package is
+ *  built against Node's types and has no DOM, which is rather the point of a
+ *  file that has to compile here and run over there. */
+const global = globalThis as {
+  navigator?: { userAgent?: string };
+  process?: { version?: string };
+};
 const environment =
-  typeof navigator !== "undefined" && navigator.userAgent
-    ? navigator.userAgent.slice(0, 60)
-    : `node ${typeof process !== "undefined" ? process.version : "?"}`;
+  global.navigator?.userAgent?.slice(0, 60) ?? `node ${global.process?.version ?? "?"}`;
 
 describe(`a recorded game replays identically (${environment})`, () => {
   const sim = new Sim(recorded.genesis);
