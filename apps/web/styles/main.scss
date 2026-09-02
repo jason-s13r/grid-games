@@ -975,3 +975,42 @@ a.btn {
   .meter { width: 140px; height: 16px; }
   .hud { gap: 5px 10px; }
 }
+
+// --- muting ------------------------------------------------------------------
+//
+// Local view state and nothing more: no log entry, no record type, nothing for
+// two peers to disagree about. Clicking a name mutes that seat; the bar is the
+// only way back, because the lines it hid are gone.
+.chat-mutable {
+  cursor: pointer;
+  &:hover { text-decoration: underline; }
+}
+.chat-muted {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+  margin-top: 6px;
+  font-size: 10px;
+}
+.chat-muted-label {
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+.chat-chip {
+  font: inherit;
+  font-size: 10px;
+  font-weight: 700;
+  padding: 1px 5px;
+  border: 1px solid #d9d2bd;
+  border-radius: 999px;
+  background: #f2eee1;
+  cursor: pointer;
+  // The strikethrough says what the chip is: a name you are not hearing.
+  text-decoration: line-through;
+  &:hover {
+    background: #fffdf6;
+    text-decoration: none;
+  }
+}
