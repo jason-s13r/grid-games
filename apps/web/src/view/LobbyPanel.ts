@@ -151,8 +151,8 @@ export class LobbyPanel {
       if (this.busy) return `<p class="hint">Connecting…</p>`;
       return `
         ${this.status ? `<p class="hint lobby-problem">${escape(this.status)}</p>` : ""}
-        <p class="hint">Play with other people. No server holds the game — your
-        browsers agree with each other.</p>
+        <p class="hint">Host a game and share the code, or join one someone sent
+        you.</p>
         <div class="lobby-actions">
           <button class="btn" data-lobby-action="host">Host a game</button>
         </div>

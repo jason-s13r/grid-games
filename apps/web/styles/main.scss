@@ -26,16 +26,32 @@ body {
   background: #ece7d6;
 }
 
+// Title bar across the top, console across the bottom, and between them the
+// board with standings and chat beside it. The side column costs the board
+// almost nothing: a 4:3 board was letterboxing that width away regardless.
 .app {
   display: grid;
-  grid-template-columns: 1fr 264px;
+  grid-template-columns: 236px minmax(0, 1fr) 272px;
   grid-template-rows: auto 1fr;
-  grid-template-areas: "top top" "stage side";
-  height: 100vh;
+  grid-template-areas:
+    "top   top   top"
+    "left  stage right";
+  height: 100dvh;
+}
+
+// Solo: nobody to talk to, so the chat column is not reserved at all.
+.app[data-chat="off"] {
+  grid-template-columns: 236px minmax(0, 1fr);
+  grid-template-areas:
+    "top   top"
+    "left  stage";
 }
 
 .topbar {
   grid-area: top;
+  // The shop hangs off this bar and must sit over the board, not under it.
+  position: relative;
+  z-index: 10;
   display: flex;
   align-items: center;
   gap: 16px;
@@ -56,14 +72,85 @@ body {
   color: var(--muted);
 }
 
-.topbar-actions { margin-left: auto; display: flex; gap: 8px; }
+.topbar-end {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: none;
+}
 
-.stage { grid-area: stage; min-width: 0; min-height: 0; }
+// The score line. Everything here answers "how am I doing", which is a
+// question you ask while looking at the board — so it sits above the board
+// rather than inside the panel you use for something else.
+.hud {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  min-width: 0;
+  flex: 1;
+}
+
+.hud-name { font-size: 13px; }
+
+.fact {
+  display: flex;
+  align-items: baseline;
+  gap: 5px;
+  white-space: nowrap;
+
+  i {
+    font-style: normal;
+    font-size: 10px;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+  b { font-variant-numeric: tabular-nums; }
+}
+
+// A standing modifier, once bought. It is not a control — there is nothing to
+// press and nothing to spend — so it reads as a property of the empire.
+.mod {
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  padding: 2px 7px;
+  border-radius: 3px;
+  background: #e9f1e3;
+  border: 1px solid #a8c093;
+  color: #3d5c2d;
+}
+
+// The stage is the letterbox; the board is the picture. Sizing the board from
+// container units rather than the viewport is what keeps 4:3 exact — the stage
+// already knows how much room is left once the bars have taken theirs.
+.stage {
+  grid-area: stage;
+  container-type: size;
+  display: grid;
+  place-items: center;
+  min-width: 0;
+  min-height: 0;
+  padding: 10px;
+  background: #e6e0cf;
+}
+
+// A fixed 4:3 board, as large as fits and no larger. Whichever axis runs out
+// first decides, so a wide screen letterboxes and a phone goes edge to edge.
+.board {
+  position: relative;
+  width: min(100cqw, 100cqh * 4 / 3);
+  aspect-ratio: 4 / 3;
+  overflow: hidden;
+  border: 1px solid var(--edge);
+  border-radius: 3px;
+  box-shadow: 0 2px 14px rgba(0, 0, 0, 0.12);
+}
 
 .viewport {
-  position: relative;
-  width: 100%;
-  height: 100%;
+  position: absolute;
+  inset: 0;
   overflow: hidden;
   background: var(--paper);
   cursor: grab;
@@ -256,26 +343,7 @@ body {
   span { color: #c9c2ad; }
 }
 
-// --- sidebar -----------------------------------------------------------------
-
-.sidebar {
-  grid-area: side;
-  background: var(--panel);
-  border-left: 1px solid var(--edge);
-  overflow-y: auto;
-  padding: 12px;
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
-}
-
-.panel h2 {
-  margin: 0 0 8px;
-  font-size: 10px;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-  color: var(--muted);
-}
+// --- shared pieces -----------------------------------------------------------
 
 .minimap {
   width: 100%;
@@ -289,8 +357,6 @@ body {
 
 .hint { margin: 6px 0 0; font-size: 11px; color: var(--muted); }
 
-.you-head { display: flex; align-items: center; gap: 6px; margin-bottom: 8px; }
-
 .swatch {
   width: 12px;
   height: 12px;
@@ -301,7 +367,6 @@ body {
 }
 
 .tag {
-  margin-left: auto;
   font-size: 10px;
   text-transform: uppercase;
   letter-spacing: 0.08em;
@@ -313,6 +378,8 @@ body {
 
 .meter {
   position: relative;
+  flex: none;
+  width: 190px;
   height: 18px;
   background: #e6e0cd;
   border: 1px solid var(--edge);
@@ -330,46 +397,263 @@ body {
   text-shadow: 0 0 3px #fff;
 }
 
-// auto-fit rather than a fixed three: the growth timer is a fourth fact that
-// only exists while the buff is running.
-.facts { display: grid; grid-template-columns: repeat(auto-fit, minmax(58px, 1fr)); gap: 4px; margin: 10px 0; }
-.facts dt { font-size: 10px; color: var(--muted); }
-.facts dd { margin: 0; font-variant-numeric: tabular-nums; font-weight: 600; }
+// --- action palette ----------------------------------------------------------
+//
+// One tile per thing you can buy. Everything that used to need placing places
+// itself now, so a tile is a purchase and nothing else.
 
-.shop { display: grid; grid-template-columns: 1fr 1fr; gap: 5px; }
-
-// Says what an armed board is waiting for. Reserves its line whether or not
-// there is text, so arming a mode never nudges the standings down the page.
-.shop-hint {
-  margin: 6px 0 0;
-  min-height: 1.1em;
-  font-size: 11px;
-  color: var(--muted);
-}
-
-// Permanent modifiers, kept apart from the consumables above them: these are
-// bought once and change how the empire plays for the rest of the game.
-.upgrades {
+.acts {
   display: grid;
-  gap: 5px;
-
-  .up {
-    display: grid;
-    grid-template-columns: auto 1fr auto;
-    align-items: baseline;
-    gap: 6px;
-    text-align: left;
-  }
-  .up-what { font-size: 10px; color: var(--muted); }
-  .up.owned { opacity: 1; background: #eef4ea; border-color: #a8c093; }
+  grid-auto-flow: column;
+  grid-auto-columns: 86px;
+  gap: 6px;
 }
 
-.side-sub {
-  margin: 12px 0 6px;
+.act {
+  position: relative;
+  display: grid;
+  grid-template-rows: auto auto 1fr;
+  gap: 1px;
+  padding: 5px 6px 6px;
+  min-height: 66px;
+  text-align: left;
+  font: inherit;
+  font-size: 11px;
+  line-height: 1.25;
+  border: 1px solid var(--edge);
+  border-radius: 4px;
+  background: #fdfbf2;
+  cursor: pointer;
+
+  &:hover:not(:disabled) { background: #fff; border-color: #b9b198; }
+  &:disabled { opacity: 0.42; cursor: default; }
+}
+
+.act-glyph { font-size: 15px; line-height: 1; color: #57503f; }
+.act-name { font-weight: 600; }
+
+// How many are in hand. Sits on the tile rather than under it, so the tile
+// stays the same height whether or not you are carrying any.
+.act-count {
+  position: absolute;
+  top: 4px;
+  right: 5px;
   font-size: 10px;
-  letter-spacing: 0.08em;
+  font-variant-numeric: tabular-nums;
+  padding: 1px 4px;
+  border-radius: 3px;
+  background: #e6e0cd;
+  color: #4b4536;
+}
+
+.act-meta {
+  align-self: end;
+  font-size: 10px;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+// --- sidebars ----------------------------------------------------------------
+//
+// Left: where you are and how you are doing. Right: what everyone is saying.
+// Both collapse, because on a phone they are stacked under the board and an
+// open panel is height the board could have had.
+
+.side {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  background: var(--panel);
+}
+
+.side-left { grid-area: left; border-right: 1px solid var(--edge); }
+.side-right { grid-area: right; border-left: 1px solid var(--edge); }
+
+.acc {
+  border-bottom: 1px solid var(--edge);
+  &:last-child { border-bottom: none; }
+}
+
+.acc > summary {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 9px 12px;
+  cursor: pointer;
+  font-size: 10px;
+  letter-spacing: 0.14em;
   text-transform: uppercase;
   color: var(--muted);
+  user-select: none;
+
+  // The default marker cannot be styled and sits where it likes, so it goes
+  // and a triangle that rotates takes its place.
+  list-style: none;
+  &::-webkit-details-marker { display: none; }
+  &::before {
+    content: "";
+    flex: none;
+    width: 0;
+    height: 0;
+    border-left: 4px solid currentColor;
+    border-top: 3.5px solid transparent;
+    border-bottom: 3.5px solid transparent;
+    transition: transform 120ms ease;
+  }
+
+  &:hover { color: var(--ink); }
+}
+
+.acc[open] > summary::before { transform: rotate(90deg); }
+
+.acc-body { padding: 0 12px 12px; }
+
+.acc-body .hint {
+  margin-top: 4px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+// Chat takes whatever the column has left, which is what makes a long exchange
+// readable rather than a 150px porthole onto it.
+.acc-chat {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  border-bottom: none;
+
+  &[open] > .acc-body {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+  }
+
+  [data-chat] {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .chat-log {
+    flex: 1;
+    height: auto;
+    min-height: 90px;
+  }
+  .chat-form { margin-top: 6px; }
+}
+
+// The shop button in the top bar, and the panel it drops over the board.
+.items-dock {
+  position: relative;
+  flex: none;
+}
+
+.items-drawer {
+  position: absolute;
+  top: calc(100% + 8px);
+  // Anchored to the button's right edge so it opens back over the board. Left
+  // anchoring ran it off the screen, because the button sits near the end of
+  // the bar and the panel is wider than what is left.
+  right: 0;
+  z-index: 6;
+  padding: 10px;
+  background: var(--panel);
+  border: 1px solid var(--edge);
+  border-radius: 5px;
+  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.16);
+}
+
+// --- setup screen ------------------------------------------------------------
+//
+// Starting a game and playing one are different jobs, so they get different
+// screens. This one covers everything; the board keeps simulating behind it.
+
+.screen {
+  position: fixed;
+  inset: 0;
+  z-index: 30;
+  display: grid;
+  place-items: start center;
+  overflow-y: auto;
+  padding: 28px 20px 40px;
+  background: #e6e0cf;
+}
+
+.screen-inner { width: 100%; max-width: 720px; }
+
+.screen-head { margin-bottom: 22px; }
+
+.screen-brand {
+  margin: 0;
+  font-size: 30px;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+}
+
+.screen-tag { margin: 4px 0 0; color: var(--muted); }
+
+.screen-cols {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  align-items: start;
+}
+
+.card {
+  padding: 14px;
+  background: var(--panel);
+  border: 1px solid var(--edge);
+  border-radius: 5px;
+}
+
+.card h2 {
+  margin: 0 0 8px;
+  font-size: 10px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.card-tag { margin: 0 0 10px; font-size: 12px; color: var(--muted); }
+
+.field {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 7px;
+  font-size: 12px;
+
+  select {
+    font: inherit;
+    font-size: 12px;
+    padding: 4px 6px;
+    border: 1px solid #c8c0aa;
+    border-radius: 4px;
+    background: #fffdf6;
+  }
+}
+
+.btn.primary {
+  margin-top: 8px;
+  width: 100%;
+  background: #23201a;
+  border-color: #23201a;
+  color: #fffbe8;
+  &:hover:not(:disabled) { background: #37322a; border-color: #37322a; }
+}
+
+.screen-foot {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 20px;
 }
 
 .btn {
@@ -591,4 +875,87 @@ body {
     background: #f2eee1;
     color: var(--muted);
   }
+}
+
+// --- narrow screens ----------------------------------------------------------
+//
+// The board runs to the edges and the page becomes one scrolling column:
+// board, console, then standings under it. Nothing is behind anything.
+
+@media (max-width: 900px) {
+  // One column: board, then the panels stacked under it. The stage keeps a
+  // definite height so the board can claim whatever the shut panels leave.
+  .app,
+  .app[data-chat="off"] {
+    grid-template-columns: 1fr;
+    grid-template-areas: "top" "stage" "left" "right";
+    grid-template-rows: auto 1fr auto auto;
+    height: 100dvh;
+  }
+
+  // The HUD is a row of facts and there is not a row's worth of width, so it
+  // wraps onto a second line rather than pushing the buttons off the edge.
+  .topbar {
+    position: sticky;
+    top: 0;
+    z-index: 5;
+    flex-wrap: wrap;
+    gap: 6px 10px;
+    padding: 6px 10px;
+  }
+
+  .hud { flex-wrap: wrap; gap: 6px 12px; order: 3; flex-basis: 100%; }
+
+  .brand { font-size: 13px; }
+  .version { display: none; }
+
+  .stage { padding: 0; }
+
+  // 4:3 is the desktop rule; here the board simply takes the stage. A phone
+  // has height a landscape board cannot use, and capping the ratio left a band
+  // of dead paper above and below it — showing more map is the better answer,
+  // and shutting a panel hands the board the space directly.
+  .board {
+    width: 100cqw;
+    height: 100cqh;
+    aspect-ratio: auto;
+    border: none;
+    border-radius: 0;
+    box-shadow: none;
+  }
+
+  // Touch drags the map, so the arrow pad is redundant — and on a small board
+  // it covers tiles you want to click.
+  .dpad { display: none; }
+  .mapctl { right: 8px; bottom: 8px; }
+
+  // A pop-up anchored to a button has nowhere to go on a 390px screen, so it
+  // spans the bar it hangs from instead of trailing off the edge of it.
+  .items-dock { position: static; }
+  .items-drawer { left: 10px; right: 10px; }
+
+  .acts { grid-auto-flow: row; grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  .act { min-height: 62px; padding: 6px; }
+
+  // Both sidebars become one stack of collapsed strips under the board. Shut,
+  // each costs about 34px; the board takes everything they are not using.
+  .side {
+    border: none;
+    border-top: 1px solid var(--edge);
+    overflow: visible;
+  }
+  .side-right .acc-chat { border-bottom: none; }
+  .acc-chat .chat-log { min-height: 120px; }
+  .acc-body .hint { display: none; }
+
+  .screen { padding: 20px 14px 32px; }
+  .screen-brand { font-size: 24px; }
+  .screen-cols { grid-template-columns: 1fr; }
+}
+
+// Phone. Four tiles across is too tight to read, so wrap to two rows of two.
+@media (max-width: 560px) {
+  .acts { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .meter { width: 140px; height: 16px; }
+  .hud { gap: 5px 10px; }
 }

@@ -1,11 +1,17 @@
-// Sidebar: your empire's resources, the shop, and standings.
+// What the game says about itself: the HUD across the top, the items you can
+// buy, and the standings beside the board.
+//
+// There is no placement mode here any more. Arming a button to say "this next
+// click is a bridge" restated something the map already knew — a bridge only
+// ever goes on a river — so the click dispatch reads the terrain instead. See
+// game/input.ts. The same goes for the standing modifiers: buying march turns
+// march on, permanently, and a bought modifier has nothing left to press, so
+// it stops being a button and becomes a badge on the HUD.
 
 import type { State } from "@tessera/sim";
 import { MOVE, PHASE, WIN, STEPS_PER_SECOND, isProtected, summarise } from "@tessera/sim";
 import { empireTheme } from "./palette";
 import type { Driver } from "../game/Driver";
-
-export type PlaceMode = "none" | "bridge" | "ladder" | "march";
 
 const clock = (steps: number): string => {
   const total = Math.floor(steps / STEPS_PER_SECOND);
@@ -23,46 +29,51 @@ const WIN_TEXT: Record<number, string> = {
   [WIN.LAST_ROSTER]: "opponents abandoned the field",
 };
 
-export class Controls {
-  placeMode: PlaceMode = "none";
+/** One tile of the shop. Every one of these is a purchase now — the things
+ *  that used to need placing place themselves. */
+interface Act {
+  buy: string;
+  glyph: string;
+  name: string;
+  what: string;
+  cost: number;
+  /** How many are in hand, for the things you can stockpile. */
+  held?: number;
+  affordable: boolean;
+}
 
+const tile = (act: Act): string =>
+  `<button class="act" data-buy="${act.buy}" title="${act.what}"${act.affordable ? "" : " disabled"}>
+     <span class="act-glyph">${act.glyph}</span>
+     <span class="act-name">${act.name}</span>
+     <span class="act-meta">${act.cost}&#9670;</span>
+     ${act.held ? `<span class="act-count">&times;${act.held}</span>` : ""}
+   </button>`;
+
+export class Controls {
   constructor(
     private game: Driver,
     private els: {
-      you: HTMLElement;
+      hud: HTMLElement;
+      acts: HTMLElement;
       standings: HTMLElement;
+      roster: HTMLElement;
+      rosterPanel: HTMLElement;
       clock: HTMLElement;
       banner: HTMLElement;
       zoomhint: HTMLElement;
     },
   ) {
-    this.els.you.addEventListener("click", (event) => {
+    this.els.acts.addEventListener("click", (event) => {
       const target = (event.target as HTMLElement).closest<HTMLElement>("[data-buy]");
       if (!target) return;
-      const what = target.dataset.buy;
-      if (what === "bridge") this.game.act(MOVE.BUY_BRIDGE);
-      if (what === "ladder") this.game.act(MOVE.BUY_LADDER);
-      if (what === "march") this.game.act(MOVE.BUY_MARCH);
-      if (what === "growth") this.game.act(MOVE.BUY_GROWTH);
-      if (what === "place-bridge") this.toggle("bridge");
-      if (what === "place-ladder") this.toggle("ladder");
-      if (what === "place-march") this.toggle("march");
+      switch (target.dataset.buy) {
+        case "bridge": this.game.act(MOVE.BUY_BRIDGE); return;
+        case "ladder": this.game.act(MOVE.BUY_LADDER); return;
+        case "march": this.game.act(MOVE.BUY_MARCH); return;
+        case "growth": this.game.act(MOVE.BUY_GROWTH); return;
+      }
     });
-  }
-
-  private toggle(mode: PlaceMode): void {
-    this.placeMode = this.placeMode === mode ? "none" : mode;
-  }
-
-  /** Put the board back to plain claiming.
-   *
-   *  Arming used to be sticky: a placed bridge left placeMode on "bridge" with
-   *  nothing left in stock, so every later click became a PLACE_BRIDGE that
-   *  failed validation silently and the player simply could not play. One
-   *  placement, one disarm — and render() disarms again if the stock runs out
-   *  some other way. */
-  disarm(): void {
-    this.placeMode = "none";
   }
 
   render(state: State): void {
@@ -71,97 +82,112 @@ export class Controls {
     const empire = state.empires[this.game.empire - 1];
     if (!empire) {
       this.els.clock.textContent = `${clock(state.step)} · step ${state.step}`;
-      this.els.you.innerHTML = `<div class="you-head"><strong>Watching</strong></div>`;
+      this.els.hud.innerHTML = `<strong class="hud-name">Watching</strong>`;
+      this.els.acts.innerHTML = "";
+      this.els.rosterPanel.hidden = true;
+      this.renderStandings(state);
       return;
     }
     const member = empire.members[this.game.member]!;
     const rules = state.genesis.rules;
     const theme = empireTheme(empire.id);
 
-    // Nothing left to place means nothing to be armed for. Without this a
-    // player whose last bridge was spent by a teammate stays stuck in place
-    // mode with no button lit to tell them why. March is exempt: it is an
-    // ability, not a stock, so once it is bought it cannot run out.
-    if (
-      (this.placeMode === "bridge" && empire.bridges === 0) ||
-      (this.placeMode === "ladder" && empire.ladders === 0)
-    ) {
-      this.placeMode = "none";
-    }
-
     this.els.clock.textContent = `${clock(state.step)} · step ${state.step}`;
 
     const pct = Math.round((member.popTimer / rules.popMax) * 100);
-    const protectedFor = isProtected(state, empire);
 
-    this.els.you.innerHTML = `
-      <div class="you-head">
-        <span class="swatch" data-empire="${empire.id}"></span>
-        <strong>${theme.name}</strong>
-        ${protectedFor ? '<span class="tag">protected</span>' : ""}
-      </div>
+    this.els.hud.innerHTML = `
+      <span class="swatch" data-empire="${empire.id}"></span>
+      <strong class="hud-name">${theme.name}</strong>
+      ${isProtected(state, empire) ? '<span class="tag">protected</span>' : ""}
       <div class="meter" title="population timer">
         <div class="meter-fill" style="width:${pct}%; background:${theme.c1}"></div>
         <span class="meter-label">${member.popTimer} / ${rules.popMax}</span>
       </div>
-      <dl class="facts">
-        <div><dt>Tiles</dt><dd>${empire.tilesOwned}</dd></div>
-        <div><dt>Population</dt><dd>${empire.popTotal.toLocaleString()}</dd></div>
-        <div><dt>Diamonds</dt><dd>${empire.diamonds}</dd></div>
-      </dl>
-      <div class="shop">
-        <button class="btn sm" data-buy="bridge" ${empire.diamonds < rules.bridgeCost ? "disabled" : ""}>
-          Buy bridge <span class="cost">${rules.bridgeCost}&#9670;</span>
-        </button>
-        <button class="btn sm ${this.placeMode === "bridge" ? "armed" : ""}" data-buy="place-bridge" ${empire.bridges === 0 ? "disabled" : ""}>
-          Place bridge (${empire.bridges})
-        </button>
-        <button class="btn sm" data-buy="ladder" ${empire.diamonds < rules.ladderCost ? "disabled" : ""}>
-          Buy ladder <span class="cost">${rules.ladderCost}&#9670;</span>
-        </button>
-        <button class="btn sm ${this.placeMode === "ladder" ? "armed" : ""}" data-buy="place-ladder" ${empire.ladders === 0 ? "disabled" : ""}>
-          Place ladder (${empire.ladders})
-        </button>
-      </div>
-      <p class="shop-hint">${this.hint()}</p>
-      <h3 class="side-sub">Upgrades</h3>
-      <div class="upgrades">
-        ${
-          empire.marchUnlocked
-            ? `<button class="btn sm up ${this.placeMode === "march" ? "armed" : ""}" data-buy="place-march">
-                 March <span class="up-what">reach two tiles</span>
-               </button>`
-            : `<button class="btn sm up" data-buy="march" ${empire.diamonds < rules.marchCost ? "disabled" : ""}>
-                 Buy march <span class="up-what">reach two tiles</span>
-                 <span class="cost">${rules.marchCost}&#9670;</span>
-               </button>`
-        }
-        ${
-          empire.growthUnlocked
-            ? `<button class="btn sm up owned" disabled>
-                 Growth <span class="up-what">connected tiles gain population</span>
-               </button>`
-            : `<button class="btn sm up" data-buy="growth" ${empire.diamonds < rules.growthCost ? "disabled" : ""}>
-                 Buy growth <span class="up-what">connected tiles gain population</span>
-                 <span class="cost">${rules.growthCost}&#9670;</span>
-               </button>`
-        }
-      </div>
+      <span class="fact"><i>Tiles</i><b>${empire.tilesOwned}</b></span>
+      <span class="fact"><i>Population</i><b>${empire.popTotal.toLocaleString()}</b></span>
+      <span class="fact"><i>Diamonds</i><b>${empire.diamonds}</b></span>
       ${
-        empire.members.length > 1
-          ? `<div class="roster">${empire.members
-              .map((m, i) => {
-                const live = state.step - m.lastBeat <= rules.livenessWindow;
-                return `<div class="roster-row${live ? "" : " afk"}">
-                  <span>${i === this.game.member ? "You" : m.kind === 1 ? `Bot ${i}` : `Member ${i}`}</span>
-                  <span class="roster-pop">${m.popTimer}</span>
-                </div>`;
-              })
-              .join("")}</div>`
+        empire.marchUnlocked
+          ? '<span class="mod" title="Claims reach two tiles out instead of one.">March</span>'
+          : ""
+      }
+      ${
+        empire.growthUnlocked
+          ? '<span class="mod" title="Tiles connected to your capital gain population over time.">Growth</span>'
           : ""
       }
     `;
 
+    // A bought modifier is not a button. It has no second state to toggle and
+    // nothing left to spend, so it leaves the shop and shows on the HUD.
+    this.els.acts.innerHTML = [
+      tile({
+        buy: "bridge",
+        glyph: "&#9636;",
+        name: "Bridge",
+        what: "Crosses a river. Click any river tile beside your border.",
+        cost: rules.bridgeCost,
+        held: empire.bridges,
+        affordable: empire.diamonds >= rules.bridgeCost,
+      }),
+      tile({
+        buy: "ladder",
+        glyph: "&#9637;",
+        name: "Ladder",
+        what: "Crosses a wall. Click any wall tile beside your border.",
+        cost: rules.ladderCost,
+        held: empire.ladders,
+        affordable: empire.diamonds >= rules.ladderCost,
+      }),
+      empire.marchUnlocked
+        ? ""
+        : tile({
+            buy: "march",
+            glyph: "&#187;",
+            name: "March",
+            what: "Permanent. Claims reach two tiles out instead of one.",
+            cost: rules.marchCost,
+            affordable: empire.diamonds >= rules.marchCost,
+          }),
+      empire.growthUnlocked
+        ? ""
+        : tile({
+            buy: "growth",
+            glyph: "&#8593;",
+            name: "Growth",
+            what: "Permanent. Tiles connected to your capital gain population.",
+            cost: rules.growthCost,
+            affordable: empire.diamonds >= rules.growthCost,
+          }),
+    ].join("");
+
+    // Only a shared empire has seats worth listing; a solo player is the seat.
+    this.els.rosterPanel.hidden = empire.members.length < 2;
+    if (empire.members.length > 1) {
+      this.els.roster.innerHTML = empire.members
+        .map((m, i) => {
+          const live = state.step - m.lastBeat <= rules.livenessWindow;
+          return `<div class="roster-row${live ? "" : " afk"}">
+            <span>${i === this.game.member ? "You" : m.kind === 1 ? `Bot ${i}` : `Member ${i}`}</span>
+            <span class="roster-pop">${m.popTimer}</span>
+          </div>`;
+        })
+        .join("");
+    }
+
+    this.renderStandings(state);
+
+    if (state.phase === PHASE.ENDED) {
+      const winner = state.winner > 0 ? empireTheme(state.winner).name : "Nobody";
+      this.els.banner.hidden = false;
+      this.els.banner.innerHTML = `<strong>${winner} wins</strong><span>${WIN_TEXT[state.winReason] ?? ""}</span>`;
+    } else {
+      this.els.banner.hidden = true;
+    }
+  }
+
+  private renderStandings(state: State): void {
     const rows = summarise(state)
       .slice()
       .sort((a, b) => b.tilesOwned - a.tilesOwned);
@@ -177,28 +203,6 @@ export class Controls {
         </div>`;
       })
       .join("");
-
-    if (state.phase === PHASE.ENDED) {
-      const winner = state.winner > 0 ? empireTheme(state.winner).name : "Nobody";
-      this.els.banner.hidden = false;
-      this.els.banner.innerHTML = `<strong>${winner} wins</strong><span>${WIN_TEXT[state.winReason] ?? ""}</span>`;
-    } else {
-      this.els.banner.hidden = true;
-    }
-  }
-
-  /** What an armed board is waiting for. Placement modes look identical to
-   *  ordinary play until you click the wrong tile, so say it out loud.
-   *
-   *  Bridges and ladders are stock: bought, carried, spent. March and growth
-   *  are not — they are standing modifiers to how the empire plays, bought
-   *  once and kept, which is why they sit in their own section rather than
-   *  beside the consumables. */
-  private hint(): string {
-    if (this.placeMode === "bridge") return "Click a river tile beside your border.";
-    if (this.placeMode === "ladder") return "Click a wall tile beside your border.";
-    if (this.placeMode === "march") return "Click two tiles out; the one between fills too. Stays on.";
-    return "";
   }
 
   setZoomHint(text: string): void {

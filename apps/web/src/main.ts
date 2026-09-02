@@ -21,6 +21,7 @@ import { MapImage } from "./view/MapImage";
 import { Renderer } from "./view/Renderer";
 import { Minimap } from "./view/Minimap";
 import { Controls } from "./view/Controls";
+import { Shell } from "./view/Shell";
 import { injectThemeCss, empireTheme } from "./view/palette";
 import { MOVE } from "@tessera/sim";
 
@@ -35,8 +36,10 @@ injectThemeCss();
 // Version comes from the manifest, which dispat rewrites on release, so what
 // the UI shows is whatever was actually built. The protocol number is the one
 // that decides whether two peers can play together at all.
-document.querySelector("[data-version]")!.textContent =
-  `v${pkg.version} · protocol ${PROTOCOL_VERSION}`;
+const version = `v${pkg.version} · protocol ${PROTOCOL_VERSION}`;
+for (const el of document.querySelectorAll("[data-version], [data-version-menu]")) {
+  el.textContent = version;
+}
 
 const viewportEl = pick<HTMLDivElement>("[data-viewport]");
 const tilesEl = pick<HTMLDivElement>("[data-tiles]");
@@ -44,11 +47,47 @@ const lodEl = pick<HTMLCanvasElement>("[data-lod]");
 const minimapEl = pick<HTMLCanvasElement>("[data-minimap]");
 const lobbyEl = pick<HTMLDivElement>("[data-lobby]");
 const chatEl = pick<HTMLDivElement>("[data-chat]");
+const chatSideEl = pick<HTMLElement>("[data-chat-section]");
+const appEl = pick<HTMLElement>(".app");
 
-/** The solo map. A mesh game uses whatever its genesis says, so this is
- *  replaced when a game is mounted rather than assumed by the view. */
-const SOLO_MAP = { width: 160, height: 112 };
-let MAP = { ...SOLO_MAP };
+/** Which panels start open. A desktop sidebar has room for all of them at
+ *  once; a phone does not, and a column of open accordions is exactly the
+ *  wasted space they exist to avoid — so only the standings, the one worth a
+ *  glance between clicks, starts open there. Set once, then left alone: after
+ *  this the state is the reader's. */
+function openPanelsForWidth(): void {
+  const narrow = window.matchMedia("(max-width: 900px)").matches;
+  for (const panel of document.querySelectorAll<HTMLDetailsElement>(".acc")) {
+    panel.open = !narrow || panel.dataset.acc === "standings";
+  }
+}
+openPanelsForWidth();
+
+/** Map sizes offered on the setup screen. A mesh game uses whatever its genesis
+ *  says, so these are a starting point rather than an assumption the view makes
+ *  anywhere else. */
+const MAP_SIZES: Record<string, { width: number; height: number }> = {
+  small: { width: 96, height: 72 },
+  medium: { width: 160, height: 112 },
+  large: { width: 256, height: 176 },
+};
+
+/** The map the setup screen is asking for. Read at the moment a game starts
+ *  rather than cached, so changing the dropdown and pressing start agree.
+ *
+ *  Kept apart from the solo options below because a HostPlan has a `bots` of
+ *  its own — bot seats in human empires, not rival empires — and spreading one
+ *  into the other silently means the wrong thing. */
+const mapSize = () =>
+  MAP_SIZES[pick<HTMLSelectElement>('[data-cfg="size"]').value] ?? MAP_SIZES.medium!;
+
+const soloSetup = () => ({
+  bots: Number(pick<HTMLSelectElement>('[data-cfg="bots"]').value),
+  teammates: Number(pick<HTMLSelectElement>('[data-cfg="teammates"]').value),
+  ...mapSize(),
+});
+
+let MAP = { ...MAP_SIZES.medium! };
 
 let game: Driver;
 let camera: Camera;
@@ -57,8 +96,25 @@ let renderer: Renderer;
 let minimap: Minimap;
 let controls: Controls;
 
+const shell = new Shell({
+  app: appEl,
+  menu: pick<HTMLElement>("[data-menu]"),
+  resume: pick<HTMLElement>('[data-action="resume"]'),
+  itemsToggle: pick<HTMLElement>("[data-items-toggle]"),
+  itemsDrawer: pick<HTMLElement>("[data-items-drawer]"),
+});
+
+// Escape shuts the shop; there is nothing else layered over the board.
+window.addEventListener("keydown", (event) => {
+  if (event.key === "Escape") shell.showItems(false);
+});
+
+/** A screen that was covered may have been resized while it was, and the board
+ *  behind the menu is measured by a ResizeObserver that cannot see through it. */
+shell.onScreen = () => resize();
+
 function start(seed: number): void {
-  mount(new LocalGame({ seed, bots: 3, teammates: 0, ...SOLO_MAP }));
+  mount(new LocalGame({ seed, ...soloSetup() }));
 }
 
 /** Everything downstream of here is the same for a solo game and a mesh game —
@@ -73,15 +129,31 @@ function mount(driver: Driver): void {
   renderer = new Renderer(tilesEl, lodEl, camera, mapImage);
   minimap = new Minimap(minimapEl, camera, mapImage, MAP.width, MAP.height);
   controls = new Controls(game, {
-    you: pick<HTMLElement>("[data-you]"),
+    hud: pick<HTMLElement>("[data-you]"),
+    acts: pick<HTMLElement>("[data-acts]"),
     standings: pick<HTMLElement>("[data-standings]"),
+    roster: pick<HTMLElement>("[data-roster]"),
+    rosterPanel: pick<HTMLElement>("[data-roster-panel]"),
     clock: pick<HTMLElement>("[data-clock]"),
     banner: pick<HTMLElement>("[data-banner]"),
     zoomhint: pick<HTMLElement>("[data-zoomhint]"),
   });
 
+  // Nobody to talk to in a solo game, so the right sidebar goes entirely and
+  // the grid drops its column rather than reserving an empty one.
+  chatSideEl.hidden = !driver.online;
+  appEl.dataset.chat = driver.online ? "on" : "off";
+
+  // The world turns on wall-clock time and other people are in it, so there is
+  // nothing in a mesh game to pause. Derived from the driver rather than
+  // switched off at the mesh call site, which left it stuck off for the next
+  // solo game you started.
+  pick<HTMLButtonElement>('[data-action="pause"]').disabled = driver.online;
+  pick<HTMLButtonElement>('[data-action="pause"]').textContent = "Pause";
+
   mapImage.paintAll(game.sim.state);
   centred = false;
+  shell.gameReady();
   resize();
 }
 
@@ -146,12 +218,7 @@ viewportEl.addEventListener("pointerup", (event) => {
   const [x, y] = camera.tileAt(event.clientX - rect.left, event.clientY - rect.top);
   if (x < 0 || y < 0 || x >= MAP.width || y >= MAP.height) return;
 
-  boardClick(game, controls, x, y);
-});
-
-// Escape is the way out of an armed board that has nothing legal to click.
-window.addEventListener("keydown", (event) => {
-  if (event.key === "Escape") controls.disarm();
+  boardClick(game, x, y);
 });
 
 // Wheel deltas are wildly inconsistent — a mouse notch is ~100px, a trackpad
@@ -209,6 +276,8 @@ pick<HTMLElement>(".mapctl").addEventListener("click", (event) => {
 
 window.addEventListener("keydown", (event) => {
   if (event.target instanceof HTMLInputElement) return;
+  // The board is not what the arrow keys are for while the setup screen is up.
+  if (shell.current !== "game") return;
   const handled = true;
   switch (event.key) {
     case "ArrowUp": camera.panByViewport(0, -PAN_FRACTION); break;
@@ -237,9 +306,34 @@ pick<HTMLButtonElement>('[data-action="pause"]').addEventListener("click", (even
   }
 });
 
-pick<HTMLButtonElement>('[data-action="new"]').addEventListener("click", () => {
-  if (lobby) return; // a mesh game is not this client's to restart
+/** Put down a mesh session if this client holds one. Leaving has to be real:
+ *  the peers still playing would otherwise wait on a seat that had wandered
+ *  off. A solo game has nothing to close. */
+function leaveMesh(): void {
+  if (!lobby) return;
+  lobby.close();
+  lobby = undefined;
+  mesh = undefined;
+  chat.close();
+  panel.detach();
+}
+
+pick<HTMLButtonElement>('[data-action="solo"]').addEventListener("click", () => {
+  leaveMesh();
   start(seedFrom(String(Date.now())));
+  shell.show("game");
+});
+
+// "Menu" said nothing about what pressing it did. This is the way out of a
+// game: it puts down the mesh session, if there is one, and goes back to the
+// lobby — so it says so, and it actually leaves rather than pretending to.
+pick<HTMLButtonElement>('[data-action="leave"]').addEventListener("click", () => {
+  leaveMesh();
+  shell.left();
+});
+
+pick<HTMLButtonElement>('[data-action="resume"]').addEventListener("click", () => {
+  shell.show("game");
 });
 
 // --- loop --------------------------------------------------------------------
@@ -260,8 +354,8 @@ function frame(now: number): void {
     controls.render(game.sim.state);
     controls.setZoomHint(
       camera.zoom >= DOM_MIN_ZOOM
-        ? `${camera.zoom}px per tile — drag, scroll, or use the arrows`
-        : `${camera.zoom}px per tile — zoom past ${DOM_MIN_ZOOM}px for tile detail`,
+        ? `${camera.zoom}px per tile`
+        : `${camera.zoom}px per tile — blocks below ${DOM_MIN_ZOOM}px`,
     );
     zoomLevelEl.textContent = `${camera.zoom}`;
     zoomInEl.disabled = !camera.canZoomIn;
@@ -290,7 +384,7 @@ const chat = new ChatPanel(chatEl, {
 const panel = new LobbyPanel(lobbyEl, {
   host: () => void begin(),
   join: (code) => void begin(code),
-  start: (plan) => void lobby?.host({ ...plan, ...SOLO_MAP }),
+  start: (plan) => void lobby?.host({ ...plan, ...mapSize() }),
   leave: () => {
     lobby?.close();
     lobby = undefined;
@@ -397,8 +491,7 @@ async function begin(code?: string): Promise<void> {
     if (seat) openChat(seat);
 
     mount(new OnlineGame(driver, lobby!.mesh, bots));
-    pick<HTMLButtonElement>('[data-action="pause"]').disabled = true;
-    pick<HTMLButtonElement>('[data-action="new"]').disabled = true;
+    shell.show("game");
   };
 }
 

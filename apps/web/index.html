@@ -2,73 +2,154 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <title>Tessera</title>
     <link rel="stylesheet" href="styles/main.scss" />
     <script type="module" src="src/main.ts"></script>
   </head>
   <body>
-    <div class="app">
+    <!-- data-screen is the shell state: "menu" shows the lobby and setup over
+         everything, "game" shows the board. The game keeps running either way —
+         the world turns on wall-clock time whether or not you are looking. -->
+    <div class="app" data-screen="menu">
+      <!-- Who you are and what you hold reads at a glance, above the board,
+           the way a score line does — not tucked into a corner of the panel
+           you use for something else. -->
       <header class="topbar">
         <h1 class="brand">Tessera</h1>
-        <div class="clock" data-clock></div>
-        <span class="version" data-version></span>
-        <div class="topbar-actions">
+        <div class="hud" data-you></div>
+
+        <!-- Beside the diamond count, because that is the number you are
+             checking when you decide to open it. -->
+        <div class="items-dock">
+          <button class="btn" data-items-toggle aria-expanded="false">Items</button>
+          <div class="items-drawer" data-items-drawer hidden>
+            <div class="acts" data-acts></div>
+          </div>
+        </div>
+
+        <div class="topbar-end">
+          <div class="clock" data-clock></div>
+          <span class="version" data-version></span>
           <button data-action="pause" class="btn">Pause</button>
-          <button data-action="new" class="btn">New game</button>
+          <button data-action="leave" class="btn">Leave</button>
         </div>
       </header>
 
-      <main class="stage">
-        <div class="viewport" data-viewport>
-          <canvas class="lod" data-lod></canvas>
-          <div class="tiles" data-tiles></div>
-          <div class="banner" data-banner hidden></div>
+      <!-- Collapsible so a phone can shut what it is not reading. Native
+           <details> rather than a bespoke toggle: it is keyboard-operable and
+           remembers its own state without a line of script. -->
+      <aside class="side side-left">
+        <details class="acc" data-acc="map">
+          <summary>Map</summary>
+          <div class="acc-body">
+            <canvas class="minimap" data-minimap width="240" height="160"></canvas>
+            <p class="hint" data-zoomhint></p>
+          </div>
+        </details>
 
-          <div class="mapctl">
-            <div class="dpad">
-              <button class="btn ctl" data-pan="up"    aria-label="Pan up">&#9650;</button>
-              <button class="btn ctl" data-pan="left"  aria-label="Pan left">&#9664;</button>
-              <button class="btn ctl" data-pan="home"  aria-label="Centre on your capital" title="Centre on your capital">&#9678;</button>
-              <button class="btn ctl" data-pan="right" aria-label="Pan right">&#9654;</button>
-              <button class="btn ctl" data-pan="down"  aria-label="Pan down">&#9660;</button>
-            </div>
-            <div class="zoomctl">
-              <button class="btn ctl" data-zoom="in"  aria-label="Zoom in">+</button>
-              <span class="zoomlevel" data-zoomlevel></span>
-              <button class="btn ctl" data-zoom="out" aria-label="Zoom out">&minus;</button>
+        <details class="acc" data-acc="standings">
+          <summary>Standings</summary>
+          <div class="acc-body" data-standings></div>
+        </details>
+
+        <details class="acc" data-acc="roster" data-roster-panel hidden>
+          <summary>Your seats</summary>
+          <div class="acc-body" data-roster></div>
+        </details>
+      </aside>
+
+      <main class="stage">
+        <!-- Fixed 4:3, centred, letterboxed. Everyone plays the same shape of
+             board regardless of the screen it is on. -->
+        <div class="board">
+          <div class="viewport" data-viewport>
+            <canvas class="lod" data-lod></canvas>
+            <div class="tiles" data-tiles></div>
+
+            <div class="mapctl">
+              <div class="dpad">
+                <button class="btn ctl" data-pan="up"    aria-label="Pan up">&#9650;</button>
+                <button class="btn ctl" data-pan="left"  aria-label="Pan left">&#9664;</button>
+                <button class="btn ctl" data-pan="home"  aria-label="Centre on your capital" title="Centre on your capital">&#9678;</button>
+                <button class="btn ctl" data-pan="right" aria-label="Pan right">&#9654;</button>
+                <button class="btn ctl" data-pan="down"  aria-label="Pan down">&#9660;</button>
+              </div>
+              <div class="zoomctl">
+                <button class="btn ctl" data-zoom="in"  aria-label="Zoom in">+</button>
+                <span class="zoomlevel" data-zoomlevel></span>
+                <button class="btn ctl" data-zoom="out" aria-label="Zoom out">&minus;</button>
+              </div>
             </div>
           </div>
+
+          <div class="banner" data-banner hidden></div>
         </div>
       </main>
 
-      <aside class="sidebar">
-        <section class="panel">
-          <h2>Minimap</h2>
-          <canvas class="minimap" data-minimap width="240" height="160"></canvas>
-          <p class="hint" data-zoomhint></p>
-        </section>
-
-        <section class="panel">
-          <h2>Multiplayer</h2>
-          <div data-lobby></div>
-        </section>
-
-        <section class="panel">
-          <h2>Chat</h2>
-          <div data-chat></div>
-        </section>
-
-        <section class="panel">
-          <h2>Your empire</h2>
-          <div data-you></div>
-        </section>
-
-        <section class="panel">
-          <h2>Standings</h2>
-          <div data-standings></div>
-        </section>
+      <aside class="side side-right" data-chat-section hidden>
+        <details class="acc acc-chat" data-acc="chat">
+          <summary>Chat</summary>
+          <div class="acc-body" data-chat></div>
+        </details>
       </aside>
+
+      <!-- The setup screen. Lobby, teams and solo configuration live here and
+           nowhere else, so nothing about starting a game competes with playing
+           one. -->
+      <section class="screen" data-menu>
+        <div class="screen-inner">
+          <header class="screen-head">
+            <h1 class="screen-brand">Tessera</h1>
+            <p class="screen-tag">
+              No server holds the game. Your browsers agree with each other.
+            </p>
+          </header>
+
+          <div class="screen-cols">
+            <section class="card">
+              <h2>Solo</h2>
+              <p class="card-tag">One empire against bots. Starts immediately.</p>
+              <div class="field">
+                <label for="cfg-bots">Rival empires</label>
+                <select id="cfg-bots" data-cfg="bots">
+                  <option value="1">1</option>
+                  <option value="3" selected>3</option>
+                  <option value="5">5</option>
+                  <option value="7">7</option>
+                </select>
+              </div>
+              <div class="field">
+                <label for="cfg-mates">Bot teammates</label>
+                <select id="cfg-mates" data-cfg="teammates">
+                  <option value="0" selected>none</option>
+                  <option value="1">1</option>
+                  <option value="2">2</option>
+                </select>
+              </div>
+              <div class="field">
+                <label for="cfg-size">Map</label>
+                <select id="cfg-size" data-cfg="size">
+                  <option value="small">small &mdash; 96&times;72</option>
+                  <option value="medium" selected>medium &mdash; 160&times;112</option>
+                  <option value="large">large &mdash; 256&times;176</option>
+                </select>
+              </div>
+              <button class="btn primary" data-action="solo">Start solo game</button>
+            </section>
+
+            <section class="card">
+              <h2>Multiplayer</h2>
+              <div data-lobby></div>
+            </section>
+          </div>
+
+          <footer class="screen-foot">
+            <button class="btn" data-action="resume" hidden>Back to the game</button>
+            <span class="version" data-version-menu></span>
+          </footer>
+        </div>
+      </section>
     </div>
   </body>
 </html>

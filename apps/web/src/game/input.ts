@@ -1,41 +1,42 @@
 // What one click on the board means.
 //
-// Pulled out of main.ts because this is where the arming bug lived and there
-// was nowhere to test it: the dispatch was welded into the module body next to
-// the pointer listeners, so proving that a placed bridge hands the board back
-// meant opening two tabs and trying it.
+// There are no modes. A river is a river whether or not you remembered to arm
+// a button first, so the click says where and the board says what: bridges go
+// on rivers, ladders go on walls, and a claim that reaches one tile too far is
+// a march if the empire has bought one. Arming was a step between deciding and
+// doing that only ever existed to disambiguate something the map already knew,
+// and it cost a whole class of bug — a mode left armed with nothing in stock
+// swallowed every later click in silence.
+//
+// The dispatch deliberately does not re-check stock or adjacency. Those are
+// validation's business, and stating them twice is how the two drift apart;
+// an unaffordable bridge is refused by the rules exactly as it was before.
 
-import { MOVE, adjacentToOwned } from "@tessera/sim";
+import { MOVE, TERRAIN, adjacentToOwned, idx } from "@tessera/sim";
 import type { Driver } from "./Driver";
-import type { Controls } from "../view/Controls";
 
-/** Spend a click on the tile at (x, y), whatever the sidebar has armed.
- *
- *  Every armed mode disarms on a placement that actually took. Leaving it
- *  armed was the bug that made a bought bridge unplayable: the next click was
- *  another PLACE_BRIDGE against an empty stock, it failed validation in
- *  silence, and the game looked frozen. A rejected click keeps the arming,
- *  because the player almost certainly just missed the tile they meant. */
-export function boardClick(game: Driver, controls: Controls, x: number, y: number): void {
-  switch (controls.placeMode) {
-    case "bridge":
-      if (game.act(MOVE.PLACE_BRIDGE, x, y)) controls.disarm();
+export function boardClick(game: Driver, x: number, y: number): void {
+  const state = game.sim.state;
+  const empire = state.empires[game.empire - 1];
+  if (!empire) return;
+
+  // TERRAIN.RIVER and TERRAIN.WALL are the *uncrossed* forms — once bridged or
+  // laddered they become their own passable terrain and fall through to a
+  // claim, which is what you want the second click on a bridge to do.
+  switch (state.terrain[idx(x, y, state.width)]) {
+    case TERRAIN.RIVER:
+      game.act(MOVE.PLACE_BRIDGE, x, y);
       return;
-
-    case "ladder":
-      if (game.act(MOVE.PLACE_LADDER, x, y)) controls.disarm();
+    case TERRAIN.WALL:
+      game.act(MOVE.PLACE_LADDER, x, y);
       return;
-
-    // Marching is an ability the empire owns rather than a thing it spends, so
-    // unlike a bridge it stays armed: it costs nothing to leave on, and a tile
-    // already on the border falls through to an ordinary claim anyway. The
-    // player turns it off with the button or with Escape.
-    case "march":
-      if (adjacentToOwned(game.sim.state, x, y, game.empire)) game.claim(x, y);
-      else game.act(MOVE.MARCH, x, y);
-      return;
-
-    default:
-      game.claim(x, y);
   }
+
+  // A march is refused outright on a tile already touching the border, so
+  // adjacency is what separates the two rather than anything the player sets.
+  if (!adjacentToOwned(state, x, y, game.empire) && empire.marchUnlocked) {
+    game.act(MOVE.MARCH, x, y);
+    return;
+  }
+  game.claim(x, y);
 }

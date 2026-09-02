@@ -1,9 +1,16 @@
-// One click on the board, and what it costs you.
+// One click on the board, and what it means.
 //
-// The bug this exists for: after placing a bridge the board stayed armed for
-// "bridge" with nothing left to place, so every following click was a
-// PLACE_BRIDGE that failed validation in silence. The player could not claim a
-// tile again for the rest of the game, with no error and no clue why.
+// The board has no modes. What used to be "arm bridge, then click a river" is
+// now just "click a river", because a bridge was never able to go anywhere
+// else. These tests pin that down from both ends: the right move goes out for
+// the terrain under the cursor, and a click the rules will refuse costs the
+// player nothing but the click.
+//
+// The bug this file was originally written for: a mode left armed with nothing
+// in stock swallowed every later click in silence, and the game looked frozen.
+// It cannot happen now — there is no mode to leave armed — but the property it
+// was really about still matters, so "the board is claimable straight after a
+// placement" is kept below.
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { STEPS_PER_SECOND, TERRAIN, idx } from "@tessera/sim";
@@ -16,18 +23,19 @@ import { boardClick } from "../game/input";
 const stub = () =>
   ({ addEventListener() {}, innerHTML: "", textContent: "", hidden: false }) as unknown as HTMLElement;
 
-const controlsFor = (game: LocalGame): Controls =>
-  new Controls(game, {
-    you: stub(),
-    standings: stub(),
-    clock: stub(),
-    banner: stub(),
-    zoomhint: stub(),
-  });
+const elementsFor = () => ({
+  hud: stub(),
+  acts: stub(),
+  standings: stub(),
+  roster: stub(),
+  rosterPanel: stub(),
+  clock: stub(),
+  banner: stub(),
+  zoomhint: stub(),
+});
 
 describe("clicking the board", () => {
   let game: LocalGame;
-  let controls: Controls;
   let empire: LocalGame["sim"]["state"]["empires"][number];
 
   // LocalGame derives its step from wall-clock time, so three tick() calls in
@@ -48,7 +56,6 @@ describe("clicking the board", () => {
     vi.spyOn(performance, "now").mockImplementation(() => now);
 
     game = new LocalGame({ seed: 7, bots: 1, teammates: 0, width: 32, height: 32 });
-    controls = controlsFor(game);
     const state = game.sim.state;
     empire = state.empires[0]!;
 
@@ -70,91 +77,130 @@ describe("clicking the board", () => {
   afterEach(() => vi.restoreAllMocks());
 
   const tilesHeld = () => empire.tilesOwned;
+  const terrainAt = (x: number, y: number) =>
+    game.sim.state.terrain[idx(x, y, game.sim.state.width)];
+  const ownerAt = (x: number, y: number) =>
+    game.sim.state.owner[idx(x, y, game.sim.state.width)];
 
-  it("an unarmed click claims", () => {
+  it("plain ground beside the border is claimed", () => {
     const before = tilesHeld();
-    boardClick(game, controls, ownX + 1, ownY);
+    boardClick(game, ownX + 1, ownY);
     run(4);
     expect(tilesHeld()).toBeGreaterThan(before);
-    expect(controls.placeMode).toBe("none");
   });
 
-  describe("placing a bridge", () => {
+  describe("a river", () => {
     beforeEach(() => {
-      const river = idx(ownX + 1, ownY, game.sim.state.width);
-      game.sim.state.terrain[river] = TERRAIN.RIVER;
-      empire.bridges = 1;
-      controls.placeMode = "bridge";
+      game.sim.state.terrain[idx(ownX + 1, ownY, game.sim.state.width)] = TERRAIN.RIVER;
     });
 
-    it("the placement is accepted", () => {
-      boardClick(game, controls, ownX + 1, ownY);
-      expect(controls.placeMode).toBe("none");
+    it("is bridged by a plain click when a bridge is in hand", () => {
+      empire.bridges = 1;
+      boardClick(game, ownX + 1, ownY);
+      run(4);
+      expect(terrainAt(ownX + 1, ownY)).toBe(TERRAIN.RIVER_BRIDGED);
     });
 
     it("and the board is claimable again straight afterwards", () => {
-      boardClick(game, controls, ownX + 1, ownY);
-      run(4); // let the queued PLACE_BRIDGE apply
-      expect(game.sim.state.terrain[idx(ownX + 1, ownY, game.sim.state.width)]).toBe(
-        TERRAIN.RIVER_BRIDGED,
-      );
+      empire.bridges = 1;
+      boardClick(game, ownX + 1, ownY);
+      run(4);
 
       empire.members[0]!.popTimer = 400;
       const before = tilesHeld();
-      boardClick(game, controls, ownX, ownY + 1);
+      boardClick(game, ownX, ownY + 1);
       run(4);
       expect(tilesHeld()).toBeGreaterThan(before);
     });
 
-    it("a miss keeps the arming, because the player meant to place", () => {
-      boardClick(game, controls, ownX + 3, ownY + 3); // not a river tile
-      expect(controls.placeMode).toBe("bridge");
+    // Nothing is spent and nothing is stuck: the rules refuse it, and the next
+    // click is an ordinary click again.
+    it("stays a river when there is no bridge to spend", () => {
+      empire.bridges = 0;
+      boardClick(game, ownX + 1, ownY);
+      run(4);
+      expect(terrainAt(ownX + 1, ownY)).toBe(TERRAIN.RIVER);
+
+      const before = tilesHeld();
+      boardClick(game, ownX, ownY + 1);
+      run(4);
+      expect(tilesHeld()).toBeGreaterThan(before);
     });
+  });
+
+  it("a wall is laddered by a plain click when a ladder is in hand", () => {
+    game.sim.state.terrain[idx(ownX + 1, ownY, game.sim.state.width)] = TERRAIN.WALL;
+    empire.ladders = 1;
+    boardClick(game, ownX + 1, ownY);
+    run(4);
+    expect(terrainAt(ownX + 1, ownY)).toBe(TERRAIN.WALL_LADDERED);
   });
 
   describe("marching", () => {
-    beforeEach(() => {
+    it("a tile two out is marched to once march is bought", () => {
       empire.marchUnlocked = 1;
-      controls.placeMode = "march";
-    });
-
-    // Unlike a bridge, marching is an ability rather than a stock, so there is
-    // nothing to run out of and no reason to hand the board back.
-    it("a tile two out is marched to, and the mode stays on", () => {
-      boardClick(game, controls, ownX + 2, ownY);
-      expect(controls.placeMode).toBe("march");
+      boardClick(game, ownX + 2, ownY);
+      run(4);
+      expect(ownerAt(ownX + 2, ownY)).toBe(empire.id);
     });
 
     it("and the tile between comes with it", () => {
-      boardClick(game, controls, ownX + 2, ownY);
+      empire.marchUnlocked = 1;
+      boardClick(game, ownX + 2, ownY);
       run(4);
-      const state = game.sim.state;
-      expect(state.owner[idx(ownX + 1, ownY, state.width)]).toBe(empire.id);
-      expect(state.owner[idx(ownX + 2, ownY, state.width)]).toBe(empire.id);
+      expect(ownerAt(ownX + 1, ownY)).toBe(empire.id);
     });
 
-    it("a tile on the border falls through to an ordinary claim", () => {
+    it("a tile on the border is an ordinary claim, not a wasted march", () => {
+      empire.marchUnlocked = 1;
       const before = tilesHeld();
-      boardClick(game, controls, ownX + 1, ownY);
+      boardClick(game, ownX + 1, ownY);
       run(4);
       expect(tilesHeld()).toBe(before + 1);
     });
+
+    it("and without march the same click reaches nothing", () => {
+      empire.marchUnlocked = 0;
+      boardClick(game, ownX + 2, ownY);
+      run(4);
+      expect(ownerAt(ownX + 2, ownY)).toBe(0);
+    });
   });
 
-  describe("running out of stock", () => {
-    it("render disarms a mode nothing is left for", () => {
-      empire.bridges = 0;
-      controls.placeMode = "bridge";
+  describe("the shop", () => {
+    it("offers march until it is bought, and never again", () => {
+      const els = elementsFor();
+      const controls = new Controls(game, els);
+
       controls.render(game.sim.state);
-      expect(controls.placeMode).toBe("none");
+      expect(els.acts.innerHTML).toContain('data-buy="march"');
+
+      empire.marchUnlocked = 1;
+      controls.render(game.sim.state);
+      expect(els.acts.innerHTML).not.toContain('data-buy="march"');
     });
 
-    it("but march is an ability, so it is never disarmed for lack of stock", () => {
-      empire.marchUnlocked = 1;
-      empire.diamonds = 0;
-      controls.placeMode = "march";
+    it("shows a bought modifier on the HUD instead", () => {
+      const els = elementsFor();
+      const controls = new Controls(game, els);
+
       controls.render(game.sim.state);
-      expect(controls.placeMode).toBe("march");
+      expect(els.hud.innerHTML).not.toContain("Growth");
+
+      empire.growthUnlocked = 1;
+      controls.render(game.sim.state);
+      expect(els.hud.innerHTML).toContain("Growth");
+    });
+
+    it("keeps bridges buyable however many are already held", () => {
+      const els = elementsFor();
+      const controls = new Controls(game, els);
+
+      empire.bridges = 3;
+      empire.diamonds = 99;
+      controls.render(game.sim.state);
+      expect(els.acts.innerHTML).toContain('data-buy="bridge"');
+      expect(els.acts.innerHTML).toContain("&times;3");
     });
   });
 });
