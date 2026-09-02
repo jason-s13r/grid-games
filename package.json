@@ -15,6 +15,6 @@
     "site": "pnpm clean && pnpm -r build && mkdir -p _site/prototype && cp -r apps/web/dist/. _site/ && cp -r apps/prototype/dist/. _site/prototype/ && touch _site/.nojekyll"
   },
   "devDependencies": {
-    "vitest": "2.1.9"
+    "vitest": "3.2.7"
   }
 }
