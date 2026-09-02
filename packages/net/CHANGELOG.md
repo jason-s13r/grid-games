@@ -1,5 +1,79 @@
 # Changelog
 
+## net@0.6.0 (2026-09-02)
+
+### Features
+
+- drop a peer that will not come back
+  Divergence was detected and reported and then nothing happened. A peer
+  whose state has drifted validates against a world nobody else is in and
+  contributes noise for the rest of the game; the plan's rule is that it
+  rebuilds from a checkpoint and is dropped if it still disagrees.
+
+  The obvious objection is that a desync has no proof behind it. Two
+  peers cannot see each other's memory and neither can prove the other
+  wrong, so nobody acts alone: the drop goes through the same
+  majority-endorsed record a stall does, and a peer only proposes one
+  while it is in the agreeing majority itself. A peer that disagrees with
+  everybody is likelier to be the broken one than everybody is, so from
+  the minority it rebuilds and says nothing. Detection is symmetric;
+  escalation deliberately is not.
+
+  Three checkpoints of tolerance, which is two chances to recover: the
+  first says something is wrong and a rebuild lands well inside the
+  second. Agreeing again clears the count, because a peer that rebuilt is
+  not a cheat. Proposals stagger by seat the way a stall's do, or two
+  naming different steps could each fall short of a majority and leave
+  the seat neither dropped nor trusted.
+
+- replay a recorded game, not just a seed
+  The replay tool could only play a fresh seeded game, which checks the
+  world's own machinery — events, bots, decay — and none of the move
+  path. It now reads a recorded game and prints the hash that log arrives
+  at, which is the number two engines have to agree on.
+
+  Recording needs a source of moves that is not the shared stream, so
+  --record decides the human empire's moves from a side rng, exactly as a
+  PeerBot does. Bot empires derive theirs from the seed and leave nothing
+  in the log. Replaying the fixture without applying its moves reaches a
+  different hash, so the log is load-bearing rather than decorative.
+
+  A log stops at a step, not at its last move: coins spawn and territory
+  decays long after anybody last clicked, so the recorded step count is
+  what replay targets.
+
+  Lockstep gains onApplied, which is where a recorded log comes from — it
+  reports each step with the inputs that made it, and keeps the signed
+  envelopes so an archive can re-verify a log rather than believe it.
+
+  Also fixes the argument parsing, which read argv[3] and argv[4]: every
+  seed anyone ever passed on the command line was silently ignored and
+  the step count taken as the seed.
+
+### Fixes
+
+- stop deleting the TURN relays PeerJS provides
+  PeerJS ships a STUN server and two TURN relays and uses them unless it
+  is handed a config of its own. That option is merged one level deep, so
+  the config this package passed did not add a STUN server to the
+  defaults — it replaced the lot, relays included.
+
+  The effect was invisible to anyone whose NAT did not need a relay, and
+  total for the roughly one pair in five behind symmetric NAT: signalling
+  succeeded, the room code worked, and the data channel simply never
+  opened. The plan's "one unavoidable server" turned out to be a server
+  we already had and were throwing away.
+
+  Config is now sent only when a caller asks for one, which is still how
+  you point the mesh at a coturn you run rather than someone else's free
+  tier. The relay never had authority either way: every move across it is
+  signed and every state hash-verified.
+
+### Dependencies
+
+- sim: 1.0.0 -> 1.1.0
+
+
 ## net@0.5.0 (2026-09-01)
 
 ### Features

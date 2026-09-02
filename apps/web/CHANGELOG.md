@@ -1,5 +1,27 @@
 # Changelog
 
+## web@0.8.0 (2026-09-02)
+
+### Features
+
+- stop reading someone
+  Clicking a name mutes that seat and takes their lines down with it; a
+  bar under the log lists who is muted and is the only way back, since
+  what it hid is gone. Muting resets when the game does, because empire 2
+  seat 1 is a different person next time.
+
+  It is local view state and deliberately nothing else — no log entry, no
+  record type, nothing to agree on. Two peers who disagree about who is
+  worth listening to still hold identical state. A version of this that
+  had to be agreed would be a rule about who may speak, which is a much
+  worse feature wearing the same word.
+
+### Dependencies
+
+- sim: 1.0.0 -> 1.1.0
+- net: 0.5.0 -> 0.6.0
+
+
 ## web@0.7.0 (2026-09-02)
 
 ### Features

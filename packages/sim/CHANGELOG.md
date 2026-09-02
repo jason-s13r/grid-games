@@ -1,5 +1,34 @@
 # Changelog
 
+## sim@1.1.0 (2026-09-02)
+
+### Features
+
+- replay a recorded game, not just a seed
+  The replay tool could only play a fresh seeded game, which checks the
+  world's own machinery — events, bots, decay — and none of the move
+  path. It now reads a recorded game and prints the hash that log arrives
+  at, which is the number two engines have to agree on.
+
+  Recording needs a source of moves that is not the shared stream, so
+  --record decides the human empire's moves from a side rng, exactly as a
+  PeerBot does. Bot empires derive theirs from the seed and leave nothing
+  in the log. Replaying the fixture without applying its moves reaches a
+  different hash, so the log is load-bearing rather than decorative.
+
+  A log stops at a step, not at its last move: coins spawn and territory
+  decays long after anybody last clicked, so the recorded step count is
+  what replay targets.
+
+  Lockstep gains onApplied, which is where a recorded log comes from — it
+  reports each step with the inputs that made it, and keeps the signed
+  envelopes so an archive can re-verify a log rather than believe it.
+
+  Also fixes the argument parsing, which read argv[3] and argv[4]: every
+  seed anyone ever passed on the command line was silently ignored and
+  the step count taken as the seed.
+
+
 ## sim@1.0.0 (2026-09-01)
 
 ### Breaking Changes
