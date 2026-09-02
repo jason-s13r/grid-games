@@ -42,6 +42,14 @@ jobs:
       - name: Build the libraries
         run: pnpm --filter "./packages/*" build
 
+      # The cross-environment determinism check runs the recorded game in three
+      # real engines. Chromium alone would not be worth the minute this costs:
+      # it is V8, as Node is, so the pairing catches a bundler difference and
+      # never an engine one. WebKit and Firefox are the ones that would actually
+      # disagree about a float or an iteration order.
+      - name: Install the browsers
+        run: pnpm --filter @tessera/web exec playwright install --with-deps chromium firefox webkit
+
       - name: Run the suites
         run: pnpm test
 

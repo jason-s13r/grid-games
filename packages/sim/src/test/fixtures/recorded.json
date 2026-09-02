@@ -1,0 +1,3852 @@
+{
+  "note": "A recorded game, replayed by both the Node and browser suites. Regenerate with: pnpm --filter @tessera/sim replay --record <path>",
+  "genesis": {
+    "protocol": 2,
+    "seed": 12648430,
+    "startedAt": 0,
+    "map": {
+      "width": 96,
+      "height": 64,
+      "mountains": 14,
+      "lakes": 8,
+      "rivers": 2,
+      "riverGaps": 3,
+      "walls": 6,
+      "blobMin": 6,
+      "blobMax": 40
+    },
+    "rules": {
+      "popMax": 999,
+      "popRateNum": 1,
+      "popRateDen": 1,
+      "botPopMax": 499,
+      "botPopRateNum": 1,
+      "botPopRateDen": 2,
+      "maxMultiplier": 4,
+      "cascadeTileCap": 4096,
+      "botCascadeDepth": 0,
+      "coinIntervalMin": 18,
+      "coinIntervalMax": 48,
+      "coinWeights": [
+        [
+          1,
+          52
+        ],
+        [
+          2,
+          24
+        ],
+        [
+          3,
+          9
+        ],
+        [
+          4,
+          15
+        ]
+      ],
+      "maxItemsOnMap": 360,
+      "bridgeCost": 3,
+      "ladderCost": 3,
+      "marchCost": 6,
+      "growthCost": 6,
+      "growthAmount": 1,
+      "upkeepInterval": 240,
+      "decayNum": 1,
+      "decayDen": 8,
+      "decayMin": 1,
+      "coinNearBias": 72,
+      "coinNearRadius": 4,
+      "noobTiles": 40,
+      "noobSteps": 2160,
+      "heartbeatInterval": 360,
+      "livenessWindow": 1440,
+      "abandonWindow": 129600,
+      "elimination": 0,
+      "endStep": 0,
+      "botActionInterval": 24
+    },
+    "empires": [
+      {
+        "control": 0,
+        "members": [
+          {
+            "kind": 0
+          }
+        ]
+      },
+      {
+        "control": 1,
+        "members": [
+          {
+            "kind": 1
+          }
+        ]
+      },
+      {
+        "control": 1,
+        "members": [
+          {
+            "kind": 1
+          }
+        ]
+      },
+      {
+        "control": 1,
+        "members": [
+          {
+            "kind": 1
+          }
+        ]
+      }
+    ]
+  },
+  "steps": 2500,
+  "hash": "e6c11980",
+  "moveLog": [
+    {
+      "step": 6,
+      "empire": 1,
+      "member": 0,
+      "seq": 0,
+      "type": 1,
+      "x": 48,
+      "y": 63
+    },
+    {
+      "step": 12,
+      "empire": 1,
+      "member": 0,
+      "seq": 1,
+      "type": 1,
+      "x": 49,
+      "y": 63
+    },
+    {
+      "step": 18,
+      "empire": 1,
+      "member": 0,
+      "seq": 2,
+      "type": 1,
+      "x": 50,
+      "y": 63
+    },
+    {
+      "step": 24,
+      "empire": 1,
+      "member": 0,
+      "seq": 3,
+      "type": 1,
+      "x": 51,
+      "y": 63
+    },
+    {
+      "step": 30,
+      "empire": 1,
+      "member": 0,
+      "seq": 4,
+      "type": 1,
+      "x": 48,
+      "y": 63
+    },
+    {
+      "step": 36,
+      "empire": 1,
+      "member": 0,
+      "seq": 5,
+      "type": 1,
+      "x": 52,
+      "y": 63
+    },
+    {
+      "step": 42,
+      "empire": 1,
+      "member": 0,
+      "seq": 6,
+      "type": 1,
+      "x": 46,
+      "y": 63
+    },
+    {
+      "step": 48,
+      "empire": 1,
+      "member": 0,
+      "seq": 7,
+      "type": 1,
+      "x": 47,
+      "y": 62
+    },
+    {
+      "step": 54,
+      "empire": 1,
+      "member": 0,
+      "seq": 8,
+      "type": 1,
+      "x": 53,
+      "y": 63
+    },
+    {
+      "step": 60,
+      "empire": 1,
+      "member": 0,
+      "seq": 9,
+      "type": 1,
+      "x": 54,
+      "y": 63
+    },
+    {
+      "step": 66,
+      "empire": 1,
+      "member": 0,
+      "seq": 10,
+      "type": 1,
+      "x": 55,
+      "y": 63
+    },
+    {
+      "step": 72,
+      "empire": 1,
+      "member": 0,
+      "seq": 11,
+      "type": 1,
+      "x": 56,
+      "y": 63
+    },
+    {
+      "step": 78,
+      "empire": 1,
+      "member": 0,
+      "seq": 12,
+      "type": 1,
+      "x": 51,
+      "y": 62
+    },
+    {
+      "step": 84,
+      "empire": 1,
+      "member": 0,
+      "seq": 13,
+      "type": 1,
+      "x": 46,
+      "y": 61
+    },
+    {
+      "step": 90,
+      "empire": 1,
+      "member": 0,
+      "seq": 14,
+      "type": 1,
+      "x": 57,
+      "y": 63
+    },
+    {
+      "step": 96,
+      "empire": 1,
+      "member": 0,
+      "seq": 15,
+      "type": 1,
+      "x": 48,
+      "y": 63
+    },
+    {
+      "step": 102,
+      "empire": 1,
+      "member": 0,
+      "seq": 16,
+      "type": 1,
+      "x": 58,
+      "y": 63
+    },
+    {
+      "step": 108,
+      "empire": 1,
+      "member": 0,
+      "seq": 17,
+      "type": 1,
+      "x": 46,
+      "y": 63
+    },
+    {
+      "step": 114,
+      "empire": 1,
+      "member": 0,
+      "seq": 18,
+      "type": 1,
+      "x": 59,
+      "y": 63
+    },
+    {
+      "step": 120,
+      "empire": 1,
+      "member": 0,
+      "seq": 19,
+      "type": 1,
+      "x": 60,
+      "y": 63
+    },
+    {
+      "step": 126,
+      "empire": 1,
+      "member": 0,
+      "seq": 20,
+      "type": 1,
+      "x": 46,
+      "y": 63
+    },
+    {
+      "step": 132,
+      "empire": 1,
+      "member": 0,
+      "seq": 21,
+      "type": 1,
+      "x": 57,
+      "y": 62
+    },
+    {
+      "step": 138,
+      "empire": 1,
+      "member": 0,
+      "seq": 22,
+      "type": 1,
+      "x": 61,
+      "y": 63
+    },
+    {
+      "step": 144,
+      "empire": 1,
+      "member": 0,
+      "seq": 23,
+      "type": 1,
+      "x": 62,
+      "y": 63
+    },
+    {
+      "step": 150,
+      "empire": 1,
+      "member": 0,
+      "seq": 24,
+      "type": 1,
+      "x": 46,
+      "y": 63
+    },
+    {
+      "step": 156,
+      "empire": 1,
+      "member": 0,
+      "seq": 25,
+      "type": 1,
+      "x": 63,
+      "y": 63
+    },
+    {
+      "step": 162,
+      "empire": 1,
+      "member": 0,
+      "seq": 26,
+      "type": 1,
+      "x": 63,
+      "y": 62
+    },
+    {
+      "step": 168,
+      "empire": 1,
+      "member": 0,
+      "seq": 27,
+      "type": 1,
+      "x": 63,
+      "y": 61
+    },
+    {
+      "step": 174,
+      "empire": 1,
+      "member": 0,
+      "seq": 28,
+      "type": 1,
+      "x": 49,
+      "y": 62
+    },
+    {
+      "step": 180,
+      "empire": 1,
+      "member": 0,
+      "seq": 29,
+      "type": 1,
+      "x": 48,
+      "y": 63
+    },
+    {
+      "step": 186,
+      "empire": 1,
+      "member": 0,
+      "seq": 30,
+      "type": 1,
+      "x": 63,
+      "y": 60
+    },
+    {
+      "step": 192,
+      "empire": 1,
+      "member": 0,
+      "seq": 31,
+      "type": 1,
+      "x": 48,
+      "y": 63
+    },
+    {
+      "step": 198,
+      "empire": 1,
+      "member": 0,
+      "seq": 32,
+      "type": 1,
+      "x": 62,
+      "y": 60
+    },
+    {
+      "step": 204,
+      "empire": 1,
+      "member": 0,
+      "seq": 33,
+      "type": 1,
+      "x": 63,
+      "y": 59
+    },
+    {
+      "step": 210,
+      "empire": 1,
+      "member": 0,
+      "seq": 34,
+      "type": 1,
+      "x": 58,
+      "y": 62
+    },
+    {
+      "step": 216,
+      "empire": 1,
+      "member": 0,
+      "seq": 35,
+      "type": 1,
+      "x": 62,
+      "y": 62
+    },
+    {
+      "step": 222,
+      "empire": 1,
+      "member": 0,
+      "seq": 36,
+      "type": 1,
+      "x": 61,
+      "y": 62
+    },
+    {
+      "step": 228,
+      "empire": 1,
+      "member": 0,
+      "seq": 37,
+      "type": 1,
+      "x": 63,
+      "y": 58
+    },
+    {
+      "step": 234,
+      "empire": 1,
+      "member": 0,
+      "seq": 38,
+      "type": 1,
+      "x": 61,
+      "y": 61
+    },
+    {
+      "step": 240,
+      "empire": 1,
+      "member": 0,
+      "seq": 39,
+      "type": 1,
+      "x": 46,
+      "y": 63
+    },
+    {
+      "step": 246,
+      "empire": 1,
+      "member": 0,
+      "seq": 40,
+      "type": 1,
+      "x": 48,
+      "y": 63
+    },
+    {
+      "step": 252,
+      "empire": 1,
+      "member": 0,
+      "seq": 41,
+      "type": 1,
+      "x": 47,
+      "y": 62
+    },
+    {
+      "step": 258,
+      "empire": 1,
+      "member": 0,
+      "seq": 42,
+      "type": 1,
+      "x": 47,
+      "y": 62
+    },
+    {
+      "step": 264,
+      "empire": 1,
+      "member": 0,
+      "seq": 43,
+      "type": 1,
+      "x": 46,
+      "y": 63
+    },
+    {
+      "step": 270,
+      "empire": 1,
+      "member": 0,
+      "seq": 44,
+      "type": 1,
+      "x": 48,
+      "y": 63
+    },
+    {
+      "step": 276,
+      "empire": 1,
+      "member": 0,
+      "seq": 45,
+      "type": 1,
+      "x": 46,
+      "y": 63
+    },
+    {
+      "step": 282,
+      "empire": 1,
+      "member": 0,
+      "seq": 46,
+      "type": 1,
+      "x": 47,
+      "y": 62
+    },
+    {
+      "step": 288,
+      "empire": 1,
+      "member": 0,
+      "seq": 47,
+      "type": 1,
+      "x": 64,
+      "y": 58
+    },
+    {
+      "step": 294,
+      "empire": 1,
+      "member": 0,
+      "seq": 48,
+      "type": 1,
+      "x": 60,
+      "y": 62
+    },
+    {
+      "step": 300,
+      "empire": 1,
+      "member": 0,
+      "seq": 49,
+      "type": 1,
+      "x": 48,
+      "y": 63
+    },
+    {
+      "step": 306,
+      "empire": 1,
+      "member": 0,
+      "seq": 50,
+      "type": 1,
+      "x": 46,
+      "y": 63
+    },
+    {
+      "step": 312,
+      "empire": 1,
+      "member": 0,
+      "seq": 51,
+      "type": 1,
+      "x": 46,
+      "y": 63
+    },
+    {
+      "step": 318,
+      "empire": 1,
+      "member": 0,
+      "seq": 52,
+      "type": 1,
+      "x": 47,
+      "y": 62
+    },
+    {
+      "step": 324,
+      "empire": 1,
+      "member": 0,
+      "seq": 53,
+      "type": 1,
+      "x": 48,
+      "y": 63
+    },
+    {
+      "step": 330,
+      "empire": 1,
+      "member": 0,
+      "seq": 54,
+      "type": 1,
+      "x": 47,
+      "y": 62
+    },
+    {
+      "step": 336,
+      "empire": 1,
+      "member": 0,
+      "seq": 55,
+      "type": 1,
+      "x": 53,
+      "y": 62
+    },
+    {
+      "step": 342,
+      "empire": 1,
+      "member": 0,
+      "seq": 56,
+      "type": 1,
+      "x": 47,
+      "y": 62
+    },
+    {
+      "step": 348,
+      "empire": 1,
+      "member": 0,
+      "seq": 57,
+      "type": 1,
+      "x": 48,
+      "y": 63
+    },
+    {
+      "step": 354,
+      "empire": 1,
+      "member": 0,
+      "seq": 58,
+      "type": 1,
+      "x": 46,
+      "y": 63
+    },
+    {
+      "step": 360,
+      "empire": 1,
+      "member": 0,
+      "seq": 59,
+      "type": 1,
+      "x": 46,
+      "y": 63
+    },
+    {
+      "step": 366,
+      "empire": 1,
+      "member": 0,
+      "seq": 60,
+      "type": 1,
+      "x": 47,
+      "y": 62
+    },
+    {
+      "step": 372,
+      "empire": 1,
+      "member": 0,
+      "seq": 61,
+      "type": 1,
+      "x": 46,
+      "y": 63
+    },
+    {
+      "step": 378,
+      "empire": 1,
+      "member": 0,
+      "seq": 62,
+      "type": 1,
+      "x": 48,
+      "y": 63
+    },
+    {
+      "step": 384,
+      "empire": 1,
+      "member": 0,
+      "seq": 63,
+      "type": 1,
+      "x": 48,
+      "y": 63
+    },
+    {
+      "step": 390,
+      "empire": 1,
+      "member": 0,
+      "seq": 64,
+      "type": 1,
+      "x": 48,
+      "y": 63
+    },
+    {
+      "step": 396,
+      "empire": 1,
+      "member": 0,
+      "seq": 65,
+      "type": 1,
+      "x": 48,
+      "y": 63
+    },
+    {
+      "step": 402,
+      "empire": 1,
+      "member": 0,
+      "seq": 66,
+      "type": 1,
+      "x": 47,
+      "y": 62
+    },
+    {
+      "step": 408,
+      "empire": 1,
+      "member": 0,
+      "seq": 67,
+      "type": 1,
+      "x": 46,
+      "y": 63
+    },
+    {
+      "step": 414,
+      "empire": 1,
+      "member": 0,
+      "seq": 68,
+      "type": 1,
+      "x": 47,
+      "y": 62
+    },
+    {
+      "step": 420,
+      "empire": 1,
+      "member": 0,
+      "seq": 69,
+      "type": 1,
+      "x": 63,
+      "y": 57
+    },
+    {
+      "step": 426,
+      "empire": 1,
+      "member": 0,
+      "seq": 70,
+      "type": 1,
+      "x": 62,
+      "y": 61
+    },
+    {
+      "step": 432,
+      "empire": 1,
+      "member": 0,
+      "seq": 71,
+      "type": 1,
+      "x": 48,
+      "y": 63
+    },
+    {
+      "step": 438,
+      "empire": 1,
+      "member": 0,
+      "seq": 72,
+      "type": 1,
+      "x": 46,
+      "y": 63
+    },
+    {
+      "step": 444,
+      "empire": 1,
+      "member": 0,
+      "seq": 73,
+      "type": 1,
+      "x": 47,
+      "y": 62
+    },
+    {
+      "step": 450,
+      "empire": 1,
+      "member": 0,
+      "seq": 74,
+      "type": 1,
+      "x": 63,
+      "y": 56
+    },
+    {
+      "step": 456,
+      "empire": 1,
+      "member": 0,
+      "seq": 75,
+      "type": 1,
+      "x": 50,
+      "y": 62
+    },
+    {
+      "step": 462,
+      "empire": 1,
+      "member": 0,
+      "seq": 76,
+      "type": 1,
+      "x": 46,
+      "y": 63
+    },
+    {
+      "step": 468,
+      "empire": 1,
+      "member": 0,
+      "seq": 77,
+      "type": 1,
+      "x": 46,
+      "y": 63
+    },
+    {
+      "step": 474,
+      "empire": 1,
+      "member": 0,
+      "seq": 78,
+      "type": 1,
+      "x": 64,
+      "y": 56
+    },
+    {
+      "step": 480,
+      "empire": 1,
+      "member": 0,
+      "seq": 79,
+      "type": 1,
+      "x": 48,
+      "y": 63
+    },
+    {
+      "step": 486,
+      "empire": 1,
+      "member": 0,
+      "seq": 80,
+      "type": 1,
+      "x": 46,
+      "y": 63
+    },
+    {
+      "step": 492,
+      "empire": 1,
+      "member": 0,
+      "seq": 81,
+      "type": 1,
+      "x": 47,
+      "y": 62
+    },
+    {
+      "step": 498,
+      "empire": 1,
+      "member": 0,
+      "seq": 82,
+      "type": 1,
+      "x": 46,
+      "y": 63
+    },
+    {
+      "step": 504,
+      "empire": 1,
+      "member": 0,
+      "seq": 83,
+      "type": 1,
+      "x": 46,
+      "y": 63
+    },
+    {
+      "step": 510,
+      "empire": 1,
+      "member": 0,
+      "seq": 84,
+      "type": 1,
+      "x": 46,
+      "y": 63
+    },
+    {
+      "step": 516,
+      "empire": 1,
+      "member": 0,
+      "seq": 85,
+      "type": 1,
+      "x": 48,
+      "y": 63
+    },
+    {
+      "step": 522,
+      "empire": 1,
+      "member": 0,
+      "seq": 86,
+      "type": 1,
+      "x": 46,
+      "y": 63
+    },
+    {
+      "step": 528,
+      "empire": 1,
+      "member": 0,
+      "seq": 87,
+      "type": 1,
+      "x": 65,
+      "y": 56
+    },
+    {
+      "step": 534,
+      "empire": 1,
+      "member": 0,
+      "seq": 88,
+      "type": 1,
+      "x": 47,
+      "y": 62
+    },
+    {
+      "step": 540,
+      "empire": 1,
+      "member": 0,
+      "seq": 89,
+      "type": 1,
+      "x": 66,
+      "y": 56
+    },
+    {
+      "step": 546,
+      "empire": 1,
+      "member": 0,
+      "seq": 90,
+      "type": 1,
+      "x": 48,
+      "y": 63
+    },
+    {
+      "step": 552,
+      "empire": 1,
+      "member": 0,
+      "seq": 91,
+      "type": 1,
+      "x": 67,
+      "y": 56
+    },
+    {
+      "step": 558,
+      "empire": 1,
+      "member": 0,
+      "seq": 92,
+      "type": 1,
+      "x": 46,
+      "y": 63
+    },
+    {
+      "step": 564,
+      "empire": 1,
+      "member": 0,
+      "seq": 93,
+      "type": 1,
+      "x": 46,
+      "y": 63
+    },
+    {
+      "step": 570,
+      "empire": 1,
+      "member": 0,
+      "seq": 94,
+      "type": 1,
+      "x": 48,
+      "y": 63
+    },
+    {
+      "step": 576,
+      "empire": 1,
+      "member": 0,
+      "seq": 95,
+      "type": 1,
+      "x": 46,
+      "y": 63
+    },
+    {
+      "step": 582,
+      "empire": 1,
+      "member": 0,
+      "seq": 96,
+      "type": 1,
+      "x": 48,
+      "y": 63
+    },
+    {
+      "step": 588,
+      "empire": 1,
+      "member": 0,
+      "seq": 97,
+      "type": 1,
+      "x": 48,
+      "y": 63
+    },
+    {
+      "step": 594,
+      "empire": 1,
+      "member": 0,
+      "seq": 98,
+      "type": 1,
+      "x": 48,
+      "y": 63
+    },
+    {
+      "step": 600,
+      "empire": 1,
+      "member": 0,
+      "seq": 99,
+      "type": 1,
+      "x": 47,
+      "y": 62
+    },
+    {
+      "step": 606,
+      "empire": 1,
+      "member": 0,
+      "seq": 100,
+      "type": 1,
+      "x": 48,
+      "y": 63
+    },
+    {
+      "step": 612,
+      "empire": 1,
+      "member": 0,
+      "seq": 101,
+      "type": 1,
+      "x": 46,
+      "y": 63
+    },
+    {
+      "step": 618,
+      "empire": 1,
+      "member": 0,
+      "seq": 102,
+      "type": 1,
+      "x": 46,
+      "y": 63
+    },
+    {
+      "step": 624,
+      "empire": 1,
+      "member": 0,
+      "seq": 103,
+      "type": 1,
+      "x": 68,
+      "y": 56
+    },
+    {
+      "step": 630,
+      "empire": 1,
+      "member": 0,
+      "seq": 104,
+      "type": 1,
+      "x": 46,
+      "y": 63
+    },
+    {
+      "step": 636,
+      "empire": 1,
+      "member": 0,
+      "seq": 105,
+      "type": 1,
+      "x": 46,
+      "y": 63
+    },
+    {
+      "step": 642,
+      "empire": 1,
+      "member": 0,
+      "seq": 106,
+      "type": 1,
+      "x": 46,
+      "y": 63
+    },
+    {
+      "step": 648,
+      "empire": 1,
+      "member": 0,
+      "seq": 107,
+      "type": 1,
+      "x": 48,
+      "y": 63
+    },
+    {
+      "step": 654,
+      "empire": 1,
+      "member": 0,
+      "seq": 108,
+      "type": 1,
+      "x": 55,
+      "y": 62
+    },
+    {
+      "step": 660,
+      "empire": 1,
+      "member": 0,
+      "seq": 109,
+      "type": 1,
+      "x": 46,
+      "y": 63
+    },
+    {
+      "step": 666,
+      "empire": 1,
+      "member": 0,
+      "seq": 110,
+      "type": 1,
+      "x": 46,
+      "y": 63
+    },
+    {
+      "step": 672,
+      "empire": 1,
+      "member": 0,
+      "seq": 111,
+      "type": 1,
+      "x": 48,
+      "y": 63
+    },
+    {
+      "step": 678,
+      "empire": 1,
+      "member": 0,
+      "seq": 112,
+      "type": 1,
+      "x": 60,
+      "y": 61
+    },
+    {
+      "step": 684,
+      "empire": 1,
+      "member": 0,
+      "seq": 113,
+      "type": 1,
+      "x": 46,
+      "y": 63
+    },
+    {
+      "step": 690,
+      "empire": 1,
+      "member": 0,
+      "seq": 114,
+      "type": 1,
+      "x": 48,
+      "y": 63
+    },
+    {
+      "step": 696,
+      "empire": 1,
+      "member": 0,
+      "seq": 115,
+      "type": 1,
+      "x": 47,
+      "y": 62
+    },
+    {
+      "step": 702,
+      "empire": 1,
+      "member": 0,
+      "seq": 116,
+      "type": 1,
+      "x": 48,
+      "y": 63
+    },
+    {
+      "step": 708,
+      "empire": 1,
+      "member": 0,
+      "seq": 117,
+      "type": 1,
+      "x": 67,
+      "y": 55
+    },
+    {
+      "step": 714,
+      "empire": 1,
+      "member": 0,
+      "seq": 118,
+      "type": 1,
+      "x": 47,
+      "y": 62
+    },
+    {
+      "step": 720,
+      "empire": 1,
+      "member": 0,
+      "seq": 119,
+      "type": 1,
+      "x": 68,
+      "y": 55
+    },
+    {
+      "step": 726,
+      "empire": 1,
+      "member": 0,
+      "seq": 120,
+      "type": 1,
+      "x": 57,
+      "y": 61
+    },
+    {
+      "step": 732,
+      "empire": 1,
+      "member": 0,
+      "seq": 121,
+      "type": 1,
+      "x": 68,
+      "y": 54
+    },
+    {
+      "step": 738,
+      "empire": 1,
+      "member": 0,
+      "seq": 122,
+      "type": 1,
+      "x": 62,
+      "y": 57
+    },
+    {
+      "step": 744,
+      "empire": 1,
+      "member": 0,
+      "seq": 123,
+      "type": 1,
+      "x": 47,
+      "y": 62
+    },
+    {
+      "step": 750,
+      "empire": 1,
+      "member": 0,
+      "seq": 124,
+      "type": 1,
+      "x": 66,
+      "y": 57
+    },
+    {
+      "step": 756,
+      "empire": 1,
+      "member": 0,
+      "seq": 125,
+      "type": 1,
+      "x": 50,
+      "y": 61
+    },
+    {
+      "step": 762,
+      "empire": 1,
+      "member": 0,
+      "seq": 126,
+      "type": 1,
+      "x": 57,
+      "y": 60
+    },
+    {
+      "step": 768,
+      "empire": 1,
+      "member": 0,
+      "seq": 127,
+      "type": 1,
+      "x": 62,
+      "y": 56
+    },
+    {
+      "step": 774,
+      "empire": 1,
+      "member": 0,
+      "seq": 128,
+      "type": 1,
+      "x": 46,
+      "y": 63
+    },
+    {
+      "step": 780,
+      "empire": 1,
+      "member": 0,
+      "seq": 129,
+      "type": 1,
+      "x": 48,
+      "y": 61
+    },
+    {
+      "step": 786,
+      "empire": 1,
+      "member": 0,
+      "seq": 130,
+      "type": 1,
+      "x": 49,
+      "y": 61
+    },
+    {
+      "step": 792,
+      "empire": 1,
+      "member": 0,
+      "seq": 131,
+      "type": 1,
+      "x": 61,
+      "y": 60
+    },
+    {
+      "step": 798,
+      "empire": 1,
+      "member": 0,
+      "seq": 132,
+      "type": 1,
+      "x": 45,
+      "y": 63
+    },
+    {
+      "step": 804,
+      "empire": 1,
+      "member": 0,
+      "seq": 133,
+      "type": 1,
+      "x": 54,
+      "y": 62
+    },
+    {
+      "step": 810,
+      "empire": 1,
+      "member": 0,
+      "seq": 134,
+      "type": 1,
+      "x": 55,
+      "y": 61
+    },
+    {
+      "step": 816,
+      "empire": 1,
+      "member": 0,
+      "seq": 135,
+      "type": 1,
+      "x": 62,
+      "y": 58
+    },
+    {
+      "step": 822,
+      "empire": 1,
+      "member": 0,
+      "seq": 136,
+      "type": 1,
+      "x": 56,
+      "y": 62
+    },
+    {
+      "step": 828,
+      "empire": 1,
+      "member": 0,
+      "seq": 137,
+      "type": 1,
+      "x": 46,
+      "y": 60
+    },
+    {
+      "step": 834,
+      "empire": 1,
+      "member": 0,
+      "seq": 138,
+      "type": 1,
+      "x": 66,
+      "y": 58
+    },
+    {
+      "step": 840,
+      "empire": 1,
+      "member": 0,
+      "seq": 139,
+      "type": 1,
+      "x": 65,
+      "y": 58
+    },
+    {
+      "step": 846,
+      "empire": 1,
+      "member": 0,
+      "seq": 140,
+      "type": 1,
+      "x": 62,
+      "y": 55
+    },
+    {
+      "step": 852,
+      "empire": 1,
+      "member": 0,
+      "seq": 141,
+      "type": 1,
+      "x": 61,
+      "y": 59
+    },
+    {
+      "step": 858,
+      "empire": 1,
+      "member": 0,
+      "seq": 142,
+      "type": 1,
+      "x": 69,
+      "y": 54
+    },
+    {
+      "step": 864,
+      "empire": 1,
+      "member": 0,
+      "seq": 143,
+      "type": 1,
+      "x": 45,
+      "y": 61
+    },
+    {
+      "step": 870,
+      "empire": 1,
+      "member": 0,
+      "seq": 144,
+      "type": 1,
+      "x": 65,
+      "y": 59
+    },
+    {
+      "step": 876,
+      "empire": 1,
+      "member": 0,
+      "seq": 145,
+      "type": 1,
+      "x": 69,
+      "y": 56
+    },
+    {
+      "step": 882,
+      "empire": 1,
+      "member": 0,
+      "seq": 146,
+      "type": 1,
+      "x": 54,
+      "y": 61
+    },
+    {
+      "step": 888,
+      "empire": 1,
+      "member": 0,
+      "seq": 147,
+      "type": 1,
+      "x": 62,
+      "y": 54
+    },
+    {
+      "step": 894,
+      "empire": 1,
+      "member": 0,
+      "seq": 148,
+      "type": 1,
+      "x": 68,
+      "y": 53
+    },
+    {
+      "step": 900,
+      "empire": 1,
+      "member": 0,
+      "seq": 149,
+      "type": 1,
+      "x": 59,
+      "y": 61
+    },
+    {
+      "step": 906,
+      "empire": 1,
+      "member": 0,
+      "seq": 150,
+      "type": 1,
+      "x": 48,
+      "y": 63
+    },
+    {
+      "step": 912,
+      "empire": 1,
+      "member": 0,
+      "seq": 151,
+      "type": 1,
+      "x": 47,
+      "y": 62
+    },
+    {
+      "step": 918,
+      "empire": 1,
+      "member": 0,
+      "seq": 152,
+      "type": 1,
+      "x": 46,
+      "y": 59
+    },
+    {
+      "step": 924,
+      "empire": 1,
+      "member": 0,
+      "seq": 153,
+      "type": 1,
+      "x": 55,
+      "y": 60
+    },
+    {
+      "step": 930,
+      "empire": 1,
+      "member": 0,
+      "seq": 154,
+      "type": 1,
+      "x": 67,
+      "y": 53
+    },
+    {
+      "step": 936,
+      "empire": 1,
+      "member": 0,
+      "seq": 155,
+      "type": 1,
+      "x": 62,
+      "y": 53
+    },
+    {
+      "step": 942,
+      "empire": 1,
+      "member": 0,
+      "seq": 156,
+      "type": 1,
+      "x": 45,
+      "y": 60
+    },
+    {
+      "step": 948,
+      "empire": 1,
+      "member": 0,
+      "seq": 157,
+      "type": 1,
+      "x": 64,
+      "y": 55
+    },
+    {
+      "step": 954,
+      "empire": 1,
+      "member": 0,
+      "seq": 158,
+      "type": 1,
+      "x": 63,
+      "y": 53
+    },
+    {
+      "step": 960,
+      "empire": 1,
+      "member": 0,
+      "seq": 159,
+      "type": 1,
+      "x": 60,
+      "y": 60
+    },
+    {
+      "step": 966,
+      "empire": 1,
+      "member": 0,
+      "seq": 160,
+      "type": 1,
+      "x": 70,
+      "y": 54
+    },
+    {
+      "step": 972,
+      "empire": 1,
+      "member": 0,
+      "seq": 161,
+      "type": 1,
+      "x": 46,
+      "y": 63
+    },
+    {
+      "step": 978,
+      "empire": 1,
+      "member": 0,
+      "seq": 162,
+      "type": 1,
+      "x": 46,
+      "y": 63
+    },
+    {
+      "step": 984,
+      "empire": 1,
+      "member": 0,
+      "seq": 163,
+      "type": 1,
+      "x": 70,
+      "y": 53
+    },
+    {
+      "step": 990,
+      "empire": 1,
+      "member": 0,
+      "seq": 164,
+      "type": 1,
+      "x": 71,
+      "y": 53
+    },
+    {
+      "step": 996,
+      "empire": 1,
+      "member": 0,
+      "seq": 165,
+      "type": 1,
+      "x": 59,
+      "y": 60
+    },
+    {
+      "step": 1002,
+      "empire": 1,
+      "member": 0,
+      "seq": 166,
+      "type": 1,
+      "x": 66,
+      "y": 59
+    },
+    {
+      "step": 1008,
+      "empire": 1,
+      "member": 0,
+      "seq": 167,
+      "type": 1,
+      "x": 72,
+      "y": 53
+    },
+    {
+      "step": 1014,
+      "empire": 1,
+      "member": 0,
+      "seq": 168,
+      "type": 1,
+      "x": 46,
+      "y": 63
+    },
+    {
+      "step": 1020,
+      "empire": 1,
+      "member": 0,
+      "seq": 169,
+      "type": 1,
+      "x": 69,
+      "y": 53
+    },
+    {
+      "step": 1026,
+      "empire": 1,
+      "member": 0,
+      "seq": 170,
+      "type": 1,
+      "x": 67,
+      "y": 58
+    },
+    {
+      "step": 1032,
+      "empire": 1,
+      "member": 0,
+      "seq": 171,
+      "type": 1,
+      "x": 67,
+      "y": 52
+    },
+    {
+      "step": 1038,
+      "empire": 1,
+      "member": 0,
+      "seq": 172,
+      "type": 1,
+      "x": 68,
+      "y": 52
+    },
+    {
+      "step": 1044,
+      "empire": 1,
+      "member": 0,
+      "seq": 173,
+      "type": 1,
+      "x": 59,
+      "y": 59
+    },
+    {
+      "step": 1050,
+      "empire": 1,
+      "member": 0,
+      "seq": 174,
+      "type": 1,
+      "x": 72,
+      "y": 52
+    },
+    {
+      "step": 1056,
+      "empire": 1,
+      "member": 0,
+      "seq": 175,
+      "type": 1,
+      "x": 58,
+      "y": 61
+    },
+    {
+      "step": 1062,
+      "empire": 1,
+      "member": 0,
+      "seq": 176,
+      "type": 1,
+      "x": 59,
+      "y": 62
+    },
+    {
+      "step": 1068,
+      "empire": 1,
+      "member": 0,
+      "seq": 177,
+      "type": 1,
+      "x": 73,
+      "y": 52
+    },
+    {
+      "step": 1074,
+      "empire": 1,
+      "member": 0,
+      "seq": 178,
+      "type": 1,
+      "x": 74,
+      "y": 52
+    },
+    {
+      "step": 1080,
+      "empire": 1,
+      "member": 0,
+      "seq": 179,
+      "type": 1,
+      "x": 66,
+      "y": 60
+    },
+    {
+      "step": 1086,
+      "empire": 1,
+      "member": 0,
+      "seq": 180,
+      "type": 1,
+      "x": 72,
+      "y": 54
+    },
+    {
+      "step": 1092,
+      "empire": 1,
+      "member": 0,
+      "seq": 181,
+      "type": 1,
+      "x": 68,
+      "y": 58
+    },
+    {
+      "step": 1098,
+      "empire": 1,
+      "member": 0,
+      "seq": 182,
+      "type": 1,
+      "x": 68,
+      "y": 59
+    },
+    {
+      "step": 1104,
+      "empire": 1,
+      "member": 0,
+      "seq": 183,
+      "type": 1,
+      "x": 67,
+      "y": 60
+    },
+    {
+      "step": 1110,
+      "empire": 1,
+      "member": 0,
+      "seq": 184,
+      "type": 1,
+      "x": 69,
+      "y": 58
+    },
+    {
+      "step": 1116,
+      "empire": 1,
+      "member": 0,
+      "seq": 185,
+      "type": 1,
+      "x": 67,
+      "y": 61
+    },
+    {
+      "step": 1122,
+      "empire": 1,
+      "member": 0,
+      "seq": 186,
+      "type": 1,
+      "x": 46,
+      "y": 63
+    },
+    {
+      "step": 1128,
+      "empire": 1,
+      "member": 0,
+      "seq": 187,
+      "type": 1,
+      "x": 71,
+      "y": 54
+    },
+    {
+      "step": 1134,
+      "empire": 1,
+      "member": 0,
+      "seq": 188,
+      "type": 1,
+      "x": 66,
+      "y": 61
+    },
+    {
+      "step": 1140,
+      "empire": 1,
+      "member": 0,
+      "seq": 189,
+      "type": 1,
+      "x": 46,
+      "y": 63
+    },
+    {
+      "step": 1146,
+      "empire": 1,
+      "member": 0,
+      "seq": 190,
+      "type": 1,
+      "x": 72,
+      "y": 51
+    },
+    {
+      "step": 1152,
+      "empire": 1,
+      "member": 0,
+      "seq": 191,
+      "type": 1,
+      "x": 47,
+      "y": 62
+    },
+    {
+      "step": 1158,
+      "empire": 1,
+      "member": 0,
+      "seq": 192,
+      "type": 1,
+      "x": 75,
+      "y": 52
+    },
+    {
+      "step": 1164,
+      "empire": 1,
+      "member": 0,
+      "seq": 193,
+      "type": 1,
+      "x": 76,
+      "y": 52
+    },
+    {
+      "step": 1170,
+      "empire": 1,
+      "member": 0,
+      "seq": 194,
+      "type": 1,
+      "x": 76,
+      "y": 51
+    },
+    {
+      "step": 1176,
+      "empire": 1,
+      "member": 0,
+      "seq": 195,
+      "type": 1,
+      "x": 70,
+      "y": 56
+    },
+    {
+      "step": 1182,
+      "empire": 1,
+      "member": 0,
+      "seq": 196,
+      "type": 1,
+      "x": 73,
+      "y": 54
+    },
+    {
+      "step": 1188,
+      "empire": 1,
+      "member": 0,
+      "seq": 197,
+      "type": 1,
+      "x": 76,
+      "y": 53
+    },
+    {
+      "step": 1194,
+      "empire": 1,
+      "member": 0,
+      "seq": 198,
+      "type": 1,
+      "x": 68,
+      "y": 60
+    },
+    {
+      "step": 1200,
+      "empire": 1,
+      "member": 0,
+      "seq": 199,
+      "type": 1,
+      "x": 47,
+      "y": 62
+    },
+    {
+      "step": 1206,
+      "empire": 1,
+      "member": 0,
+      "seq": 200,
+      "type": 1,
+      "x": 67,
+      "y": 57
+    },
+    {
+      "step": 1212,
+      "empire": 1,
+      "member": 0,
+      "seq": 201,
+      "type": 1,
+      "x": 53,
+      "y": 61
+    },
+    {
+      "step": 1218,
+      "empire": 1,
+      "member": 0,
+      "seq": 202,
+      "type": 1,
+      "x": 69,
+      "y": 60
+    },
+    {
+      "step": 1224,
+      "empire": 1,
+      "member": 0,
+      "seq": 203,
+      "type": 1,
+      "x": 53,
+      "y": 60
+    },
+    {
+      "step": 1230,
+      "empire": 1,
+      "member": 0,
+      "seq": 204,
+      "type": 1,
+      "x": 46,
+      "y": 63
+    },
+    {
+      "step": 1236,
+      "empire": 1,
+      "member": 0,
+      "seq": 205,
+      "type": 1,
+      "x": 46,
+      "y": 63
+    },
+    {
+      "step": 1242,
+      "empire": 1,
+      "member": 0,
+      "seq": 206,
+      "type": 1,
+      "x": 46,
+      "y": 63
+    },
+    {
+      "step": 1248,
+      "empire": 1,
+      "member": 0,
+      "seq": 207,
+      "type": 1,
+      "x": 48,
+      "y": 63
+    },
+    {
+      "step": 1254,
+      "empire": 1,
+      "member": 0,
+      "seq": 208,
+      "type": 1,
+      "x": 46,
+      "y": 63
+    },
+    {
+      "step": 1260,
+      "empire": 1,
+      "member": 0,
+      "seq": 209,
+      "type": 1,
+      "x": 46,
+      "y": 63
+    },
+    {
+      "step": 1266,
+      "empire": 1,
+      "member": 0,
+      "seq": 210,
+      "type": 1,
+      "x": 47,
+      "y": 62
+    },
+    {
+      "step": 1272,
+      "empire": 1,
+      "member": 0,
+      "seq": 211,
+      "type": 1,
+      "x": 67,
+      "y": 51
+    },
+    {
+      "step": 1278,
+      "empire": 1,
+      "member": 0,
+      "seq": 212,
+      "type": 1,
+      "x": 46,
+      "y": 63
+    },
+    {
+      "step": 1284,
+      "empire": 1,
+      "member": 0,
+      "seq": 213,
+      "type": 1,
+      "x": 46,
+      "y": 63
+    },
+    {
+      "step": 1290,
+      "empire": 1,
+      "member": 0,
+      "seq": 214,
+      "type": 1,
+      "x": 46,
+      "y": 63
+    },
+    {
+      "step": 1296,
+      "empire": 1,
+      "member": 0,
+      "seq": 215,
+      "type": 1,
+      "x": 48,
+      "y": 63
+    },
+    {
+      "step": 1302,
+      "empire": 1,
+      "member": 0,
+      "seq": 216,
+      "type": 1,
+      "x": 46,
+      "y": 63
+    },
+    {
+      "step": 1308,
+      "empire": 1,
+      "member": 0,
+      "seq": 217,
+      "type": 1,
+      "x": 47,
+      "y": 62
+    },
+    {
+      "step": 1314,
+      "empire": 1,
+      "member": 0,
+      "seq": 218,
+      "type": 1,
+      "x": 46,
+      "y": 63
+    },
+    {
+      "step": 1320,
+      "empire": 1,
+      "member": 0,
+      "seq": 219,
+      "type": 1,
+      "x": 46,
+      "y": 63
+    },
+    {
+      "step": 1326,
+      "empire": 1,
+      "member": 0,
+      "seq": 220,
+      "type": 1,
+      "x": 47,
+      "y": 62
+    },
+    {
+      "step": 1332,
+      "empire": 1,
+      "member": 0,
+      "seq": 221,
+      "type": 1,
+      "x": 47,
+      "y": 62
+    },
+    {
+      "step": 1338,
+      "empire": 1,
+      "member": 0,
+      "seq": 222,
+      "type": 1,
+      "x": 47,
+      "y": 62
+    },
+    {
+      "step": 1344,
+      "empire": 1,
+      "member": 0,
+      "seq": 223,
+      "type": 1,
+      "x": 76,
+      "y": 51
+    },
+    {
+      "step": 1350,
+      "empire": 1,
+      "member": 0,
+      "seq": 224,
+      "type": 1,
+      "x": 76,
+      "y": 51
+    },
+    {
+      "step": 1356,
+      "empire": 1,
+      "member": 0,
+      "seq": 225,
+      "type": 1,
+      "x": 76,
+      "y": 51
+    },
+    {
+      "step": 1362,
+      "empire": 1,
+      "member": 0,
+      "seq": 226,
+      "type": 1,
+      "x": 76,
+      "y": 51
+    },
+    {
+      "step": 1368,
+      "empire": 1,
+      "member": 0,
+      "seq": 227,
+      "type": 1,
+      "x": 76,
+      "y": 51
+    },
+    {
+      "step": 1374,
+      "empire": 1,
+      "member": 0,
+      "seq": 228,
+      "type": 1,
+      "x": 48,
+      "y": 63
+    },
+    {
+      "step": 1380,
+      "empire": 1,
+      "member": 0,
+      "seq": 229,
+      "type": 1,
+      "x": 76,
+      "y": 51
+    },
+    {
+      "step": 1386,
+      "empire": 1,
+      "member": 0,
+      "seq": 230,
+      "type": 1,
+      "x": 76,
+      "y": 51
+    },
+    {
+      "step": 1392,
+      "empire": 1,
+      "member": 0,
+      "seq": 231,
+      "type": 1,
+      "x": 76,
+      "y": 51
+    },
+    {
+      "step": 1398,
+      "empire": 1,
+      "member": 0,
+      "seq": 232,
+      "type": 1,
+      "x": 77,
+      "y": 51
+    },
+    {
+      "step": 1404,
+      "empire": 1,
+      "member": 0,
+      "seq": 233,
+      "type": 1,
+      "x": 73,
+      "y": 55
+    },
+    {
+      "step": 1410,
+      "empire": 1,
+      "member": 0,
+      "seq": 234,
+      "type": 1,
+      "x": 52,
+      "y": 62
+    },
+    {
+      "step": 1416,
+      "empire": 1,
+      "member": 0,
+      "seq": 235,
+      "type": 1,
+      "x": 76,
+      "y": 51
+    },
+    {
+      "step": 1422,
+      "empire": 1,
+      "member": 0,
+      "seq": 236,
+      "type": 1,
+      "x": 76,
+      "y": 51
+    },
+    {
+      "step": 1428,
+      "empire": 1,
+      "member": 0,
+      "seq": 237,
+      "type": 1,
+      "x": 76,
+      "y": 51
+    },
+    {
+      "step": 1434,
+      "empire": 1,
+      "member": 0,
+      "seq": 238,
+      "type": 1,
+      "x": 47,
+      "y": 62
+    },
+    {
+      "step": 1440,
+      "empire": 1,
+      "member": 0,
+      "seq": 239,
+      "type": 1,
+      "x": 47,
+      "y": 62
+    },
+    {
+      "step": 1446,
+      "empire": 1,
+      "member": 0,
+      "seq": 240,
+      "type": 1,
+      "x": 76,
+      "y": 51
+    },
+    {
+      "step": 1452,
+      "empire": 1,
+      "member": 0,
+      "seq": 241,
+      "type": 1,
+      "x": 48,
+      "y": 63
+    },
+    {
+      "step": 1458,
+      "empire": 1,
+      "member": 0,
+      "seq": 242,
+      "type": 1,
+      "x": 46,
+      "y": 63
+    },
+    {
+      "step": 1464,
+      "empire": 1,
+      "member": 0,
+      "seq": 243,
+      "type": 1,
+      "x": 47,
+      "y": 62
+    },
+    {
+      "step": 1470,
+      "empire": 1,
+      "member": 0,
+      "seq": 244,
+      "type": 1,
+      "x": 48,
+      "y": 63
+    },
+    {
+      "step": 1476,
+      "empire": 1,
+      "member": 0,
+      "seq": 245,
+      "type": 1,
+      "x": 47,
+      "y": 62
+    },
+    {
+      "step": 1482,
+      "empire": 1,
+      "member": 0,
+      "seq": 246,
+      "type": 1,
+      "x": 47,
+      "y": 62
+    },
+    {
+      "step": 1488,
+      "empire": 1,
+      "member": 0,
+      "seq": 247,
+      "type": 1,
+      "x": 46,
+      "y": 63
+    },
+    {
+      "step": 1494,
+      "empire": 1,
+      "member": 0,
+      "seq": 248,
+      "type": 1,
+      "x": 46,
+      "y": 63
+    },
+    {
+      "step": 1500,
+      "empire": 1,
+      "member": 0,
+      "seq": 249,
+      "type": 1,
+      "x": 45,
+      "y": 59
+    },
+    {
+      "step": 1506,
+      "empire": 1,
+      "member": 0,
+      "seq": 250,
+      "type": 1,
+      "x": 47,
+      "y": 62
+    },
+    {
+      "step": 1512,
+      "empire": 1,
+      "member": 0,
+      "seq": 251,
+      "type": 1,
+      "x": 69,
+      "y": 55
+    },
+    {
+      "step": 1518,
+      "empire": 1,
+      "member": 0,
+      "seq": 252,
+      "type": 1,
+      "x": 47,
+      "y": 62
+    },
+    {
+      "step": 1524,
+      "empire": 1,
+      "member": 0,
+      "seq": 253,
+      "type": 1,
+      "x": 47,
+      "y": 62
+    },
+    {
+      "step": 1530,
+      "empire": 1,
+      "member": 0,
+      "seq": 254,
+      "type": 1,
+      "x": 47,
+      "y": 62
+    },
+    {
+      "step": 1536,
+      "empire": 1,
+      "member": 0,
+      "seq": 255,
+      "type": 1,
+      "x": 46,
+      "y": 63
+    },
+    {
+      "step": 1542,
+      "empire": 1,
+      "member": 0,
+      "seq": 256,
+      "type": 1,
+      "x": 65,
+      "y": 60
+    },
+    {
+      "step": 1548,
+      "empire": 1,
+      "member": 0,
+      "seq": 257,
+      "type": 1,
+      "x": 70,
+      "y": 60
+    },
+    {
+      "step": 1554,
+      "empire": 1,
+      "member": 0,
+      "seq": 258,
+      "type": 1,
+      "x": 46,
+      "y": 63
+    },
+    {
+      "step": 1560,
+      "empire": 1,
+      "member": 0,
+      "seq": 259,
+      "type": 1,
+      "x": 47,
+      "y": 62
+    },
+    {
+      "step": 1566,
+      "empire": 1,
+      "member": 0,
+      "seq": 260,
+      "type": 1,
+      "x": 76,
+      "y": 51
+    },
+    {
+      "step": 1572,
+      "empire": 1,
+      "member": 0,
+      "seq": 261,
+      "type": 1,
+      "x": 65,
+      "y": 55
+    },
+    {
+      "step": 1578,
+      "empire": 1,
+      "member": 0,
+      "seq": 262,
+      "type": 1,
+      "x": 46,
+      "y": 63
+    },
+    {
+      "step": 1584,
+      "empire": 1,
+      "member": 0,
+      "seq": 263,
+      "type": 1,
+      "x": 46,
+      "y": 63
+    },
+    {
+      "step": 1590,
+      "empire": 1,
+      "member": 0,
+      "seq": 264,
+      "type": 1,
+      "x": 46,
+      "y": 63
+    },
+    {
+      "step": 1596,
+      "empire": 1,
+      "member": 0,
+      "seq": 265,
+      "type": 1,
+      "x": 48,
+      "y": 63
+    },
+    {
+      "step": 1602,
+      "empire": 1,
+      "member": 0,
+      "seq": 266,
+      "type": 1,
+      "x": 48,
+      "y": 63
+    },
+    {
+      "step": 1608,
+      "empire": 1,
+      "member": 0,
+      "seq": 267,
+      "type": 1,
+      "x": 48,
+      "y": 63
+    },
+    {
+      "step": 1614,
+      "empire": 1,
+      "member": 0,
+      "seq": 268,
+      "type": 1,
+      "x": 48,
+      "y": 63
+    },
+    {
+      "step": 1620,
+      "empire": 1,
+      "member": 0,
+      "seq": 269,
+      "type": 1,
+      "x": 48,
+      "y": 63
+    },
+    {
+      "step": 1626,
+      "empire": 1,
+      "member": 0,
+      "seq": 270,
+      "type": 1,
+      "x": 46,
+      "y": 63
+    },
+    {
+      "step": 1632,
+      "empire": 1,
+      "member": 0,
+      "seq": 271,
+      "type": 1,
+      "x": 48,
+      "y": 63
+    },
+    {
+      "step": 1638,
+      "empire": 1,
+      "member": 0,
+      "seq": 272,
+      "type": 1,
+      "x": 46,
+      "y": 63
+    },
+    {
+      "step": 1644,
+      "empire": 1,
+      "member": 0,
+      "seq": 273,
+      "type": 1,
+      "x": 71,
+      "y": 60
+    },
+    {
+      "step": 1650,
+      "empire": 1,
+      "member": 0,
+      "seq": 274,
+      "type": 1,
+      "x": 47,
+      "y": 62
+    },
+    {
+      "step": 1656,
+      "empire": 1,
+      "member": 0,
+      "seq": 275,
+      "type": 1,
+      "x": 48,
+      "y": 63
+    },
+    {
+      "step": 1662,
+      "empire": 1,
+      "member": 0,
+      "seq": 276,
+      "type": 1,
+      "x": 47,
+      "y": 62
+    },
+    {
+      "step": 1668,
+      "empire": 1,
+      "member": 0,
+      "seq": 277,
+      "type": 1,
+      "x": 76,
+      "y": 51
+    },
+    {
+      "step": 1674,
+      "empire": 1,
+      "member": 0,
+      "seq": 278,
+      "type": 1,
+      "x": 76,
+      "y": 51
+    },
+    {
+      "step": 1680,
+      "empire": 1,
+      "member": 0,
+      "seq": 279,
+      "type": 1,
+      "x": 58,
+      "y": 59
+    },
+    {
+      "step": 1686,
+      "empire": 1,
+      "member": 0,
+      "seq": 280,
+      "type": 1,
+      "x": 70,
+      "y": 59
+    },
+    {
+      "step": 1692,
+      "empire": 1,
+      "member": 0,
+      "seq": 281,
+      "type": 1,
+      "x": 44,
+      "y": 63
+    },
+    {
+      "step": 1698,
+      "empire": 1,
+      "member": 0,
+      "seq": 282,
+      "type": 1,
+      "x": 71,
+      "y": 55
+    },
+    {
+      "step": 1704,
+      "empire": 1,
+      "member": 0,
+      "seq": 283,
+      "type": 1,
+      "x": 55,
+      "y": 59
+    },
+    {
+      "step": 1710,
+      "empire": 1,
+      "member": 0,
+      "seq": 284,
+      "type": 1,
+      "x": 47,
+      "y": 60
+    },
+    {
+      "step": 1716,
+      "empire": 1,
+      "member": 0,
+      "seq": 285,
+      "type": 1,
+      "x": 75,
+      "y": 51
+    },
+    {
+      "step": 1722,
+      "empire": 1,
+      "member": 0,
+      "seq": 286,
+      "type": 1,
+      "x": 66,
+      "y": 52
+    },
+    {
+      "step": 1728,
+      "empire": 1,
+      "member": 0,
+      "seq": 287,
+      "type": 1,
+      "x": 58,
+      "y": 60
+    },
+    {
+      "step": 1734,
+      "empire": 1,
+      "member": 0,
+      "seq": 288,
+      "type": 1,
+      "x": 61,
+      "y": 56
+    },
+    {
+      "step": 1740,
+      "empire": 1,
+      "member": 0,
+      "seq": 289,
+      "type": 1,
+      "x": 73,
+      "y": 51
+    },
+    {
+      "step": 1746,
+      "empire": 1,
+      "member": 0,
+      "seq": 290,
+      "type": 1,
+      "x": 45,
+      "y": 62
+    },
+    {
+      "step": 1752,
+      "empire": 1,
+      "member": 0,
+      "seq": 291,
+      "type": 1,
+      "x": 72,
+      "y": 50
+    },
+    {
+      "step": 1758,
+      "empire": 1,
+      "member": 0,
+      "seq": 292,
+      "type": 1,
+      "x": 70,
+      "y": 55
+    },
+    {
+      "step": 1764,
+      "empire": 1,
+      "member": 0,
+      "seq": 293,
+      "type": 1,
+      "x": 74,
+      "y": 51
+    },
+    {
+      "step": 1770,
+      "empire": 1,
+      "member": 0,
+      "seq": 294,
+      "type": 1,
+      "x": 72,
+      "y": 60
+    },
+    {
+      "step": 1776,
+      "empire": 1,
+      "member": 0,
+      "seq": 295,
+      "type": 1,
+      "x": 76,
+      "y": 51
+    },
+    {
+      "step": 1782,
+      "empire": 1,
+      "member": 0,
+      "seq": 296,
+      "type": 1,
+      "x": 73,
+      "y": 50
+    },
+    {
+      "step": 1788,
+      "empire": 1,
+      "member": 0,
+      "seq": 297,
+      "type": 1,
+      "x": 71,
+      "y": 59
+    },
+    {
+      "step": 1794,
+      "empire": 1,
+      "member": 0,
+      "seq": 298,
+      "type": 1,
+      "x": 71,
+      "y": 58
+    },
+    {
+      "step": 1800,
+      "empire": 1,
+      "member": 0,
+      "seq": 299,
+      "type": 1,
+      "x": 71,
+      "y": 50
+    },
+    {
+      "step": 1806,
+      "empire": 1,
+      "member": 0,
+      "seq": 300,
+      "type": 1,
+      "x": 65,
+      "y": 52
+    },
+    {
+      "step": 1812,
+      "empire": 1,
+      "member": 0,
+      "seq": 301,
+      "type": 1,
+      "x": 47,
+      "y": 59
+    },
+    {
+      "step": 1818,
+      "empire": 1,
+      "member": 0,
+      "seq": 302,
+      "type": 1,
+      "x": 76,
+      "y": 51
+    },
+    {
+      "step": 1824,
+      "empire": 1,
+      "member": 0,
+      "seq": 303,
+      "type": 1,
+      "x": 52,
+      "y": 61
+    },
+    {
+      "step": 1830,
+      "empire": 1,
+      "member": 0,
+      "seq": 304,
+      "type": 1,
+      "x": 76,
+      "y": 51
+    },
+    {
+      "step": 1836,
+      "empire": 1,
+      "member": 0,
+      "seq": 305,
+      "type": 1,
+      "x": 68,
+      "y": 51
+    },
+    {
+      "step": 1842,
+      "empire": 1,
+      "member": 0,
+      "seq": 306,
+      "type": 1,
+      "x": 64,
+      "y": 52
+    },
+    {
+      "step": 1848,
+      "empire": 1,
+      "member": 0,
+      "seq": 307,
+      "type": 1,
+      "x": 71,
+      "y": 49
+    },
+    {
+      "step": 1854,
+      "empire": 1,
+      "member": 0,
+      "seq": 308,
+      "type": 1,
+      "x": 64,
+      "y": 51
+    },
+    {
+      "step": 1860,
+      "empire": 1,
+      "member": 0,
+      "seq": 309,
+      "type": 1,
+      "x": 73,
+      "y": 56
+    },
+    {
+      "step": 1866,
+      "empire": 1,
+      "member": 0,
+      "seq": 310,
+      "type": 1,
+      "x": 61,
+      "y": 55
+    },
+    {
+      "step": 1872,
+      "empire": 1,
+      "member": 0,
+      "seq": 311,
+      "type": 1,
+      "x": 71,
+      "y": 57
+    },
+    {
+      "step": 1878,
+      "empire": 1,
+      "member": 0,
+      "seq": 312,
+      "type": 1,
+      "x": 66,
+      "y": 51
+    },
+    {
+      "step": 1884,
+      "empire": 1,
+      "member": 0,
+      "seq": 313,
+      "type": 1,
+      "x": 69,
+      "y": 51
+    },
+    {
+      "step": 1890,
+      "empire": 1,
+      "member": 0,
+      "seq": 314,
+      "type": 1,
+      "x": 56,
+      "y": 60
+    },
+    {
+      "step": 1896,
+      "empire": 1,
+      "member": 0,
+      "seq": 315,
+      "type": 1,
+      "x": 63,
+      "y": 52
+    },
+    {
+      "step": 1902,
+      "empire": 1,
+      "member": 0,
+      "seq": 316,
+      "type": 1,
+      "x": 68,
+      "y": 61
+    },
+    {
+      "step": 1908,
+      "empire": 1,
+      "member": 0,
+      "seq": 317,
+      "type": 1,
+      "x": 43,
+      "y": 63
+    },
+    {
+      "step": 1914,
+      "empire": 1,
+      "member": 0,
+      "seq": 318,
+      "type": 1,
+      "x": 65,
+      "y": 51
+    },
+    {
+      "step": 1920,
+      "empire": 1,
+      "member": 0,
+      "seq": 319,
+      "type": 1,
+      "x": 48,
+      "y": 63
+    },
+    {
+      "step": 1926,
+      "empire": 1,
+      "member": 0,
+      "seq": 320,
+      "type": 1,
+      "x": 74,
+      "y": 55
+    },
+    {
+      "step": 1932,
+      "empire": 1,
+      "member": 0,
+      "seq": 321,
+      "type": 1,
+      "x": 72,
+      "y": 59
+    },
+    {
+      "step": 1938,
+      "empire": 1,
+      "member": 0,
+      "seq": 322,
+      "type": 1,
+      "x": 73,
+      "y": 57
+    },
+    {
+      "step": 1944,
+      "empire": 1,
+      "member": 0,
+      "seq": 323,
+      "type": 1,
+      "x": 73,
+      "y": 60
+    },
+    {
+      "step": 1950,
+      "empire": 1,
+      "member": 0,
+      "seq": 324,
+      "type": 1,
+      "x": 76,
+      "y": 51
+    },
+    {
+      "step": 1956,
+      "empire": 1,
+      "member": 0,
+      "seq": 325,
+      "type": 1,
+      "x": 73,
+      "y": 59
+    },
+    {
+      "step": 1962,
+      "empire": 1,
+      "member": 0,
+      "seq": 326,
+      "type": 1,
+      "x": 74,
+      "y": 57
+    },
+    {
+      "step": 1968,
+      "empire": 1,
+      "member": 0,
+      "seq": 327,
+      "type": 1,
+      "x": 47,
+      "y": 62
+    },
+    {
+      "step": 1974,
+      "empire": 1,
+      "member": 0,
+      "seq": 328,
+      "type": 1,
+      "x": 75,
+      "y": 55
+    },
+    {
+      "step": 1980,
+      "empire": 1,
+      "member": 0,
+      "seq": 329,
+      "type": 1,
+      "x": 74,
+      "y": 60
+    },
+    {
+      "step": 1986,
+      "empire": 1,
+      "member": 0,
+      "seq": 330,
+      "type": 1,
+      "x": 47,
+      "y": 62
+    },
+    {
+      "step": 1992,
+      "empire": 1,
+      "member": 0,
+      "seq": 331,
+      "type": 1,
+      "x": 46,
+      "y": 63
+    },
+    {
+      "step": 1998,
+      "empire": 1,
+      "member": 0,
+      "seq": 332,
+      "type": 1,
+      "x": 73,
+      "y": 53
+    },
+    {
+      "step": 2004,
+      "empire": 1,
+      "member": 0,
+      "seq": 333,
+      "type": 1,
+      "x": 77,
+      "y": 51
+    },
+    {
+      "step": 2010,
+      "empire": 1,
+      "member": 0,
+      "seq": 334,
+      "type": 1,
+      "x": 75,
+      "y": 57
+    },
+    {
+      "step": 2016,
+      "empire": 1,
+      "member": 0,
+      "seq": 335,
+      "type": 1,
+      "x": 77,
+      "y": 51
+    },
+    {
+      "step": 2022,
+      "empire": 1,
+      "member": 0,
+      "seq": 336,
+      "type": 1,
+      "x": 74,
+      "y": 59
+    },
+    {
+      "step": 2028,
+      "empire": 1,
+      "member": 0,
+      "seq": 337,
+      "type": 1,
+      "x": 72,
+      "y": 55
+    },
+    {
+      "step": 2034,
+      "empire": 1,
+      "member": 0,
+      "seq": 338,
+      "type": 1,
+      "x": 63,
+      "y": 51
+    },
+    {
+      "step": 2040,
+      "empire": 1,
+      "member": 0,
+      "seq": 339,
+      "type": 1,
+      "x": 72,
+      "y": 58
+    },
+    {
+      "step": 2046,
+      "empire": 1,
+      "member": 0,
+      "seq": 340,
+      "type": 1,
+      "x": 60,
+      "y": 59
+    },
+    {
+      "step": 2052,
+      "empire": 1,
+      "member": 0,
+      "seq": 341,
+      "type": 1,
+      "x": 71,
+      "y": 52
+    },
+    {
+      "step": 2058,
+      "empire": 1,
+      "member": 0,
+      "seq": 342,
+      "type": 1,
+      "x": 70,
+      "y": 52
+    },
+    {
+      "step": 2064,
+      "empire": 1,
+      "member": 0,
+      "seq": 343,
+      "type": 1,
+      "x": 75,
+      "y": 60
+    },
+    {
+      "step": 2070,
+      "empire": 1,
+      "member": 0,
+      "seq": 344,
+      "type": 1,
+      "x": 45,
+      "y": 58
+    },
+    {
+      "step": 2076,
+      "empire": 1,
+      "member": 0,
+      "seq": 345,
+      "type": 1,
+      "x": 77,
+      "y": 51
+    },
+    {
+      "step": 2082,
+      "empire": 1,
+      "member": 0,
+      "seq": 346,
+      "type": 1,
+      "x": 74,
+      "y": 56
+    },
+    {
+      "step": 2088,
+      "empire": 1,
+      "member": 0,
+      "seq": 347,
+      "type": 1,
+      "x": 76,
+      "y": 55
+    },
+    {
+      "step": 2094,
+      "empire": 1,
+      "member": 0,
+      "seq": 348,
+      "type": 1,
+      "x": 77,
+      "y": 51
+    },
+    {
+      "step": 2100,
+      "empire": 1,
+      "member": 0,
+      "seq": 349,
+      "type": 1,
+      "x": 74,
+      "y": 50
+    },
+    {
+      "step": 2106,
+      "empire": 1,
+      "member": 0,
+      "seq": 350,
+      "type": 1,
+      "x": 71,
+      "y": 56
+    },
+    {
+      "step": 2112,
+      "empire": 1,
+      "member": 0,
+      "seq": 351,
+      "type": 1,
+      "x": 77,
+      "y": 51
+    },
+    {
+      "step": 2118,
+      "empire": 1,
+      "member": 0,
+      "seq": 352,
+      "type": 1,
+      "x": 71,
+      "y": 61
+    },
+    {
+      "step": 2124,
+      "empire": 1,
+      "member": 0,
+      "seq": 353,
+      "type": 1,
+      "x": 77,
+      "y": 51
+    },
+    {
+      "step": 2130,
+      "empire": 1,
+      "member": 0,
+      "seq": 354,
+      "type": 1,
+      "x": 77,
+      "y": 51
+    },
+    {
+      "step": 2136,
+      "empire": 1,
+      "member": 0,
+      "seq": 355,
+      "type": 1,
+      "x": 75,
+      "y": 50
+    },
+    {
+      "step": 2142,
+      "empire": 1,
+      "member": 0,
+      "seq": 356,
+      "type": 1,
+      "x": 60,
+      "y": 58
+    },
+    {
+      "step": 2148,
+      "empire": 1,
+      "member": 0,
+      "seq": 357,
+      "type": 1,
+      "x": 73,
+      "y": 58
+    },
+    {
+      "step": 2154,
+      "empire": 1,
+      "member": 0,
+      "seq": 358,
+      "type": 1,
+      "x": 47,
+      "y": 62
+    },
+    {
+      "step": 2160,
+      "empire": 1,
+      "member": 0,
+      "seq": 359,
+      "type": 1,
+      "x": 76,
+      "y": 51
+    },
+    {
+      "step": 2166,
+      "empire": 1,
+      "member": 0,
+      "seq": 360,
+      "type": 1,
+      "x": 76,
+      "y": 51
+    },
+    {
+      "step": 2172,
+      "empire": 1,
+      "member": 0,
+      "seq": 361,
+      "type": 1,
+      "x": 76,
+      "y": 60
+    },
+    {
+      "step": 2178,
+      "empire": 1,
+      "member": 0,
+      "seq": 362,
+      "type": 1,
+      "x": 76,
+      "y": 51
+    },
+    {
+      "step": 2184,
+      "empire": 1,
+      "member": 0,
+      "seq": 363,
+      "type": 1,
+      "x": 76,
+      "y": 51
+    },
+    {
+      "step": 2190,
+      "empire": 1,
+      "member": 0,
+      "seq": 364,
+      "type": 1,
+      "x": 76,
+      "y": 51
+    },
+    {
+      "step": 2196,
+      "empire": 1,
+      "member": 0,
+      "seq": 365,
+      "type": 1,
+      "x": 76,
+      "y": 51
+    },
+    {
+      "step": 2202,
+      "empire": 1,
+      "member": 0,
+      "seq": 366,
+      "type": 1,
+      "x": 76,
+      "y": 51
+    },
+    {
+      "step": 2208,
+      "empire": 1,
+      "member": 0,
+      "seq": 367,
+      "type": 1,
+      "x": 76,
+      "y": 51
+    },
+    {
+      "step": 2214,
+      "empire": 1,
+      "member": 0,
+      "seq": 368,
+      "type": 1,
+      "x": 76,
+      "y": 51
+    },
+    {
+      "step": 2220,
+      "empire": 1,
+      "member": 0,
+      "seq": 369,
+      "type": 1,
+      "x": 76,
+      "y": 51
+    },
+    {
+      "step": 2226,
+      "empire": 1,
+      "member": 0,
+      "seq": 370,
+      "type": 1,
+      "x": 76,
+      "y": 51
+    },
+    {
+      "step": 2232,
+      "empire": 1,
+      "member": 0,
+      "seq": 371,
+      "type": 1,
+      "x": 76,
+      "y": 51
+    },
+    {
+      "step": 2238,
+      "empire": 1,
+      "member": 0,
+      "seq": 372,
+      "type": 1,
+      "x": 76,
+      "y": 51
+    },
+    {
+      "step": 2244,
+      "empire": 1,
+      "member": 0,
+      "seq": 373,
+      "type": 1,
+      "x": 76,
+      "y": 51
+    },
+    {
+      "step": 2250,
+      "empire": 1,
+      "member": 0,
+      "seq": 374,
+      "type": 1,
+      "x": 76,
+      "y": 51
+    },
+    {
+      "step": 2256,
+      "empire": 1,
+      "member": 0,
+      "seq": 375,
+      "type": 1,
+      "x": 76,
+      "y": 51
+    },
+    {
+      "step": 2262,
+      "empire": 1,
+      "member": 0,
+      "seq": 376,
+      "type": 1,
+      "x": 73,
+      "y": 61
+    },
+    {
+      "step": 2268,
+      "empire": 1,
+      "member": 0,
+      "seq": 377,
+      "type": 1,
+      "x": 48,
+      "y": 63
+    },
+    {
+      "step": 2274,
+      "empire": 1,
+      "member": 0,
+      "seq": 378,
+      "type": 1,
+      "x": 76,
+      "y": 51
+    },
+    {
+      "step": 2280,
+      "empire": 1,
+      "member": 0,
+      "seq": 379,
+      "type": 1,
+      "x": 76,
+      "y": 51
+    },
+    {
+      "step": 2286,
+      "empire": 1,
+      "member": 0,
+      "seq": 380,
+      "type": 1,
+      "x": 76,
+      "y": 51
+    },
+    {
+      "step": 2292,
+      "empire": 1,
+      "member": 0,
+      "seq": 381,
+      "type": 1,
+      "x": 76,
+      "y": 51
+    },
+    {
+      "step": 2298,
+      "empire": 1,
+      "member": 0,
+      "seq": 382,
+      "type": 1,
+      "x": 76,
+      "y": 51
+    },
+    {
+      "step": 2304,
+      "empire": 1,
+      "member": 0,
+      "seq": 383,
+      "type": 1,
+      "x": 76,
+      "y": 51
+    },
+    {
+      "step": 2310,
+      "empire": 1,
+      "member": 0,
+      "seq": 384,
+      "type": 1,
+      "x": 76,
+      "y": 51
+    },
+    {
+      "step": 2316,
+      "empire": 1,
+      "member": 0,
+      "seq": 385,
+      "type": 1,
+      "x": 76,
+      "y": 51
+    },
+    {
+      "step": 2322,
+      "empire": 1,
+      "member": 0,
+      "seq": 386,
+      "type": 1,
+      "x": 76,
+      "y": 51
+    },
+    {
+      "step": 2328,
+      "empire": 1,
+      "member": 0,
+      "seq": 387,
+      "type": 1,
+      "x": 76,
+      "y": 51
+    },
+    {
+      "step": 2334,
+      "empire": 1,
+      "member": 0,
+      "seq": 388,
+      "type": 1,
+      "x": 76,
+      "y": 51
+    },
+    {
+      "step": 2340,
+      "empire": 1,
+      "member": 0,
+      "seq": 389,
+      "type": 1,
+      "x": 46,
+      "y": 63
+    },
+    {
+      "step": 2346,
+      "empire": 1,
+      "member": 0,
+      "seq": 390,
+      "type": 1,
+      "x": 76,
+      "y": 51
+    },
+    {
+      "step": 2352,
+      "empire": 1,
+      "member": 0,
+      "seq": 391,
+      "type": 1,
+      "x": 76,
+      "y": 51
+    },
+    {
+      "step": 2358,
+      "empire": 1,
+      "member": 0,
+      "seq": 392,
+      "type": 1,
+      "x": 76,
+      "y": 51
+    },
+    {
+      "step": 2364,
+      "empire": 1,
+      "member": 0,
+      "seq": 393,
+      "type": 1,
+      "x": 76,
+      "y": 51
+    },
+    {
+      "step": 2370,
+      "empire": 1,
+      "member": 0,
+      "seq": 394,
+      "type": 1,
+      "x": 76,
+      "y": 51
+    },
+    {
+      "step": 2376,
+      "empire": 1,
+      "member": 0,
+      "seq": 395,
+      "type": 1,
+      "x": 75,
+      "y": 50
+    },
+    {
+      "step": 2382,
+      "empire": 1,
+      "member": 0,
+      "seq": 396,
+      "type": 1,
+      "x": 75,
+      "y": 50
+    },
+    {
+      "step": 2388,
+      "empire": 1,
+      "member": 0,
+      "seq": 397,
+      "type": 1,
+      "x": 75,
+      "y": 50
+    },
+    {
+      "step": 2394,
+      "empire": 1,
+      "member": 0,
+      "seq": 398,
+      "type": 1,
+      "x": 75,
+      "y": 50
+    },
+    {
+      "step": 2400,
+      "empire": 1,
+      "member": 0,
+      "seq": 399,
+      "type": 1,
+      "x": 48,
+      "y": 63
+    },
+    {
+      "step": 2406,
+      "empire": 1,
+      "member": 0,
+      "seq": 400,
+      "type": 1,
+      "x": 75,
+      "y": 50
+    },
+    {
+      "step": 2412,
+      "empire": 1,
+      "member": 0,
+      "seq": 401,
+      "type": 1,
+      "x": 48,
+      "y": 63
+    },
+    {
+      "step": 2418,
+      "empire": 1,
+      "member": 0,
+      "seq": 402,
+      "type": 1,
+      "x": 47,
+      "y": 62
+    },
+    {
+      "step": 2424,
+      "empire": 1,
+      "member": 0,
+      "seq": 403,
+      "type": 1,
+      "x": 48,
+      "y": 63
+    },
+    {
+      "step": 2430,
+      "empire": 1,
+      "member": 0,
+      "seq": 404,
+      "type": 1,
+      "x": 46,
+      "y": 63
+    },
+    {
+      "step": 2436,
+      "empire": 1,
+      "member": 0,
+      "seq": 405,
+      "type": 1,
+      "x": 77,
+      "y": 55
+    },
+    {
+      "step": 2442,
+      "empire": 1,
+      "member": 0,
+      "seq": 406,
+      "type": 1,
+      "x": 48,
+      "y": 63
+    },
+    {
+      "step": 2448,
+      "empire": 1,
+      "member": 0,
+      "seq": 407,
+      "type": 1,
+      "x": 47,
+      "y": 62
+    },
+    {
+      "step": 2454,
+      "empire": 1,
+      "member": 0,
+      "seq": 408,
+      "type": 1,
+      "x": 57,
+      "y": 59
+    },
+    {
+      "step": 2460,
+      "empire": 1,
+      "member": 0,
+      "seq": 409,
+      "type": 1,
+      "x": 46,
+      "y": 63
+    },
+    {
+      "step": 2466,
+      "empire": 1,
+      "member": 0,
+      "seq": 410,
+      "type": 1,
+      "x": 47,
+      "y": 62
+    },
+    {
+      "step": 2472,
+      "empire": 1,
+      "member": 0,
+      "seq": 411,
+      "type": 1,
+      "x": 75,
+      "y": 50
+    },
+    {
+      "step": 2478,
+      "empire": 1,
+      "member": 0,
+      "seq": 412,
+      "type": 1,
+      "x": 48,
+      "y": 63
+    },
+    {
+      "step": 2484,
+      "empire": 1,
+      "member": 0,
+      "seq": 413,
+      "type": 1,
+      "x": 46,
+      "y": 63
+    },
+    {
+      "step": 2490,
+      "empire": 1,
+      "member": 0,
+      "seq": 414,
+      "type": 1,
+      "x": 47,
+      "y": 62
+    },
+    {
+      "step": 2496,
+      "empire": 1,
+      "member": 0,
+      "seq": 415,
+      "type": 1,
+      "x": 46,
+      "y": 63
+    }
+  ]
+}
