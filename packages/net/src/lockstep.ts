@@ -176,6 +176,19 @@ export class Lockstep {
   readonly inputDelay: number;
 
   onDirty?: (dirty: Set<number>) => void;
+  /** Every step that actually ran, with the inputs that made it what it is.
+   *
+   *  `moves` is exactly what went into `sim.advance`, so replaying the
+   *  concatenation of them through a fresh Sim reproduces this peer's state
+   *  hash — that is the whole contract, and what `pnpm replay --log` checks.
+   *
+   *  `signed` is the subset that arrived over the wire, kept so a recorded log
+   *  can be re-verified against the roster rather than merely believed. It is a
+   *  subset because a ROSTER_AMEND move is synthesised locally from a
+   *  SignedAmendment: the authority for it is the amendment's endorsements, not
+   *  a signature on the move. An archive that wants to prove a log needs both,
+   *  and the amendments already travel with a resume payload. */
+  onApplied?: (step: number, moves: readonly Move[], signed: readonly SignedMove[]) => void;
   /** A chat line. `text` is what it says when we could read it, and null when
    *  we could not: a team message from another empire is ciphertext to us by
    *  design, and that is worth showing rather than hiding. */
@@ -396,7 +409,11 @@ export class Lockstep {
       }
       this.stalledSince.clear();
 
+      const signed = this.pending.get(step) ?? [];
       const moves = [...this.drain(step), ...this.seatArrivals(step)];
+      // Before advancing: the hook describes the step about to run, and a
+      // listener that throws must not leave the simulation half-stepped.
+      this.onApplied?.(step, moves, signed);
       for (const index of this.sim.advance(moves)) dirty.add(index);
 
       this.checkpoint(this.sim.step);
