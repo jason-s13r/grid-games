@@ -72,9 +72,11 @@ jobs:
 
       - name: Assemble site
         run: |
-          mkdir -p _site/web _site/prototype
-          cp public/index.html _site/index.html
-          cp -r apps/web/dist/. _site/web/
+          # The client is the site. It used to sit under /web behind a landing
+          # page whose only job was choosing between two builds; the setup
+          # screen links to the prototype now, so the hop is gone.
+          mkdir -p _site/prototype
+          cp -r apps/web/dist/. _site/
           cp -r apps/prototype/dist/. _site/prototype/
           # Without this, Pages runs Jekyll and drops files beginning with _.
           touch _site/.nojekyll
