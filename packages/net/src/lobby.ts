@@ -1,4 +1,10 @@
-// Getting from "two browser tabs" to "one agreed game".
+// Getting from "two peers who found each other" to "one agreed game".
+//
+// It lives here rather than in the client because a headless peer needs exactly
+// the same handshake and none of the rest of a page: the observer and the bot
+// join a running game the way a reloading tab does, and a second implementation
+// of this would be a second implementation of the one part of the protocol
+// where a peer decides what it is playing.
 //
 // The lobby exists to answer one question before any simulation starts: who is
 // playing, and under which key. Once the host has that, it builds the genesis
@@ -23,11 +29,11 @@ import {
   toBase64Url,
 } from "@tessera/protocol";
 import type { Frame, MemberKey } from "@tessera/protocol";
-import { LocalHub, createMesh } from "@tessera/net";
-import { checkPlan } from "./teams";
-import type { PeerMesh, Transport, FrameHandler, Seat } from "@tessera/net";
-
-const IDENTITY_STORE = "tessera.identity";
+import { LocalHub } from "./hub.js";
+import { PeerMesh, createMesh } from "./mesh.js";
+import { checkPlan } from "./teams.js";
+import type { Seat } from "./lockstep.js";
+import type { FrameHandler, Transport } from "./transport.js";
 
 /** How long a joiner waits for a channel to the host before giving up.
  *
@@ -37,23 +43,6 @@ const IDENTITY_STORE = "tessera.identity";
  *  opens. Without a deadline the joiner waits forever on a screen that says
  *  everything is fine. */
 const JOIN_TIMEOUT_MS = 15_000;
-
-/** The keypair is the seat. Losing it loses the seat, so it is persisted —
- *  and because it is persisted, a private window is a different player. */
-export async function myIdentity(): Promise<Identity> {
-  const stored = localStorage.getItem(IDENTITY_STORE);
-  if (stored) {
-    const restored = await Identity.restore(stored);
-    if (restored) return restored;
-  }
-  const fresh = await Identity.generate();
-  try {
-    localStorage.setItem(IDENTITY_STORE, await fresh.export());
-  } catch {
-    // A blocked store costs persistence across reloads, not the ability to play.
-  }
-  return fresh;
-}
 
 export type LobbyPhase = "connecting" | "hosting" | "waiting" | "playing" | "failed";
 

@@ -6,13 +6,13 @@
 
 import { seedFrom, PROTOCOL_VERSION, Sim } from "@tessera/sim";
 import { Roster } from "@tessera/protocol";
-import { Lockstep, PeerBot } from "@tessera/net";
+import { Lobby, Lockstep, PeerBot } from "@tessera/net";
 import pkg from "../package.json";
 import { LocalGame } from "./game/Local";
 import { boardClick } from "./game/input";
 import { OnlineGame } from "./game/Online";
 import type { Driver } from "./game/Driver";
-import { Lobby, myIdentity } from "./net/Lobby";
+import { myIdentity } from "./net/identity";
 import { LobbyPanel } from "./view/LobbyPanel";
 import type { RosterView } from "./view/LobbyPanel";
 import { ChatPanel } from "./view/Chat";

@@ -10,4 +10,8 @@ export { PeerBot } from "./peerbot.js";
 export type { PeerBotOptions } from "./peerbot.js";
 export { LocalHub } from "./hub.js";
 export { PeerMesh, createMesh } from "./mesh.js";
+export { Lobby } from "./lobby.js";
+export type { BotSeat, HostPlan, LobbyMember, LobbyPhase, LobbyPlayer } from "./lobby.js";
+export { MAX_BOTS_PER_EMPIRE, checkPlan, composeTeams } from "./teams.js";
+export type { Composition, Seated } from "./teams.js";
 export type { PeerMeshOptions, PeerConstructor } from "./mesh.js";

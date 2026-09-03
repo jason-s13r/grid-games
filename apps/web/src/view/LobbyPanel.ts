@@ -5,8 +5,8 @@
 // join box.
 
 import type { MemberKey } from "@tessera/protocol";
-import type { Lobby, LobbyPlayer } from "../net/Lobby";
-import { MAX_BOTS_PER_EMPIRE, composeTeams } from "../net/teams";
+import { MAX_BOTS_PER_EMPIRE, composeTeams } from "@tessera/net";
+import type { Lobby, LobbyPlayer } from "@tessera/net";
 import { empireTheme } from "./palette";
 
 export interface LobbyHandlers {

@@ -3,8 +3,8 @@
 // started with the wrong people on the wrong side.
 
 import { describe, expect, it } from "vitest";
-import { MAX_BOTS_PER_EMPIRE, checkPlan, composeTeams } from "../net/teams";
-import type { Seated } from "../net/teams";
+import { MAX_BOTS_PER_EMPIRE, checkPlan, composeTeams } from "../teams.js";
+import type { Seated } from "../teams.js";
 
 const players = (...keys: string[]): Seated[] => keys.map((key) => ({ key }));
 const wanted = (pairs: Record<string, number>): Map<string, number> =>
