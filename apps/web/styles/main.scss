@@ -893,6 +893,64 @@ a.btn {
   }
 }
 
+// --- tabs --------------------------------------------------------------------
+//
+// Only on a narrow screen, where the sidebars are stacked under the board and
+// an accordion strip costs height whether or not anyone is reading it. Driven
+// by a data attribute rather than by the media query directly, so the script
+// that manages which panel is open and the styles that show it agree about
+// when they are in force. See view/Tabs.ts.
+
+.tabs { display: none; }
+
+.app[data-tabbed="on"] {
+  .tabs {
+    grid-area: tabs;
+    display: flex;
+    gap: 0;
+    border-top: 1px solid var(--edge);
+    background: var(--panel);
+  }
+
+  .tab {
+    flex: 1;
+    min-width: 0;
+    appearance: none;
+    border: none;
+    border-right: 1px solid var(--edge);
+    background: transparent;
+    padding: 10px 6px;
+    font: inherit;
+    font-size: 10px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--muted);
+    cursor: pointer;
+    // A tab is a target for a thumb, so it gets a thumb's worth of height.
+    min-height: 40px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+
+    &:last-child { border-right: none; }
+
+    &.on {
+      color: var(--ink);
+      background: var(--bg);
+      // The marker goes on top: the panel this opens is below, so an underline
+      // would sit between the two things it is meant to connect.
+      box-shadow: inset 0 2px 0 var(--ink);
+    }
+  }
+
+  // The headings are the tabs now. A closed panel is not a strip to be
+  // scrolled past; it is simply not here, and the board has its height.
+  .acc > summary { display: none; }
+  .acc:not([open]) { display: none; }
+  .side { border-top: none; }
+  .side:not(:has(.acc[open])) { display: none; }
+}
+
 // --- narrow screens ----------------------------------------------------------
 //
 // The board runs to the edges and the page becomes one scrolling column:
@@ -904,8 +962,8 @@ a.btn {
   .app,
   .app[data-chat="off"] {
     grid-template-columns: 1fr;
-    grid-template-areas: "top" "stage" "left" "right";
-    grid-template-rows: auto 1fr auto auto;
+    grid-template-areas: "top" "stage" "tabs" "left" "right";
+    grid-template-rows: auto 1fr auto auto auto;
     height: 100dvh;
   }
 

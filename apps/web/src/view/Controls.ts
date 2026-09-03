@@ -163,7 +163,11 @@ export class Controls {
     ].join("");
 
     // Only a shared empire has seats worth listing; a solo player is the seat.
-    this.els.rosterPanel.hidden = empire.members.length < 2;
+    // Only when it actually changes. Writing the same value still counts as an
+    // attribute mutation, and this runs every frame — anything watching the
+    // page for panels appearing and disappearing would hear it constantly.
+    const seats = empire.members.length >= 2;
+    if (this.els.rosterPanel.hidden === seats) this.els.rosterPanel.hidden = !seats;
     if (empire.members.length > 1) {
       this.els.roster.innerHTML = empire.members
         .map((m, i) => {

@@ -20,6 +20,7 @@ import { Camera, MIN_ZOOM, MAX_ZOOM, DOM_MIN_ZOOM } from "./view/Camera";
 import { MapImage } from "./view/MapImage";
 import { Renderer } from "./view/Renderer";
 import { Minimap } from "./view/Minimap";
+import { Tabs } from "./view/Tabs";
 import { Controls } from "./view/Controls";
 import { Shell } from "./view/Shell";
 import { injectThemeCss, empireTheme } from "./view/palette";
@@ -103,6 +104,11 @@ const shell = new Shell({
   itemsToggle: pick<HTMLElement>("[data-items-toggle]"),
   itemsDrawer: pick<HTMLElement>("[data-items-drawer]"),
 });
+
+// One panel at a time on a narrow screen, and the rest of the height is the
+// board's. Builds itself from whatever panels are on the page, so nothing here
+// has to be kept in step with the markup.
+new Tabs(appEl, pick<HTMLElement>("[data-tabs]"));
 
 // Escape shuts the shop; there is nothing else layered over the board.
 window.addEventListener("keydown", (event) => {
