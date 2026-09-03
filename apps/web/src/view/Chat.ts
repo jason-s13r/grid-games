@@ -137,11 +137,19 @@ export class ChatPanel {
     this.append(line);
   }
 
-  /** `text` is what the message says to us, and null when it says nothing:
-   *  another empire's team traffic arrives here as ciphertext by design, and
-   *  showing that it happened is better than pretending it did not. */
+  /** `text` is what the message says to us, and null when it says nothing.
+   *
+   *  Another empire's team traffic arrives here as ciphertext by design, and
+   *  used to be shown as a sealed line — the argument being that knowing an
+   *  exchange happened is part of reading the game. In play it is not: it is a
+   *  stranger's private conversation announcing itself in your log, several
+   *  times a minute, saying nothing. Traffic analysis is not a feature anybody
+   *  asked for. So a team line from an empire that is not yours is dropped
+   *  outright, and the sealed rendering below now only covers the case that
+   *  really is worth seeing — our own team's line that we could not open. */
   add(message: Message, text: string | null): void {
     if (this.muted.has(seatKey(message))) return;
+    if (message.channel === CHANNEL.TEAM && message.empire !== this.you?.empire) return;
 
     const theme = empireTheme(message.empire);
     const mine =
