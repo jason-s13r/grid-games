@@ -1,0 +1,13 @@
+{
+  // The build excludes src/test so no test code reaches dist or the
+  // release tarball. Typechecking still has to see it, so this config
+  // puts it back and emits nothing.
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "declaration": false,
+    "declarationMap": false
+  },
+  "include": ["src"],
+  "exclude": []
+}

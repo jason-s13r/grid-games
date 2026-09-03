@@ -1,0 +1,17 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "outDir": "dist",
+    "rootDir": "src",
+    "declaration": true,
+    "declarationMap": true,
+    "sourceMap": true,
+    // DOM for the WebRTC types PeerJS and the mesh speak. The polyfill in
+    // webrtc.ts is what makes them true at runtime; this is only what makes
+    // them typecheck.
+    "lib": ["ES2022", "DOM"],
+    "types": ["node"]
+  },
+  "include": ["src"],
+  "exclude": ["src/test"]
+}

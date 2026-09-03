@@ -39,6 +39,9 @@ scripts:
   # zip is the exact bundle that was deployed to Pages for this version, so a
   # release is reproducible from its own artifact rather than only from source.
   # Built with --public-url ./, so it serves from any path — unzip it anywhere.
+  # The headless apps go through the same flow and produce the same thing for a
+  # different audience: a zip of compiled JavaScript that runs under Node, which
+  # is how somebody stands an observer up without cloning the repository.
   # Zipped into a temp dir, never the package folder, because the release
   # commit stages that folder and would otherwise carry the archive.
   export-app: |
@@ -49,8 +52,9 @@ scripts:
     echo "DISPAT_EXPORT_GITHUB=$site" >> "$DISPAT_OUTPUT"
     echo "zipped $DISPAT_PACKAGE $DISPAT_VERSION for the GitHub release"
 spaces:
-  # Shared libraries: the sim, and later the wire protocol and mesh. These are
-  # what bot peers and the observer consume, so each release carries a tarball.
+  # Shared libraries: the sim, the wire protocol, the mesh, and the headless
+  # runtime. These are what the bot and the observer consume, so each release
+  # carries a tarball.
   packages:
     path: packages
     autoVersion:
@@ -65,9 +69,9 @@ spaces:
     flow:
       build: build-lib
       publish: publish-lib
-  # Deployables: the web frontend, and later the headless bot peer and the
-  # archive/observer peer. Versioned and changelogged, never published to npm —
-  # each release instead carries the built static site as a zip.
+  # Deployables: the web frontend, the headless bot peer and the archive and
+  # observer peer. Versioned and changelogged, never published to npm — each
+  # release instead carries its build as a zip.
   apps:
     path: apps
     autoVersion:
@@ -92,8 +96,27 @@ dependencies:
     - sim
     - net
     - protocol
+  headless:
+    - sim
+    - net
+    - protocol
+  observer:
+    - sim
+    - net
+    - protocol
+    - headless
+  bot:
+    - sim
+    - net
+    - protocol
+    - headless
+# Never released, so they start from nothing and dispat decides the first
+# number from the commits themselves rather than from a guess made here.
 initials:
+  bot: 0.0.0
+  headless: 0.0.0
   net: 0.1.0
+  observer: 0.0.0
   prototype: 0.1.0
   protocol: 0.1.0
   sim: 0.1.0

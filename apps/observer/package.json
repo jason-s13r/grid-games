@@ -1,0 +1,27 @@
+{
+  "name": "@tessera/observer",
+  "version": "0.0.0",
+  "private": true,
+  "description": "An always-on peer with no seat: it follows a game, keeps it alive, and writes it down.",
+  "license": "MIT",
+  "type": "module",
+  "bin": {
+    "tessera-observe": "./dist/main.js"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "start": "node dist/main.js",
+    "test": "vitest run --passWithNoTests"
+  },
+  "dependencies": {
+    "@tessera/net": "workspace:*",
+    "@tessera/headless": "workspace:*",
+    "@tessera/protocol": "workspace:*",
+    "@tessera/sim": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "22.7.5",
+    "typescript": "5.6.3"
+  }
+}

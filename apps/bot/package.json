@@ -1,0 +1,27 @@
+{
+  "name": "@tessera/bot",
+  "version": "0.0.0",
+  "private": true,
+  "description": "A headless peer that holds one seat: night cover for an empire whose players are asleep.",
+  "license": "MIT",
+  "type": "module",
+  "bin": {
+    "tessera-bot": "./dist/main.js"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "start": "node dist/main.js",
+    "test": "vitest run --passWithNoTests"
+  },
+  "dependencies": {
+    "@tessera/net": "workspace:*",
+    "@tessera/headless": "workspace:*",
+    "@tessera/protocol": "workspace:*",
+    "@tessera/sim": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "22.7.5",
+    "typescript": "5.6.3"
+  }
+}

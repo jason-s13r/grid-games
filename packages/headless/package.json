@@ -1,0 +1,35 @@
+{
+  "name": "@tessera/headless",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Running a peer with no browser around it: WebRTC under Node, a key in a file, an archive on disk.",
+  "license": "MIT",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.test.json",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@tessera/net": "workspace:*",
+    "@tessera/protocol": "workspace:*",
+    "@tessera/sim": "workspace:*",
+    "node-datachannel": "0.33.2",
+    "peerjs": "1.5.5"
+  },
+  "devDependencies": {
+    "@types/node": "22.7.5",
+    "typescript": "5.6.3"
+  }
+}
