@@ -55,6 +55,7 @@ import type {
   Roster,
   SignedAmendment,
   SignedDrop,
+  SignedMessage,
   SignedMove,
 } from "@tessera/protocol";
 import type { Transport } from "./transport.js";
@@ -201,8 +202,12 @@ export class Lockstep {
   onApplied?: (step: number, moves: readonly Move[], signed: readonly SignedMove[]) => void;
   /** A chat line. `text` is what it says when we could read it, and null when
    *  we could not: a team message from another empire is ciphertext to us by
-   *  design, and that is worth showing rather than hiding. */
-  onMessage?: (message: Message, text: string | null) => void;
+   *  design, and that is worth showing rather than hiding.
+   *
+   *  `signed` is the envelope it arrived in, for an archive that wants to keep
+   *  a chat log a stranger can attribute rather than one it is asked to
+   *  believe. A UI has no use for it and ignores it. */
+  onMessage?: (message: Message, text: string | null, signed?: SignedMessage) => void;
   onDesync?: (step: number, ours: number, theirs: number, seat: Seat) => void;
   onEjection?: (seat: Seat, atStep: number, reason: EjectionReason, late: boolean) => void;
   onStalled?: (seats: Seat[], waitedMs: number) => void;
@@ -215,6 +220,11 @@ export class Lockstep {
   /** Somebody has proposed seating a key on our empire and it is short of a
    *  quorum. Our signature is one of the ones it is waiting for. */
   onInvitation?: (amendment: Amendment, endorsed: number, needed: number) => void;
+  /** An amendment this peer acted on, endorsements and all. `onSeated` says a
+   *  seat exists; this says why it is allowed to, which is the part an archive
+   *  needs — the ROSTER_AMEND move in the log carries no signature of its own,
+   *  and this record is the authority behind it. */
+  onAmended?: (amendment: SignedAmendment) => void;
 
   private readonly options: LockstepOptions;
   private readonly transport: Transport;
@@ -519,7 +529,7 @@ export class Lockstep {
     this.transport.broadcast({ t: FRAME.MESSAGE, signed });
     // Our own line comes back as what we typed. The sender is not among its own
     // recipients, so it could not decrypt what it just sent.
-    this.onMessage?.(message, body);
+    this.onMessage?.(message, body, signed);
     return true;
   }
 
@@ -682,7 +692,7 @@ export class Lockstep {
 
   private async onChat(signed: { message: Message; sig: string }): Promise<void> {
     if (!(await verifyMessage(this.roster, this.gameId, signed))) return;
-    this.onMessage?.(signed.message, await this.read(signed.message));
+    this.onMessage?.(signed.message, await this.read(signed.message), signed);
   }
 
   /** What a message says to us, or null when it does not say anything to us.
@@ -1070,6 +1080,7 @@ export class Lockstep {
       const member = this.roster.amend(empire, key, kind, step);
       this.applied.push(record);
       moves.push(move);
+      this.onAmended?.(record);
       this.onSeated?.({ empire, member }, key);
       // The invitation was ours: take the seat and start playing it.
       if (this.options.identity?.key === key && !this.options.seat) {
@@ -1176,6 +1187,7 @@ export class Lockstep {
       if (this.roster.has(key)) continue;
       const member = this.roster.amend(empire, key, kind, step);
       this.applied.push(record);
+      this.onAmended?.(record);
       this.onSeated?.({ empire, member }, key);
       if (this.options.identity?.key === key && !this.options.seat) {
         this.options.seat = { empire, member };
