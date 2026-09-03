@@ -72,14 +72,18 @@ export interface TableOptions {
    *  world has something in it besides the test's own clicking. */
   seats: number[];
   /** Bot seats per empire, alongside the human ones — a PeerBot covering a
-   *  seat in a human empire, which is what a sleeping teammate looks like. */
+   *  seat in a human empire, which is what a sleeping teammate looks like.
+   *
+   *  Declared in the genesis record here because a test wants the state, not
+   *  the ceremony. In a real game an empire arrives at it by voting a bot in
+   *  with ROSTER_AMEND: nobody composes somebody else's team. */
   bots?: number[];
   /** Steps between bot actions. Set it past the length of a run to seat a bot
    *  that never spends, which is how a test watches one accrue. */
   botInterval?: number;
   /** Seat each empire's bots in the same page as its first human seat, sharing
-   *  one connection through a LocalHub — what the lobby does when a team asks
-   *  for night cover rather than opening a second tab for it. */
+   *  one connection through a LocalHub — several drivers behind one link, which
+   *  is what a page running more than one seat looks like on the wire. */
   hosted?: boolean;
   simbots?: number;
   observer?: boolean;

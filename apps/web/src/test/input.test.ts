@@ -55,7 +55,7 @@ describe("clicking the board", () => {
     now = 0;
     vi.spyOn(performance, "now").mockImplementation(() => now);
 
-    game = new LocalGame({ seed: 7, bots: 1, teammates: 0, width: 32, height: 32 });
+    game = new LocalGame({ seed: 7, bots: 1, width: 32, height: 32 });
     const state = game.sim.state;
     empire = state.empires[0]!;
 

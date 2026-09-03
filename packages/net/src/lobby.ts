@@ -18,7 +18,7 @@
 // into the driver the moment it exists.
 
 import { CONTROL, MEMBER, PROTOCOL_VERSION, makeGenesis, seedFrom } from "@tessera/sim";
-import type { EmpireSpec, Genesis, MemberSpec } from "@tessera/sim";
+import type { EmpireSpec, Genesis } from "@tessera/sim";
 import {
   FRAME,
   Identity,
@@ -29,7 +29,6 @@ import {
   toBase64Url,
 } from "@tessera/protocol";
 import type { Frame, MemberKey } from "@tessera/protocol";
-import { LocalHub } from "./hub.js";
 import { PeerMesh, createMesh } from "./mesh.js";
 import { checkPlan } from "./teams.js";
 import type { Seat } from "./lockstep.js";
@@ -68,18 +67,8 @@ export interface LobbyPlayer {
 export interface HostPlan {
   empires: MemberKey[][];
   simbots: number;
-  /** Bot seats per human empire, parallel to `empires`. */
-  bots: number[];
   width: number;
   height: number;
-}
-
-/** A bot seat this page is responsible for playing. Only the host builds these:
- *  it minted the keys, so it is the only peer that can sign for them. */
-export interface BotSeat {
-  identity: Identity;
-  seat: Seat;
-  transport: Transport;
 }
 
 export class Lobby {
@@ -92,12 +81,7 @@ export class Lobby {
   /** `seat` is undefined for an observer — a peer whose key is not in the
    *  roster. It follows, verifies and archives the game like anyone else, and
    *  can be voted a seat later by ROSTER_AMEND. */
-  onStart?: (
-    genesis: Genesis,
-    seat: Seat | undefined,
-    transport: Transport,
-    bots: BotSeat[],
-  ) => void;
+  onStart?: (genesis: Genesis, seat: Seat | undefined, transport: Transport) => void;
 
   private handler?: FrameHandler;
   /** The record we agreed to play, kept so a peer that arrives after the game
@@ -109,21 +93,6 @@ export class Lobby {
   /** Key digests, computed once each. Deriving one is async and the panel
    *  renders synchronously, so they are cached as they arrive. */
   private readonly labels = new Map<MemberKey, string>();
-  /** Keypairs minted for the bot seats this page will play, by public key.
-   *
-   *  They are not persisted and never leave the page. A bot's key is its seat,
-   *  so losing it loses the seat — which is the honest behaviour: a bot exists
-   *  because the host offered to run it, and when the host closes the tab
-   *  nobody is running it any more. The empire simply idles, exactly as it does
-   *  when a person walks away.
-   *
-   *  Only the host has them. Every other peer sees an ordinary keyed seat in
-   *  the roster and validates its moves like anyone else's. */
-  private readonly botKeys = new Map<MemberKey, Identity>();
-  /** One connection to the world, several drivers behind it. Built lazily,
-   *  because a game with no bot seats needs exactly one port and would rather
-   *  not pay for the indirection. */
-  private hub?: LocalHub;
 
   private constructor(
     readonly identity: Identity,
@@ -286,19 +255,15 @@ export class Lobby {
       return false;
     }
 
-    // Human seats first, then bot seats, so a member index means the same
-    // thing on every peer regardless of the mix: e1m0 is whoever the host
-    // listed first, bot or not, and the roster is what says which.
-    const empires: EmpireSpec[] = [];
-    for (const [offset, keys] of plan.empires.entries()) {
-      const members: MemberSpec[] = keys.map((key) => ({ kind: MEMBER.HUMAN, key }));
-      for (let i = 0; i < (plan.bots[offset] ?? 0); i++) {
-        const bot = await Identity.generate();
-        this.botKeys.set(bot.key, bot);
-        members.push({ kind: MEMBER.BOT, key: bot.key });
-      }
-      empires.push({ control: CONTROL.HUMAN, members });
-    }
+    // Every seat in a human empire is a person who is here. A team that wants
+    // an extra pair of hands — a substitute, or a headless bot to hold a seat
+    // overnight — votes one in with ROSTER_AMEND once the game is running,
+    // which every peer sees and the seat cap limits. The host composing seats
+    // nobody else agreed to is precisely what that vote exists to prevent.
+    const empires: EmpireSpec[] = plan.empires.map((keys) => ({
+      control: CONTROL.HUMAN,
+      members: keys.map((key) => ({ kind: MEMBER.HUMAN, key })),
+    }));
     for (let i = 0; i < plan.simbots; i++) {
       empires.push({ control: CONTROL.SIMBOT, members: [{ kind: MEMBER.BOT }] });
     }
@@ -346,30 +311,11 @@ export class Lobby {
     this.phase = "playing";
     this.changed();
 
-    // The player's own port first, so a page with no bots in it gets the mesh
-    // id it would have had anyway and behaves exactly as it did before.
-    const hub = (this.hub ??= new LocalHub(this.baseTransport()));
-    const mine = hub.port();
-    const bots = this.botSeats(genesis).map((found) => ({ ...found, transport: hub.port() }));
-    this.onStart?.(genesis, seat, mine, bots);
+    this.onStart?.(genesis, seat, this.baseTransport());
   }
 
-  /** Seats in the sealed record whose keys this page minted. Read back out of
-   *  the genesis rather than remembered alongside it, so the seat numbers are
-   *  the ones every other peer will be validating against. */
-  private botSeats(genesis: Genesis): Array<{ identity: Identity; seat: Seat }> {
-    const found: Array<{ identity: Identity; seat: Seat }> = [];
-    genesis.empires.forEach((empire, offset) => {
-      empire.members.forEach((member, index) => {
-        const identity = member.key ? this.botKeys.get(member.key) : undefined;
-        if (identity) found.push({ identity, seat: { empire: offset + 1, member: index } });
-      });
-    });
-    return found;
-  }
-
-  /** The page's one view of the mesh, which the hub then divides. Its listener
-   *  is routed through the lobby so frames that arrived early are not lost. */
+  /** The page's one view of the mesh. Its listener is routed through the lobby
+   *  so frames that arrived early are not lost. */
   private baseTransport(): Transport {
     const mesh = this.mesh;
     return {
@@ -394,8 +340,6 @@ export class Lobby {
 
   close(): void {
     this.clearWatchdog();
-    this.hub?.close();
-    this.hub = undefined;
     this.mesh.close();
   }
 }

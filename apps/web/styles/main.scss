@@ -786,13 +786,6 @@ a.btn {
   font-size: 11px;
 }
 
-// Bot seats read as an addition to an empire rather than as another player, so
-// the name is set in the empire's own colour and the row is quieter than a
-// person's.
-.lobby-botseat .lobby-who {
-  font-family: inherit;
-  opacity: 0.85;
-}
 .lobby-field {
   display: flex;
   align-items: center;

@@ -5,7 +5,7 @@
 // (keys sorted, no whitespace) rather than whatever JSON.stringify felt like
 // given the insertion order of the object it was handed.
 
-import { PROTOCOL_VERSION } from "@tessera/sim";
+import { DEFAULT_RULES, PROTOCOL_VERSION, SEAT_CEILING } from "@tessera/sim";
 import type { Genesis } from "@tessera/sim";
 import { toHex, utf8 } from "./bytes.js";
 import { sha256 } from "./identity.js";
@@ -79,13 +79,19 @@ export async function inspectGenesis(genesis: Genesis): Promise<GenesisProblem[]
   // 0 means neutral, so the roster has to fit 1..255.
   if (genesis.empires.length > 255) problems.push("empires");
 
+  // The seat cap is checked here as well as on every amendment, because a
+  // genesis record is the one place an empire could be born oversized — and a
+  // peer that only checked amendments would join the unfair game and then
+  // faithfully enforce fairness for the rest of it.
+  const seats = Math.min(genesis.rules?.maxSeats ?? DEFAULT_RULES.maxSeats, SEAT_CEILING);
+
   const seen = new Set<string>();
   for (const empire of genesis.empires) {
     if (!Array.isArray(empire.members) || empire.members.length < 1) {
       problems.push("members");
       continue;
     }
-    if (empire.members.length > 255) problems.push("seats");
+    if (empire.members.length > seats) problems.push("seats");
     for (const member of empire.members) {
       if (!member.key) continue; // an unkeyed seat is a SimBot's, and needs none
       if (seen.has(member.key)) problems.push("duplicate-key");

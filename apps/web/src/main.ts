@@ -6,7 +6,7 @@
 
 import { seedFrom, PROTOCOL_VERSION, Sim } from "@tessera/sim";
 import { Roster } from "@tessera/protocol";
-import { Archive, Lobby, Lockstep, PeerBot } from "@tessera/net";
+import { Archive, Lobby, Lockstep } from "@tessera/net";
 import pkg from "../package.json";
 import { LocalGame } from "./game/Local";
 import { boardClick } from "./game/input";
@@ -74,17 +74,12 @@ const MAP_SIZES: Record<string, { width: number; height: number }> = {
 };
 
 /** The map the setup screen is asking for. Read at the moment a game starts
- *  rather than cached, so changing the dropdown and pressing start agree.
- *
- *  Kept apart from the solo options below because a HostPlan has a `bots` of
- *  its own — bot seats in human empires, not rival empires — and spreading one
- *  into the other silently means the wrong thing. */
+ *  rather than cached, so changing the dropdown and pressing start agree. */
 const mapSize = () =>
   MAP_SIZES[pick<HTMLSelectElement>('[data-cfg="size"]').value] ?? MAP_SIZES.medium!;
 
 const soloSetup = () => ({
   bots: Number(pick<HTMLSelectElement>('[data-cfg="bots"]').value),
-  teammates: Number(pick<HTMLSelectElement>('[data-cfg="teammates"]').value),
   ...mapSize(),
 });
 
@@ -497,7 +492,7 @@ async function begin(code?: string): Promise<void> {
 
   lobby = opened;
   panel.attach(lobby);
-  lobby.onStart = (genesis, seat, transport, botSeats) => {
+  lobby.onStart = (genesis, seat, transport) => {
     const driver = new Lockstep({
       genesis,
       sim: new Sim(genesis),
@@ -507,20 +502,6 @@ async function begin(code?: string): Promise<void> {
       seat,
     });
 
-    // A bot seat is a whole peer: its own simulation, its own driver, its own
-    // signatures. It only shares a page — and a connection — with this one.
-    const bots = botSeats.map((bot) => {
-      const own = new Lockstep({
-        genesis,
-        sim: new Sim(genesis),
-        roster: Roster.fromGenesis(genesis),
-        transport: bot.transport,
-        identity: bot.identity,
-        seat: bot.seat,
-      });
-      own.start();
-      return new PeerBot({ lockstep: own });
-    });
     archive = new Archive(genesis, driver);
     archive.attach(driver);
     archiveBtn.hidden = false;
@@ -539,7 +520,7 @@ async function begin(code?: string): Promise<void> {
     mesh = driver;
     if (seat) openChat(seat);
 
-    mount(new OnlineGame(driver, lobby!.mesh, bots));
+    mount(new OnlineGame(driver, lobby!.mesh));
     shell.show("game");
   };
 }

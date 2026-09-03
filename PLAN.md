@@ -150,6 +150,12 @@ Both share one targeting policy — `policy(state, empire, member, rng) -> move`
 
 Genesis picks per empire: `control: HUMAN | SIMBOT`, plus a member list that may include bot keys.
 
+> **Revised.** The genesis record no longer composes bot seats inside human empires, and the lobby has no control for it. A host arranging its own team a couple of extra seats — while every other empire got what it turned up with — is not a feature, it is an unfair setup with a UI. Seats in a human empire are the people who are there, and another one joins the way a substitute always has: `ROSTER_AMEND`, endorsed by a quorum of the empire already holding it. A headless bot is seated by exactly that route, which is also how it plays a whole empire of its own if that is what somebody wants.
+>
+> What replaces it is **a seat cap, `rules.maxSeats`, defaulting to four**: three people rotating shifts plus a seat to cover the night. An empire is a set of seats sharing territory with a population timer each, so a side that can add seats freely simply out-accrues everyone else — and since a headless bot is an ordinary peer holding an ordinary seat, "add seats" costs nothing but processes. The cap is in the genesis record, uniform across every empire in the game, refused by `inspectGenesis` before a peer agrees to play and again by `validate` on every amendment. No quorum can vote itself a bigger team than the game allows.
+>
+> The growth modifier stays as it was, and it is the part that was always doing the useful work: a `BOT` member accrues at half rate, caps at 499, and its coin claims never chain. Cover, priced.
+
 ### A8. Liveness, win conditions, and stats
 
 **Presence must be derived from the log, not from sockets.** This is the subtle one. "Last player remaining" cannot be evaluated from connection state, because peers genuinely disagree about who is reachable — two peers would compute different winners and desync. So members emit a signed `HEARTBEAT` roughly every 30 s of game time, and **a member is live at step S if their last heartbeat falls within `LIVENESS_WINDOW` steps.** Presence becomes a deterministic function of the log, identical on every peer.

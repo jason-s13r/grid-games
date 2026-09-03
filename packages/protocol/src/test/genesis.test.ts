@@ -3,7 +3,7 @@
 // id for different ones, nothing built on top of it means anything.
 
 import { beforeAll, describe, expect, it } from "vitest";
-import { CONTROL, MEMBER, makeGenesis } from "@tessera/sim";
+import { CONTROL, DEFAULT_RULES, MEMBER, makeGenesis } from "@tessera/sim";
 import type { Genesis } from "@tessera/sim";
 import { canonicalJson, gameIdOf, inspectGenesis, sealGenesis } from "../genesis.js";
 import { fixture } from "./fixture.js";
@@ -73,5 +73,45 @@ describe("genesis", () => {
       }),
     );
     expect(await inspectGenesis(doubled)).toContain("duplicate-key");
+  });
+
+  // The seat cap is checked here as well as on every amendment, because the
+  // genesis record is the one place an empire could be born oversized. A peer
+  // that only checked amendments would join the unfair game and then faithfully
+  // enforce fairness for the rest of it.
+  it("an empire born over the seat cap is refused", async () => {
+    const crowded = await sealGenesis(
+      makeGenesis({
+        seed: 1,
+        empires: [
+          {
+            control: CONTROL.HUMAN,
+            members: Array.from({ length: DEFAULT_RULES.maxSeats + 1 }, (_, i) => ({
+              kind: MEMBER.HUMAN,
+              key: `k${i}`,
+            })),
+          },
+        ],
+      }),
+    );
+    expect(await inspectGenesis(crowded)).toContain("seats");
+  });
+
+  it("and one filled to it is not", async () => {
+    const full = await sealGenesis(
+      makeGenesis({
+        seed: 1,
+        empires: [
+          {
+            control: CONTROL.HUMAN,
+            members: Array.from({ length: DEFAULT_RULES.maxSeats }, (_, i) => ({
+              kind: MEMBER.HUMAN,
+              key: `k${i}`,
+            })),
+          },
+        ],
+      }),
+    );
+    expect(await inspectGenesis(full)).toEqual([]);
   });
 });

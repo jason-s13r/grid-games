@@ -3,7 +3,8 @@
 // started with the wrong people on the wrong side.
 
 import { describe, expect, it } from "vitest";
-import { MAX_BOTS_PER_EMPIRE, checkPlan, composeTeams } from "../teams.js";
+import { DEFAULT_RULES, SEAT_CEILING } from "@tessera/sim";
+import { MAX_SEATS, checkPlan, composeTeams } from "../teams.js";
 import type { Seated } from "../teams.js";
 
 const players = (...keys: string[]): Seated[] => keys.map((key) => ({ key }));
@@ -88,38 +89,28 @@ describe("checking a plan", () => {
   });
 });
 
-describe("bot seats in a plan", () => {
-  const a = "ka";
-  const b = "kb";
+describe("the seat cap", () => {
+  const team = ["ka", "kb", "kc", "kd", "ke"];
 
-  it("accepts a bot seat alongside a person", () => {
-    expect(checkPlan({ empires: [[a], [b]], simbots: 0, bots: [1, 0] }, [a, b])).toBe("");
+  // The cap is the whole of team-size fairness, and it is uniform: every empire
+  // in a game gets the same number, so no side can field more people than
+  // another simply by inviting them.
+  it("accepts an empire filled to the cap", () => {
+    const full = team.slice(0, MAX_SEATS);
+    const plan = { empires: [full, ["kz"]], simbots: 0 };
+    expect(checkPlan(plan, [...full, "kz"])).toBe("");
   });
 
-  it("accepts a solo empire covering itself overnight", () => {
-    expect(checkPlan({ empires: [[a]], simbots: 1, bots: [MAX_BOTS_PER_EMPIRE] }, [a])).toBe("");
+  it("refuses one seat past it", () => {
+    const over = team.slice(0, MAX_SEATS + 1);
+    const plan = { empires: [over, ["kz"]], simbots: 0 };
+    expect(checkPlan(plan, [...over, "kz"])).toContain("seats");
   });
 
-  it("refuses more bot seats than an empire may hold", () => {
-    const plan = { empires: [[a], [b]], simbots: 0, bots: [MAX_BOTS_PER_EMPIRE + 1, 0] };
-    expect(checkPlan(plan, [a, b])).toContain("bot seats");
-  });
-
-  it("refuses a fractional or negative count", () => {
-    expect(checkPlan({ empires: [[a], [b]], simbots: 0, bots: [-1, 0] }, [a, b])).not.toBe("");
-    expect(checkPlan({ empires: [[a], [b]], simbots: 0, bots: [1.5, 0] }, [a, b])).not.toBe("");
-  });
-
-  it("refuses a count with no empire to sit in", () => {
-    expect(checkPlan({ empires: [[a], [b]], simbots: 0, bots: [0, 0, 1] }, [a, b])).toBe(
-      "a bot is seated in no empire",
-    );
-  });
-
-  // Bot seats are seats, not empires: three of them do not make a game.
-  it("does not let bot seats stand in for a second empire", () => {
-    expect(checkPlan({ empires: [[a, b]], simbots: 0, bots: [3] }, [a, b])).toBe(
-      "a game needs at least two empires",
-    );
+  // Not merely a manner of the picker. The same rule is in the genesis record,
+  // so a hand-rolled host that skipped this check is refused by every peer it
+  // sends the record to.
+  it("is the rule the simulation will be enforcing", () => {
+    expect(MAX_SEATS).toBe(Math.min(DEFAULT_RULES.maxSeats, SEAT_CEILING));
   });
 });

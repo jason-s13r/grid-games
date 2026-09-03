@@ -96,7 +96,9 @@ missing.
 The **bot** holds one seat, so a team can sleep without losing ground. It is
 seated the way any substitute is — it joins as an observer, prints its key, and
 an empire votes it in with `ROSTER_AMEND`. There is no bot-shaped mechanism
-anywhere in the protocol, and there should not be.
+anywhere in the protocol, and there should not be: no host composes seats onto
+somebody else's team, and an empire is capped at four seats, so night cover
+costs a seat rather than adding one.
 
 How it plays is yours: `--play` picks defending, expanding, attacking, banking
 or cycling through all four, `--target` says whose capital to walk at, and

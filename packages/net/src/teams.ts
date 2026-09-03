@@ -4,6 +4,7 @@
 // because it is the one part of team-picking that is neither DOM nor network:
 // a compaction and a validation, and both are worth being sure about.
 
+import { DEFAULT_RULES, SEAT_CEILING } from "@tessera/sim";
 import type { MemberKey } from "@tessera/protocol";
 
 export interface Seated {
@@ -53,15 +54,12 @@ export function composeTeams(
 export interface Plan {
   empires: MemberKey[][];
   simbots: number;
-  /** Bot seats to add to each empire, parallel to `empires`. A bot seat is a
-   *  full member with its own keypair, not a mode the empire is in: it accrues,
-   *  it signs, and it can be left holding the line overnight. */
-  bots?: number[];
 }
 
-/** Bot seats one empire may hold. Enough for a team to cover a night shift,
- *  few enough that "add bots" is not a way to out-populate everyone else. */
-export const MAX_BOTS_PER_EMPIRE = 3;
+/** Seats one empire may hold, which is the genesis rule every peer will check
+ *  the record against. Read from the defaults rather than declared here, so the
+ *  picker and the simulation cannot drift apart. */
+export const MAX_SEATS = Math.min(DEFAULT_RULES.maxSeats, SEAT_CEILING);
 
 /** Why this plan cannot be played, or "" if it can.
  *
@@ -78,14 +76,11 @@ export function checkPlan(plan: Plan, expected: Iterable<MemberKey>): string {
   for (const key of seated) if (!waiting.delete(key)) return "a stranger is seated";
   if (waiting.size > 0) return "somebody here has no seat";
 
-  const bots = plan.bots ?? [];
-  if (bots.length > plan.empires.length) return "a bot is seated in no empire";
-  if (bots.some((n) => !Number.isInteger(n) || n < 0 || n > MAX_BOTS_PER_EMPIRE)) {
-    return `an empire may hold up to ${MAX_BOTS_PER_EMPIRE} bot seats`;
-  }
-  // Empire and member ids ride in single bytes of every signed move.
-  if (plan.empires.some((keys, e) => keys.length + (bots[e] ?? 0) > 255)) {
-    return "an empire has too many seats";
+  // The cap that keeps sides comparable. Every empire in the game gets the same
+  // number, and inspectGenesis checks the sealed record against the same rule —
+  // this is the early refusal, while the host can still fix it.
+  if (plan.empires.some((keys) => keys.length > MAX_SEATS)) {
+    return `an empire may hold up to ${MAX_SEATS} seats`;
   }
 
   // One empire is last-empire-standing on the first step: a game nobody plays.

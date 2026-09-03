@@ -15,8 +15,10 @@ const MAX_STEPS_PER_FRAME = 240;
 
 export interface LocalOptions {
   seed: number;
+  /** Whole SimBot empires to play against. There is no such thing as a bot on
+   *  your own side: an empire's seats are people, and the one way another seat
+   *  joins one is a vote by the seats already in it. */
   bots: number;
-  teammates: number;
   width: number;
   height: number;
 }
@@ -35,13 +37,7 @@ export class LocalGame implements Driver {
 
   constructor(readonly options: LocalOptions) {
     const empires: EmpireSpec[] = [
-      {
-        control: CONTROL.HUMAN,
-        members: [
-          { kind: MEMBER.HUMAN },
-          ...Array.from({ length: options.teammates }, () => ({ kind: MEMBER.BOT })),
-        ],
-      },
+      { control: CONTROL.HUMAN, members: [{ kind: MEMBER.HUMAN }] },
       ...Array.from({ length: options.bots }, () => ({
         control: CONTROL.SIMBOT,
         members: [{ kind: MEMBER.BOT }],
