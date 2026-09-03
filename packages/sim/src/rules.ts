@@ -407,7 +407,22 @@ function claim(
 
   const item = state.item[i]! as Item;
   if (item !== ITEM.NONE && item !== ITEM.DIAMOND) {
-    cascade(state, i, item, base, empire, member, dirty);
+    // The click lands as an ordinary claim first, and the coin spreads on top.
+    //
+    // It used to be one or the other: a coin consumed the claim and
+    // redistributed it, which meant clicking a coin put *less* on the tile you
+    // clicked than clicking a plain tile would have. A full bank on a bronze
+    // coin placed 203 there instead of 999. On contested ground that made a
+    // coin a downgrade — the opposite of a reward.
+    const took = place(state, i, empire.id, base, dirty);
+    if (took) {
+      bump(empire, member, STAT.TILES_TAKEN);
+      raise(empire, member, STAT.TILES_ONE_MOVE, 1);
+    }
+    // Spent, not base: the surround multiplier is a fact about the tile you
+    // clicked and it has already been paid on the claim above. The coin's own
+    // multiplier is a fact about its shape, applied per tile inside cascade.
+    cascade(state, i, item, spent, empire, member, dirty);
   } else {
     if (item === ITEM.DIAMOND) collectDiamond(state, i, empire, member);
     const captured = place(state, i, empire.id, base, dirty);
@@ -427,6 +442,17 @@ function claim(
  *  shape — population is created by the cascade, not divided. That is what
  *  makes farming an enclosed field explosive, and what turns a chain into a
  *  sudden jump in tile count.
+ *
+ *  Each tile of the shape then carries the surround multiplier it has earned
+ *  *within* that shape: a tile whose four orthogonal neighbours are also being
+ *  claimed is being surrounded, and the game has always said a surrounded tile
+ *  takes four times the population. Read off the shape rather than off live
+ *  ownership, so it cannot depend on the order tiles happen to be visited in.
+ *
+ *  That is what separates the coins by more than area. Bronze has no interior
+ *  beyond its own tile, so its arms are single strength; a gold coin is thirteen
+ *  interior tiles at quadruple and twelve rim tiles at less. The rarest coin is
+ *  the one whose middle is worth having.
  *
  *  A coin is cleared the moment it is queued, so it can fire at most once. */
 function cascade(
@@ -448,12 +474,6 @@ function cascade(
   // the empty ground it was sitting in the middle of. One population is enough
   // to take a neutral tile, which is the least a coin should ever do.
   const perTile = Math.max(1, Math.floor(base / shape.length));
-  // The remainder lands on the coin tile itself, so nothing is lost and the
-  // split stays deterministic. Clamped for the same reason as above: once
-  // perTile has been floored upwards it can exceed what there was to spread,
-  // and a negative remainder would have made the coin tile the one tile the
-  // coin failed to take.
-  const remainder = Math.max(0, base - perTile * shape.length);
 
   const maxDepth =
     member.kind === MEMBER.BOT ? rules.botCascadeDepth : Number.MAX_SAFE_INTEGER;
@@ -490,7 +510,7 @@ function cascade(
         queue.push([ti, COIN_RADIUS[found]!, depth + 1]);
       }
 
-      const amount = perTile + (ti === origin ? remainder : 0);
+      const amount = perTile * surroundedBy(dx, dy, cr);
       if (place(state, ti, empire.id, amount, dirty)) captured++;
       popPlaced += amount;
       touched++;
@@ -502,6 +522,26 @@ function cascade(
   raise(empire, member, STAT.CASCADE_TILES, touched);
   raise(empire, member, STAT.CASCADE_POP, popPlaced);
 }
+
+/** How many of a tile's orthogonal neighbours are also inside the ball it
+ *  belongs to, clamped the way the surround multiplier always is.
+ *
+ *  Geometry, not ownership: everything in the ball is about to be claimed, so a
+ *  tile with all four neighbours inside it is being surrounded on all four
+ *  sides. Deriving it from the offset means it is the same number on every peer
+ *  regardless of what each has already painted. */
+function surroundedBy(dx: number, dy: number, radius: number): number {
+  let inside = 0;
+  for (const [ex, ey] of ORTHO) {
+    if (Math.abs(dx + ex) + Math.abs(dy + ey) <= radius) inside++;
+  }
+  return Math.max(1, Math.min(inside, MAX_COIN_MULTIPLIER));
+}
+
+/** The same ceiling the ordinary surround multiplier uses. Named separately
+ *  because this one is geometric and could never exceed four anyway; the
+ *  clamp is here so the two rules cannot drift apart silently. */
+const MAX_COIN_MULTIPLIER = 4;
 
 const COIN_STAT: Record<number, number> = {
   [ITEM.BRONZE]: STAT.COINS_BRONZE,

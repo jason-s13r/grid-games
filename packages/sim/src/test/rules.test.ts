@@ -33,15 +33,23 @@ describe("surround multiplier", () => {
 });
 
 describe("coin claim radii", () => {
-  // perTile is floor(999 / tiles); the remainder is added to the coin tile so
-  // no population is lost to the division.
+  // A coin's share is floor(999 / tiles), and each tile of the shape then takes
+  // the surround multiplier it earns inside that shape. `beside` is the tile one
+  // step from the centre: single strength for bronze, whose arms have nothing
+  // behind them, and quadruple for the two larger coins, where it is interior.
+  //
+  // `centre` is the click plus the coin. The clicked tile is claimed normally
+  // first — 999 here — and the coin spreads on top of it, so landing on a coin
+  // is never worse than landing on bare ground. It used to be: the coin
+  // consumed the claim, and a full bank on bronze put 203 on the tile you
+  // clicked instead of 999.
   const cases = [
-    { coin: "bronze", item: ITEM.BRONZE, tiles: 5, perTile: 199 },
-    { coin: "silver", item: ITEM.SILVER, tiles: 13, perTile: 76 },
-    { coin: "gold", item: ITEM.GOLD, tiles: 25, perTile: 39 },
+    { coin: "bronze", item: ITEM.BRONZE, tiles: 5, beside: 199, centre: 1795 },
+    { coin: "silver", item: ITEM.SILVER, tiles: 13, beside: 304, centre: 1303 },
+    { coin: "gold", item: ITEM.GOLD, tiles: 25, beside: 156, centre: 1155 },
   ] as const;
 
-  describe.each(cases)("$coin", ({ item, tiles, perTile }) => {
+  describe.each(cases)("$coin", ({ item, tiles, beside, centre }) => {
     let sim: Sim;
 
     beforeAll(() => {
@@ -56,11 +64,16 @@ describe("coin claim radii", () => {
     // The claim covers the ball, and the seed tile at (10,12) sits inside it.
     it(`claims ${tiles} tiles`, () => expect(held(sim, 1)).toBe(tiles));
 
-    it(`spreads floor(999/${tiles}) per tile`, () => expect(popAt(sim, 11, 13)).toBe(perTile));
+    it(`puts ${beside} on the tile beside the coin`, () =>
+      expect(popAt(sim, 11, 13)).toBe(beside));
 
-    it("puts the remainder on the coin tile", () => {
-      expect(popAt(sim, 11, 12)).toBe(perTile + (999 - perTile * tiles));
-    });
+    it("lands the click on the coin tile as well as the coin", () =>
+      expect(popAt(sim, 11, 12)).toBe(centre));
+
+    // The point of the whole change: a coin is a reward, so clicking one can
+    // never be worse than clicking bare ground with the same population.
+    it("is never a worse place to spend than an empty tile", () =>
+      expect(popAt(sim, 11, 12)).toBeGreaterThanOrEqual(999));
   });
 });
 
@@ -84,15 +97,14 @@ describe("a coin triggered with almost nothing", () => {
   it("still claims its whole shape", () => expect(held(sim, 1)).toBe(25));
 
   it("puts a population on every tile of it", () => {
-    expect(popAt(sim, 11, 13)).toBe(1);
-    expect(popAt(sim, 11, 10)).toBe(1);
+    // One each, times whatever surround the tile earns inside the shape: four
+    // for an interior tile, one on the rim.
+    expect(popAt(sim, 11, 13)).toBe(4);
+    expect(popAt(sim, 11, 15)).toBe(1);
   });
 
-  // The remainder is what is left after the split, and there is nothing left
-  // when the split had to round up. It must not go negative and take the coin
-  // tile with it.
   it("and does not leave the coin tile empty", () => {
-    expect(popAt(sim, 11, 12)).toBe(1);
+    expect(popAt(sim, 11, 12)).toBe(24); // 20 from the click, 1 x4 from the coin
     expect(ownerAt(sim, 11, 12)).toBe(1);
   });
 });
@@ -119,8 +131,9 @@ describe("coin cascade", () => {
   });
 
   it("creates population rather than dividing it", () => {
-    // Every tile of the chained gold gets the bronze's own 199 per tile.
-    expect(popAt(sim, 12, 13)).toBe(199);
+    // Every tile of the chained gold gets the bronze's own 199 per tile, times
+    // the surround it earns inside the gold's shape — interior, so four.
+    expect(popAt(sim, 12, 13)).toBe(796);
   });
 
   it("a bot's cascade does not chain", () => {
