@@ -149,11 +149,17 @@ export class Lobby {
   /** PeerJS arrives here, on demand: a solo game never downloads it. Resolves
    *  once the broker has assigned an id, because until then there is no room
    *  code to put on screen. */
-  static async open(identity: Identity, join?: string): Promise<Lobby> {
+  static async open(
+    identity: Identity,
+    join?: string,
+    options: { iceServers?: RTCIceServer[]; id?: string } = {},
+  ): Promise<Lobby> {
     let lobby: Lobby | undefined;
     const mesh = await createMesh({
       join,
       prefix: "tsr-",
+      ...(options.iceServers ? { iceServers: options.iceServers } : {}),
+      ...(options.id ? { id: options.id } : {}),
       onJoin: (peer) => lobby?.welcome(peer),
       onLeave: (peer) => {
         lobby?.members.delete(peer);

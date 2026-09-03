@@ -46,6 +46,12 @@ export interface ArchivedGame {
    *  and decaying territory ever since. */
   steps: number;
   hash: string;
+  /** The step the log begins at. Zero, and usually absent, for a peer that
+   *  watched from the start — the only case in which a log replays from the
+   *  genesis record. A peer that joined an hour in holds a fragment, and saying
+   *  so is the difference between an honest partial archive and a hash mismatch
+   *  nobody can account for. */
+  from?: number;
 }
 
 /** Where the archive reads the step and hash it is claiming. A `Sim` is one and
@@ -217,6 +223,13 @@ export async function verifyArchive(game: ArchivedGame): Promise<Verdict> {
 
   const { genesis } = game;
   for (const wrong of await inspectGenesis(genesis)) problems.push(`genesis: ${wrong}`);
+  if (game.from) {
+    // Everything below still runs: the signatures on a fragment are as real as
+    // any others, and knowing who played is worth having even when the hash
+    // cannot be reproduced. It is the replay that is meaningless, and it says so
+    // here rather than in the mismatch it is about to produce.
+    problems.push(`archive begins at step ${game.from}, so it cannot be replayed from the start`);
+  }
 
   const gameId = genesis.gameId ?? "";
   const roster = Roster.fromGenesis(genesis);

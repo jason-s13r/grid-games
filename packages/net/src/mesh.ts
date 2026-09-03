@@ -44,6 +44,13 @@ type Envelope =
 export interface PeerMeshOptions {
   /** The host's peer id, which doubles as the room code. Omit to be the host. */
   join?: string;
+  /** The id to claim for ourselves, rather than one the broker invents.
+   *
+   *  A joiner normally takes whatever it is given, because nobody dials it. An
+   *  always-on peer is the exception: it is the one thing in the mesh worth
+   *  having a stable address for, since a game whose original host has closed
+   *  their laptop is reachable at the observer's code and nowhere else. */
+  id?: string;
   /** Prefix for a generated host id, so a room code reads as a room code. */
   prefix?: string;
   /** Replaces PeerJS's own STUN and TURN servers rather than adding to them.
@@ -96,8 +103,17 @@ export type PeerConstructor = new (id?: string, options?: PeerOptions) => Peer;
 /** Loads PeerJS and opens a mesh. Resolves once the broker has assigned an id,
  *  because until then there is no room code to show anyone. */
 export async function createMesh(options: PeerMeshOptions = {}): Promise<PeerMesh> {
-  const module = await import("peerjs");
-  const constructor = (module.default ?? module.Peer) as unknown as PeerConstructor;
+  // Three shapes, one library. Loaded by a bundler this is an ES module whose
+  // default export is the class; loaded by Node it is CommonJS, and the interop
+  // namespace puts the whole exports object under `default` — so the old
+  // `default ?? Peer` handed `new` an object and failed with "Peer is not a
+  // constructor", which is exactly where a headless peer used to stop.
+  const module = (await import("peerjs")) as unknown as Record<string, unknown>;
+  const bundled = module.default as Record<string, unknown> | undefined;
+  const constructor = [module.Peer, bundled?.Peer, module.default].find(
+    (candidate) => typeof candidate === "function",
+  ) as PeerConstructor | undefined;
+  if (!constructor) throw new Error("peerjs loaded but exported no Peer constructor");
   const mesh = new PeerMesh(constructor, options);
   try {
     await mesh.opening;
@@ -130,7 +146,7 @@ export class PeerMesh implements Transport {
     PeerClass: PeerConstructor,
     private readonly options: PeerMeshOptions = {},
   ) {
-    const id = options.join ? undefined : roomCode(options.prefix ?? "");
+    const id = options.id ?? (options.join ? undefined : roomCode(options.prefix ?? ""));
 
     // Absent unless asked for: an undefined `config` leaves PeerJS's defaults
     // whole, and any object at all would take their place.
