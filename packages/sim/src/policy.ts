@@ -12,6 +12,12 @@
 //
 // Mode is derived from game time rather than stored, so bots need no fields in
 // the snapshot and can never desync through their own bookkeeping.
+//
+// The optional `forced` and `focus` arguments exist for the PeerBot alone. A
+// SimBot passes neither, and must not: both are decisions made outside the
+// shared stream, which is exactly what a bot inside the simulation cannot have.
+// Because it passes neither, adding them moves no hash — the draw order for an
+// in-sim bot is the one it always was.
 
 import { MOVE, ITEM } from "./types.js";
 import type { Empire, Move } from "./types.js";
@@ -77,6 +83,13 @@ function scan(state: State, empire: Empire): Scan {
   return { owned, frontier, coins, threatened };
 }
 
+/** A specific empire's capital, if it is somebody else's and still standing. */
+function capitalOf(state: State, empire: Empire, id: number): number {
+  if (id === empire.id) return -1;
+  const other = state.empires.find((one) => one.id === id);
+  return other?.alive ? other.capital : -1;
+}
+
 function nearestEnemyCapital(state: State, empire: Empire): number {
   let best = -1;
   let bestD = Infinity;
@@ -102,6 +115,7 @@ export function policy(
   memberIndex: number,
   rng: Rng,
   forced?: Mode,
+  focus?: number,
 ): Move | null {
   const member = empire.members[memberIndex];
   if (!member || member.popTimer <= 0) return null;
@@ -123,7 +137,13 @@ export function policy(
   } else if (mode === "expand" && frontier.length > 0) {
     target = weakest(state, frontier, rng);
   } else if (mode === "attack" && frontier.length > 0) {
-    const capital = nearestEnemyCapital(state, empire);
+    // Whose capital to walk towards. `focus` names one; without it, whoever is
+    // closest — which is the only choice a SimBot ever makes, because a caller
+    // that picks an enemy has decided something no shared stream could agree
+    // on. A named empire that is dead or absent falls back to nearest rather
+    // than to nothing: a bot with orders it cannot follow should still fight.
+    const chosen = focus === undefined ? -1 : capitalOf(state, empire, focus);
+    const capital = chosen >= 0 ? chosen : nearestEnemyCapital(state, empire);
     target = capital < 0 ? weakest(state, frontier, rng) : closestTo(state, frontier, capital, rng);
   } else if (mode === "defend") {
     // Reinforce where the line actually is. Piling population onto a random

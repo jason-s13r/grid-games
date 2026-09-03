@@ -6,7 +6,7 @@
 // lower cap, and coin claims that fire without chaining.
 
 import { beforeAll, describe, expect, it } from "vitest";
-import { MEMBER, Rng, Sim } from "@tessera/sim";
+import { MEMBER, Rng, STAT, Sim } from "@tessera/sim";
 import { PeerBot } from "../index.js";
 import { agreed, clickAround, run, table } from "./harness.js";
 import type { Table } from "./harness.js";
@@ -93,5 +93,102 @@ describe("a bot's randomness stays out of the shared stream", () => {
 
     expect(sim.state.rng.s).toBe(before);
     expect(sim.hash()).toBe(hash);
+  });
+});
+
+// The balance lever an always-on seat needs.
+//
+// A bot that is resting must not look like a bot that has crashed — to the
+// simulation or to the mesh. It keeps pumping, so it keeps heartbeating and
+// keeps promising readiness; it simply stops spending. Getting this wrong in
+// either direction is bad: a bot that stops pumping is dropped for stalling and
+// the empire loses the seat, and a bot that keeps spending was never resting.
+describe("a resting bot", () => {
+  let t: Table;
+  let bot: PeerBot;
+  let seat: Table["peers"][number];
+  let human: Table["peers"][number];
+
+  beforeAll(async () => {
+    t = await table({ seats: [1, 1], bots: [1, 0] });
+    seat = t.peers[1]!;
+    human = t.peers[0]!;
+    // Replace the harness's bot with one that is never awake.
+    bot = new PeerBot({ lockstep: seat.driver, awake: () => false });
+    seat.bot = bot;
+    await run(t, 240, await clickAround(t, 30));
+  });
+
+  it("says so, rather than looking broken", () => expect(bot.resting).toBe(true));
+
+  it("spends nothing, and banks it instead", () => {
+    const member = seat.driver.sim.state.empires[0]!.members[1]!;
+    expect(member.stats[STAT.POP_SPENT]).toBe(0);
+    // Which is what makes a rest a rest rather than a waste: the population is
+    // still there in the morning.
+    expect(member.popTimer).toBeGreaterThan(0);
+  });
+
+  // The one move a resting bot still makes, and the reason its seat survives.
+  it("but goes on answering, because a heartbeat is not spending", () => {
+    const member = seat.driver.sim.state.empires[0]!.members[1]!;
+    expect(member.stats[STAT.MOVES]).toBeGreaterThan(0);
+  });
+
+  it("but keeps its seat, because it never stopped answering", () => {
+    expect(t.peers.flatMap((peer) => peer.ejections)).toEqual([]);
+    expect(human.driver.blockedOn()).toEqual([]);
+    expect(agreed(t)).toBe(true);
+  });
+});
+
+describe("how a bot is told to play", () => {
+  let t: Table;
+
+  beforeAll(async () => {
+    t = await table({ seats: [1, 1, 1], bots: [1, 0, 0] });
+    await run(t, 240, await clickAround(t, 30));
+  });
+
+  const botFor = (options: Partial<ConstructorParameters<typeof PeerBot>[0]> = {}): PeerBot =>
+    new PeerBot({ lockstep: t.peers[1]!.driver, ...options });
+
+  // Faster than the genesis rule is not on offer: an always-on seat that
+  // out-reflexed the people it covers for is the one thing it must not be.
+  it("cannot be asked to act faster than the rules allow", () => {
+    const floor = t.genesis.rules.botActionInterval;
+    const eager = botFor({ interval: 1 });
+    const patient = botFor({ interval: floor * 10 });
+    // Read through decide()'s effect rather than a private field: an eager bot
+    // and a floored one are the same bot.
+    expect(eager["interval"]).toBe(floor);
+    expect(patient["interval"]).toBe(floor * 10);
+  });
+
+  it("attacks a named empire rather than the nearest", () => {
+    const state = t.peers[1]!.driver.sim.state;
+    const focused = botFor({ mode: "attack", target: 3 });
+    // Its focus is empire 3's capital, whoever happens to be closer.
+    expect(focused["focus"](state, 1)).toBe(3);
+  });
+
+  it("takes them in turn when asked to rotate", () => {
+    const state = t.peers[1]!.driver.sim.state;
+    const rotating = botFor({ mode: "attack", target: "rotate" });
+    const chosen = rotating["focus"](state, 1);
+    expect(chosen).not.toBe(1); // never ourselves
+    expect(state.empires.some((one) => one.id === chosen && one.alive)).toBe(true);
+  });
+
+  it("and asks the simulation to choose when it is not told", () => {
+    const state = t.peers[1]!.driver.sim.state;
+    expect(botFor({ mode: "attack" })["focus"](state, 1)).toBeUndefined();
+  });
+
+  // "cycle" is the absence of a forced mode, which is also what re-opens the
+  // coin grab — a pinned bot skips coins, because taking one is expansion.
+  it("can be let off the leash entirely", () => {
+    const cycling = botFor({ mode: "cycle" });
+    expect(cycling.decide()).not.toBeNull();
   });
 });

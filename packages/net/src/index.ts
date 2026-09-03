@@ -7,7 +7,7 @@ export type { ArchivedGame, ArchiveOptions, ArchiveRecord, ArchiveSource, Verdic
 export { Lockstep } from "./lockstep.js";
 export type { LockstepOptions, Seat, EjectionReason } from "./lockstep.js";
 export { PeerBot } from "./peerbot.js";
-export type { PeerBotOptions } from "./peerbot.js";
+export type { PeerBotOptions, Play, Target } from "./peerbot.js";
 export { LocalHub } from "./hub.js";
 export { PeerMesh, createMesh } from "./mesh.js";
 export { Lobby } from "./lobby.js";

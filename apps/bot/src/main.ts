@@ -21,12 +21,18 @@
 // bot-shaped mechanism anywhere in the protocol, and there should not be — from
 // the mesh's side this is a player who happens never to sleep.
 //
-//   tessera-bot <room-code> [--key path]
+//   tessera-bot <room-code> [--play cycle] [--rate patient] [--hours 22-07]
+//
+// What is *not* configurable here is what a bot costs. Population accrual is
+// hashed state, decided by the seat's kind in the genesis record — a BOT member
+// accrues at half rate and caps at 499 — so a bot that chose its own growth
+// would either desync or be a cheat that validated. The host prices the seat;
+// the bot only decides how to play it.
 
 import { parseArgs } from "node:util";
 import { fingerprint } from "@tessera/protocol";
 import { PeerBot } from "@tessera/net";
-import type { Seat } from "@tessera/net";
+import type { Play, Seat, Target } from "@tessera/net";
 import { identityAt, joinGame } from "@tessera/headless";
 
 const USAGE = `tessera-bot — hold a seat in a Tessera game while its player is away
@@ -40,8 +46,37 @@ Options:
   --key <path>    identity file (default ./bot.jwk) — the key IS the seat
   --as <id>       claim this peer id rather than one the broker invents
   --ice <urls>    comma-separated STUN/TURN urls, replacing PeerJS's own
-  --attack        let it take ground as well as hold it (it will not thank you)
   --quiet         only complain
+
+  --play <how>    defend (default) | expand | attack | home | cycle
+                  defend reinforces the thinnest contested tile and nothing
+                  else. expand takes neutral ground. attack walks towards a
+                  capital. home banks around its own. cycle rotates through all
+                  four the way an in-sim bot does, coin grabs included.
+
+  --target <who>  nearest (default) | random | rotate | <empire number>
+                  Who to walk towards while attacking. random and rotate change
+                  every two minutes, not every action — a bot that re-chose
+                  constantly would just be "nearest" again, since the nearest
+                  front is where its tiles already are.
+
+  --rate <how>    brisk | steady (default) | patient | <seconds>
+                  How long it banks between claims, which is style rather than
+                  strength. A bot accrues 6 population a second and caps at 499,
+                  so brisk (2s) spends about 12 a claim and can only take empty
+                  ground, while patient (85s) spends the full bank in one hit.
+                  Slower than 85s only wastes accrual. Never faster than the
+                  genesis rule: an always-on seat must not out-reflex the people
+                  it is covering for.
+
+  --hours <a-b>   only play between these local hours, e.g. 22-07 for a night
+                  shift. Wraps midnight.
+  --duty <on/off> play for <on> minutes in every <on+off>, e.g. 20/40.
+
+Both schedules can be given together, and a resting bot is still connected: it
+heartbeats, it promises readiness, it never blocks the peers still playing. It
+simply banks its population instead of spending it — which is the one balance
+lever an always-on seat needs, and it must not cost the empire the seat.
 `;
 
 const { values, positionals } = parseArgs({
@@ -50,21 +85,98 @@ const { values, positionals } = parseArgs({
     key: { type: "string", default: "bot.jwk" },
     as: { type: "string" },
     ice: { type: "string" },
-    attack: { type: "boolean", default: false },
+    play: { type: "string", default: "defend" },
+    target: { type: "string", default: "nearest" },
+    rate: { type: "string", default: "steady" },
+    hours: { type: "string" },
+    duty: { type: "string" },
     quiet: { type: "boolean", default: false },
     help: { type: "boolean", default: false },
   },
 });
 
+const PLAYS: readonly Play[] = ["defend", "expand", "attack", "home", "cycle"];
+
+/** Seconds between claims, by name. A bot fills its 499 cap in about 85
+ *  seconds, so `patient` is the slowest setting that wastes nothing. */
+const RATES: Record<string, number> = { brisk: 2, steady: 15, patient: 85 };
+
+const STEPS_PER_SECOND = 12;
+
+function fail(message: string): never {
+  console.error(message);
+  process.exit(1);
+}
+
+function play(): Play {
+  const chosen = values.play as Play;
+  if (!PLAYS.includes(chosen)) fail(`--play must be one of ${PLAYS.join(", ")}`);
+  return chosen;
+}
+
+function target(): Target {
+  const chosen = values.target!;
+  if (chosen === "nearest" || chosen === "random" || chosen === "rotate") return chosen;
+  const empire = Number(chosen);
+  if (!Number.isInteger(empire) || empire < 1) {
+    fail("--target must be nearest, random, rotate, or an empire number");
+  }
+  return empire;
+}
+
+function interval(): number {
+  const named = RATES[values.rate!];
+  const seconds = named ?? Number(values.rate);
+  if (!Number.isFinite(seconds) || seconds <= 0) {
+    fail(`--rate must be ${Object.keys(RATES).join(", ")}, or a number of seconds`);
+  }
+  return Math.round(seconds * STEPS_PER_SECOND);
+}
+
+/** When it is playing at all. Two independent schedules, and a bot has to be
+ *  inside both: a night shift that also rests is a night shift that rests. */
+function awake(): ((now: number) => boolean) | undefined {
+  const checks: Array<(now: number) => boolean> = [];
+
+  if (values.hours !== undefined) {
+    const [from, to] = values.hours.split("-").map((part) => Number(part));
+    if (![from, to].every((h) => Number.isInteger(h) && h! >= 0 && h! <= 23)) {
+      fail("--hours wants two local hours, as in 22-07");
+    }
+    checks.push((now) => {
+      const hour = new Date(now).getHours();
+      // Wrapping midnight is the normal case for a night shift, not the corner.
+      return from! <= to! ? hour >= from! && hour < to! : hour >= from! || hour < to!;
+    });
+  }
+
+  if (values.duty !== undefined) {
+    const [on, off] = values.duty.split("/").map((part) => Number(part));
+    if (![on, off].every((m) => Number.isFinite(m) && m! >= 0) || !on || on + off! <= 0) {
+      fail("--duty wants minutes on and minutes off, as in 20/40");
+    }
+    const cycle = on + off!;
+    checks.push((now) => Math.floor(now / 60_000) % cycle < on);
+  }
+
+  if (checks.length === 0) return undefined;
+  return (now) => checks.every((check) => check(now));
+}
+
 const say = (line: string): void => {
   if (!values.quiet) console.log(line);
 };
 
-async function play(code: string): Promise<void> {
+async function run(code: string): Promise<void> {
   const identity = await identityAt(values.key);
   say(`bot      ${await fingerprint(identity.key)}`);
   say(`key      ${identity.key}`);
   say(`joining  ${code}`);
+  say(
+    `playing  ${settings.mode}, target ${String(settings.target)}, ` +
+      `a claim every ${(settings.interval / STEPS_PER_SECOND).toFixed(0)}s` +
+      (settings.awake ? ", on a schedule" : ""),
+  );
 
   let bot: PeerBot | undefined;
 
@@ -82,7 +194,13 @@ async function play(code: string): Promise<void> {
       // needlessly dull.
       const start = (given: Seat): void => {
         if (bot) return;
-        bot = new PeerBot({ lockstep: driver, ...(values.attack ? { mode: "attack" as const } : {}) });
+        bot = new PeerBot({
+          lockstep: driver,
+          mode: settings.mode,
+          target: settings.target,
+          interval: settings.interval,
+          ...(settings.awake ? { awake: settings.awake } : {}),
+        });
         say(`seated   empire ${given.empire}, seat ${given.member}`);
       };
 
@@ -106,8 +224,19 @@ async function play(code: string): Promise<void> {
   // decision every few seconds rather than every step.
   const acting = setInterval(() => bot?.tick(), 1000);
 
+  // A bot that has gone quiet looks exactly like one that has crashed, and the
+  // difference matters to the team relying on it.
+  let rested = false;
+  const watch = setInterval(() => {
+    if (!bot || bot.resting === rested) return;
+    rested = bot.resting;
+    say(rested ? "resting" : "playing again");
+  }, 10_000);
+  watch.unref?.();
+
   const done = async (): Promise<void> => {
     clearInterval(acting);
+    clearInterval(watch);
     await peer.stop();
     say(`stopped at step ${peer.driver.step}`);
     process.exit(0);
@@ -122,7 +251,16 @@ if (values.help || !code) {
   process.exit(code ? 0 : 1);
 }
 
-await play(code).catch((error: Error) => {
+// Everything the flags decide, decided once and before anything connects: a bad
+// flag should be a refusal at the prompt, not a surprise an hour into a game.
+const settings = {
+  mode: play(),
+  target: target(),
+  interval: interval(),
+  awake: awake(),
+};
+
+await run(code).catch((error: Error) => {
   console.error(error.message);
   process.exit(1);
 });
