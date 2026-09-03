@@ -64,6 +64,39 @@ describe("coin claim radii", () => {
   });
 });
 
+// A coin divides the population that triggered it across its whole shape, so a
+// large coin triggered by a small claim divided to nothing per tile — and
+// place() refuses an amount of zero. A gold coin sitting in open ground took
+// none of it: not the tiles around it, not even the tile it was on.
+describe("a coin triggered with almost nothing", () => {
+  let sim: Sim;
+
+  beforeAll(() => {
+    sim = arena([humans(1), humans(1)]);
+    own(sim, 10, 12, 1);
+    sim.state.item[at(sim, 11, 12)] = ITEM.GOLD;
+    sim.state.itemCount = 1;
+    // Twenty population across twenty-five tiles is less than one each.
+    sim.state.empires[0]!.members[0]!.popTimer = 20;
+    claimNow(sim, 1, 0, 11, 12);
+  });
+
+  it("still claims its whole shape", () => expect(held(sim, 1)).toBe(25));
+
+  it("puts a population on every tile of it", () => {
+    expect(popAt(sim, 11, 13)).toBe(1);
+    expect(popAt(sim, 11, 10)).toBe(1);
+  });
+
+  // The remainder is what is left after the split, and there is nothing left
+  // when the split had to round up. It must not go negative and take the coin
+  // tile with it.
+  it("and does not leave the coin tile empty", () => {
+    expect(popAt(sim, 11, 12)).toBe(1);
+    expect(ownerAt(sim, 11, 12)).toBe(1);
+  });
+});
+
 describe("coin cascade", () => {
   let sim: Sim;
 

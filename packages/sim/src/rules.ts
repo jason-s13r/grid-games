@@ -442,10 +442,18 @@ function cascade(
   const rules = state.genesis.rules;
 
   const shape = vonNeumannBall(COIN_RADIUS[originItem]!);
-  const perTile = Math.floor(base / shape.length);
+  // Never zero. A gold coin spreads across twenty-five tiles, so a trigger with
+  // less than that much population divided to nothing per tile — and place()
+  // refuses an amount of zero, so the coin claimed nothing whatsoever, not even
+  // the empty ground it was sitting in the middle of. One population is enough
+  // to take a neutral tile, which is the least a coin should ever do.
+  const perTile = Math.max(1, Math.floor(base / shape.length));
   // The remainder lands on the coin tile itself, so nothing is lost and the
-  // split stays deterministic.
-  const remainder = base - perTile * shape.length;
+  // split stays deterministic. Clamped for the same reason as above: once
+  // perTile has been floored upwards it can exceed what there was to spread,
+  // and a negative remainder would have made the coin tile the one tile the
+  // coin failed to take.
+  const remainder = Math.max(0, base - perTile * shape.length);
 
   const maxDepth =
     member.kind === MEMBER.BOT ? rules.botCascadeDepth : Number.MAX_SAFE_INTEGER;

@@ -5,7 +5,7 @@ import type { Rules, MapConfig } from "./types.js";
 
 /** Bumped whenever a change moves the state hash. Genesis records it, and a
  *  peer refuses to join a game whose major differs. */
-export const PROTOCOL_VERSION = 2;
+export const PROTOCOL_VERSION = 3;
 
 /** Indexed by Terrain. Mountains and lakes are permanent; rivers and walls
  *  open once bridged or laddered. */
