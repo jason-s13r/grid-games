@@ -1,5 +1,82 @@
 # Changelog
 
+## web@0.9.0 (2026-09-03)
+
+### Features
+
+- the side panels become tabs on a phone
+  Stacked as accordions under the board they were a strip of headings,
+  each costing height whether or not anyone was reading it, and the one
+  you opened pushed the board up out of its own stage. Tabs say the same
+  thing in one row: exactly one panel, and the rest of the height is the
+  board's. Clicking the open tab shuts it and hands the board everything
+  — 422px of board becomes 710px on a 390x844 screen.
+
+  The tabs are built from the panels rather than declared beside them, so
+  the seats list brings its own tab when an empire gains a second member
+  and the chat column brings one when the game is a mesh game. Nothing
+  has to be kept in step by hand.
+
+  Two things this cost, both worth writing down. The app element carries
+  data-tabbed and data-panel rather than data-tabs and data-tab: a state
+  flag on an ancestor that answers the same selector as the thing it
+  describes makes every querySelector in the page a coin toss, and it
+  matched the app before the button for an afternoon. And the default
+  panel is chosen when a narrow screen arrives, never in the sync pass —
+  setting an attribute to the value it already has still counts as a
+  mutation, so a default chosen there reopened the panel a moment after
+  the reader shut it.
+
+- room to pan past the edge, and a board that follows you
+  Three complaints with one cause: the map stopped exactly at the
+  viewport edge, which is where the zoom and pan controls live. The tiles
+  in the bottom-right corner of the world could be seen and never
+  clicked.
+
+  So the camera may now be pushed 96px past the map on every side —
+  pixels rather than tiles, because what has to be cleared is a button
+  and a button is the same size at every zoom. Clicking out there lands
+  on nothing and is not a move.
+
+  Clicking near an edge also pans just enough to see around the tile,
+  capped at a quarter of the viewport so a narrow board does not move
+  under every tap. Clicking two tiles from the edge says where you are
+  going, and following you there saves a separate gesture.
+
+  And the arrow pad comes back on mobile, a size larger for thumbs and
+  slightly translucent over the board. It was hidden on the theory that
+  touch drags the map and the buttons cover tiles you want; a drag on a
+  small board competes with a tap, and the tiles under the controls are
+  reachable now.
+
+### Fixes
+
+- the minimap jumps where you click
+  A canvas has two sizes and they are not the same one. The backing store
+  is what the letterbox fit is computed against; the bounding rect is CSS
+  pixels, which here is whatever width the sidebar happens to be. Clicks
+  were read in one and converted with the other, so a jump landed at
+  about a third of where it was aimed, and further out the wider the
+  panel got — which is why it was at its most useless on a phone, where
+  the minimap is widest relative to the 240x160 it was declared as.
+
+  The backing store now follows the box it is drawn in, at device pixel
+  density and at the map's own aspect ratio. That fixes the arithmetic,
+  sharpens a blit that was being upscaled, and takes the letterbox bars
+  with it.
+
+- stop announcing other empires' team chat
+  A team line you cannot read used to appear as "sealed to their empire",
+  on the argument that knowing an exchange happened is part of reading
+  the game. In play it is not. It is a stranger's private conversation
+  announcing itself in your log several times a minute and saying
+  nothing, and traffic analysis is not a feature anybody asked for.
+
+  A team line from an empire that is not yours is now dropped outright.
+  The sealed rendering stays for the case that is genuinely worth seeing:
+  our own team's line that we could not open.
+
+
 ## web@0.8.0 (2026-09-02)
 
 ### Features
