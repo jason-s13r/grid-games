@@ -940,10 +940,26 @@ a.btn {
     box-shadow: none;
   }
 
-  // Touch drags the map, so the arrow pad is redundant — and on a small board
-  // it covers tiles you want to click.
-  .dpad { display: none; }
-  .mapctl { right: 8px; bottom: 8px; }
+  // The pad was hidden here on the theory that touch drags the map and the
+  // buttons only cover tiles you want to click. Both halves turned out to be
+  // wrong in practice: a drag on a small board competes with a tap, so panning
+  // by thumb is fiddly exactly where precision matters most, and the tiles the
+  // controls sit on are reachable now that the camera can be pushed past the
+  // map's edge. It comes back a size smaller, since a phone has less room and
+  // a thumb needs less help finding a target than a mouse does.
+  .dpad {
+    grid-template-columns: repeat(3, 34px);
+    grid-template-rows: repeat(3, 34px);
+  }
+  .mapctl {
+    right: 8px;
+    bottom: 8px;
+    // Translucent until touched: the pad is larger here and sits over the
+    // board, so it should not compete with the map for attention.
+    opacity: 0.82;
+    &:active, &:focus-within { opacity: 1; }
+  }
+  .btn.ctl { width: 34px; height: 34px; font-size: 13px; }
 
   // A pop-up anchored to a button has nowhere to go on a 390px screen, so it
   // spans the bar it hangs from instead of trailing off the edge of it.

@@ -17,6 +17,23 @@ export const DOM_MIN_ZOOM = 11;
 
 export const DEFAULT_ZOOM = 24;
 
+/** How far past the map's edge the camera may be pushed, in screen pixels.
+ *
+ *  Without it the last row and column sit hard against the viewport edge,
+ *  which is exactly where the zoom and pan controls are — so the tiles in the
+ *  bottom-right corner of the world could be seen and never clicked. Slack in
+ *  pixels rather than tiles because what has to be cleared is a button, and a
+ *  button is the same size at every zoom.
+ *
+ *  Comfortably more than the control cluster, which is 30px of button plus its
+ *  12px margin. */
+export const OVERSCROLL_PX = 96;
+
+/** Tiles of context to keep beyond a tile you clicked near the edge. Capped
+ *  against the viewport below, since a quarter of a phone's board is a lot
+ *  fewer tiles than a quarter of a desktop's. */
+export const REVEAL_TILES = 8;
+
 export class Camera {
   /** World tile coordinates at the viewport's top-left corner. Fractional, so
    *  panning stays smooth rather than snapping tile to tile. */
@@ -61,6 +78,30 @@ export class Camera {
   panByViewport(fx: number, fy: number): void {
     this.x += (this.width / this.zoom) * fx;
     this.y += (this.height / this.zoom) * fy;
+    this.clamp();
+  }
+
+  /** Pan the least that leaves room to see around a tile near the edge.
+   *
+   *  Clicking two tiles from the edge means the next thing you want to do is
+   *  almost certainly out there, and reaching it should not cost a separate
+   *  pan gesture — on a phone, where the board is small and a drag competes
+   *  with a tap, it costs several. Nothing moves when the tile already has
+   *  room, so a click in the middle of the board is never a camera event. */
+  revealAround(tx: number, ty: number): void {
+    const spanX = this.width / this.zoom;
+    const spanY = this.height / this.zoom;
+    // No more than a quarter of what is on screen: on a narrow board a fixed
+    // eight tiles would mean every tile but the middle few pans the map.
+    const marginX = Math.min(REVEAL_TILES, Math.floor(spanX / 4));
+    const marginY = Math.min(REVEAL_TILES, Math.floor(spanY / 4));
+
+    if (tx - marginX < this.x) this.x = tx - marginX;
+    else if (tx + 1 + marginX > this.x + spanX) this.x = tx + 1 + marginX - spanX;
+
+    if (ty - marginY < this.y) this.y = ty - marginY;
+    else if (ty + 1 + marginY > this.y + spanY) this.y = ty + 1 + marginY - spanY;
+
     this.clamp();
   }
 
@@ -125,13 +166,17 @@ export class Camera {
   private clamp(): void {
     const spanX = this.width / this.zoom;
     const spanY = this.height / this.zoom;
+    // The slack is a fixed number of pixels, so it is the same strip of screen
+    // at every zoom — which is the point, since what it exists to clear is a
+    // button rather than a number of tiles.
+    const slack = OVERSCROLL_PX / this.zoom;
 
     this.x = spanX >= this.mapWidth
       ? (this.mapWidth - spanX) / 2
-      : Math.max(0, Math.min(this.mapWidth - spanX, this.x));
+      : Math.max(-slack, Math.min(this.mapWidth - spanX + slack, this.x));
     this.y = spanY >= this.mapHeight
       ? (this.mapHeight - spanY) / 2
-      : Math.max(0, Math.min(this.mapHeight - spanY, this.y));
+      : Math.max(-slack, Math.min(this.mapHeight - spanY + slack, this.y));
 
     this.changed = true;
   }

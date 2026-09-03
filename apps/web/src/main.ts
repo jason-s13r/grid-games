@@ -216,9 +216,15 @@ viewportEl.addEventListener("pointerup", (event) => {
 
   const rect = viewportEl.getBoundingClientRect();
   const [x, y] = camera.tileAt(event.clientX - rect.left, event.clientY - rect.top);
+  // The camera can sit a little past the map's edge, so a click can land on
+  // nothing at all. That is not a move; it is how you reach the corner tiles
+  // without the controls on top of them.
   if (x < 0 || y < 0 || x >= MAP.width || y >= MAP.height) return;
 
   boardClick(game, x, y);
+  // Clicking near the edge says where you are going. Following it there saves
+  // a separate pan gesture, which on a phone is several.
+  camera.revealAround(x, y);
 });
 
 // Wheel deltas are wildly inconsistent — a mouse notch is ~100px, a trackpad
