@@ -97,7 +97,18 @@ export const DEFAULT_RULES: Rules = {
   endStep: 0, // 0 = no timeout
 
   botActionInterval: seconds(2),
+
+  // Three people rotating shifts, plus a bot to hold the seat overnight. Big
+  // enough for the team game this is for, small enough that adding seats is not
+  // a strategy.
+  maxSeats: 4,
 };
+
+/** The most seats any rule may allow. Empire and member ids ride in single
+ *  bytes of every signed move, and 32 members is already an empire nobody could
+ *  coordinate — the ceiling exists so a hand-rolled genesis cannot ask for a
+ *  number the wire cannot carry. */
+export const SEAT_CEILING = 32;
 
 export const DEFAULT_MAP: MapConfig = {
   width: 96,

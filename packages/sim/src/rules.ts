@@ -4,7 +4,7 @@
 
 import { MOVE, ITEM, TERRAIN, MEMBER, PHASE, ELIMINATION } from "./types.js";
 import type { Empire, Member, Move, EmpireId, Item } from "./types.js";
-import { PASSABLE, COIN_RADIUS, STAT } from "./constants.js";
+import { PASSABLE, COIN_RADIUS, SEAT_CEILING, STAT } from "./constants.js";
 import { ORTHO, vonNeumannBall, idx, xOf, yOf, inBounds } from "./geometry.js";
 import { bump, raise } from "./stats.js";
 import type { State } from "./state.js";
@@ -216,7 +216,12 @@ export function validate(state: State, move: Move): boolean {
   const rules = state.genesis.rules;
 
   if (move.type === MOVE.PASS || move.type === MOVE.HEARTBEAT) return true;
-  if (move.type === MOVE.ROSTER_AMEND) return empire.members.length < 32;
+  // The seat cap, enforced where it cannot be argued with. An empire votes a
+  // substitute in, but no quorum can vote itself a bigger team than every other
+  // empire is allowed.
+  if (move.type === MOVE.ROSTER_AMEND) {
+    return empire.members.length < Math.min(rules.maxSeats, SEAT_CEILING);
+  }
   if (move.type === MOVE.BUY_BRIDGE) return empire.diamonds >= rules.bridgeCost;
   if (move.type === MOVE.BUY_LADDER) return empire.diamonds >= rules.ladderCost;
   // Refused once it is already owned: it is permanent, and letting an empire

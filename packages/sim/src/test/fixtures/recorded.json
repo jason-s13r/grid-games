@@ -64,7 +64,8 @@
       "abandonWindow": 129600,
       "elimination": 0,
       "endStep": 0,
-      "botActionInterval": 24
+      "botActionInterval": 24,
+      "maxSeats": 4
     },
     "empires": [
       {

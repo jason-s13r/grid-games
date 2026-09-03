@@ -114,6 +114,18 @@ export interface Rules {
   endStep: number;
 
   botActionInterval: number;
+
+  /** Seats one empire may ever hold, counted in the genesis record and enforced
+   *  again on every ROSTER_AMEND.
+   *
+   *  This is the whole of team-size fairness. An empire is a set of seats
+   *  sharing territory with a population timer each, so a side that can add
+   *  seats freely simply out-accrues everyone else — and since a headless bot
+   *  is an ordinary peer holding an ordinary seat, "add seats" costs nothing
+   *  but processes. The cap is uniform across every empire in a game and it is
+   *  in the genesis record, so it is agreed before anybody plays rather than
+   *  argued about afterwards. */
+  maxSeats: number;
 }
 
 export interface MapConfig {

@@ -8,7 +8,7 @@ import { beforeAll, describe, expect, it } from "vitest";
 import { Sim, makeGenesis, CLAIM } from "../sim.js";
 import { MOVE, MEMBER, CONTROL, TERRAIN, ITEM, WIN } from "../types.js";
 import { idx } from "../geometry.js";
-import { STEPS_PER_SECOND } from "../constants.js";
+import { DEFAULT_RULES, STEPS_PER_SECOND } from "../constants.js";
 import { arena, at, claimNow, held, humans, own, ownerAt, popAt } from "./testkit.js";
 
 describe("surround multiplier", () => {
@@ -342,6 +342,44 @@ describe("team empires", () => {
 
     it("a bot member accrues at half rate", () => {
       expect(sim.state.empires[0]!.members[1]!.popTimer).toBe(100);
+    });
+  });
+
+  // An empire is a set of seats sharing territory with a population timer
+  // each, so a side that can add seats freely out-accrues everyone else. Since
+  // a headless bot is an ordinary peer holding an ordinary seat, adding one
+  // costs nothing but a process — which is why the cap is a rule rather than a
+  // manner of the lobby. An empire votes a substitute in; no quorum can vote
+  // itself a bigger team than every other empire is allowed.
+  describe("an empire cannot vote itself past the seat cap", () => {
+    const amend = (sim: Sim, kind: number) => ({
+      step: sim.step,
+      empire: 1,
+      member: 0,
+      seq: 0,
+      type: MOVE.ROSTER_AMEND,
+      x: kind,
+      y: 0,
+    });
+
+    it("seats a substitute while there is room", () => {
+      const sim = arena([humans(1), humans(1)], 1, { maxSeats: 3 });
+      sim.advance([amend(sim, MEMBER.HUMAN)]);
+      expect(sim.state.empires[0]!.members).toHaveLength(2);
+    });
+
+    it("and refuses the one that would put it over", () => {
+      const sim = arena([humans(3), humans(1)], 1, { maxSeats: 3 });
+      const move = amend(sim, MEMBER.HUMAN);
+      expect(sim.validate(move)).toBe(false);
+      sim.advance([move]);
+      expect(sim.state.empires[0]!.members).toHaveLength(3);
+    });
+
+    // The default is a team of three rotating shifts plus a seat to cover the
+    // night, which is the game this is for.
+    it("by default, four", () => {
+      expect(DEFAULT_RULES.maxSeats).toBe(4);
     });
   });
 });
