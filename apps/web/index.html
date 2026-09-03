@@ -115,22 +115,9 @@
             <section class="card">
               <h2>Solo</h2>
               <p class="card-tag">One empire against bots. Starts immediately.</p>
-              <div class="field">
-                <label for="cfg-bots">Rival empires</label>
-                <select id="cfg-bots" data-cfg="bots">
-                  <option value="1">1</option>
-                  <option value="3" selected>3</option>
-                  <option value="5">5</option>
-                  <option value="7">7</option>
-                </select>
-              </div>
-              <div class="field">
-                <label for="cfg-level">Difficulty</label>
-                <select id="cfg-level" data-cfg="level">
-                  <option value="easy">easy &mdash; sprawls, holds nothing</option>
-                  <option value="steady" selected>steady</option>
-                  <option value="hard">hard &mdash; slower, and every tile a wall</option>
-                </select>
+              <div class="field field-stacked">
+                <label>Rival empires</label>
+                <div class="rivals" data-cfg="rivals"></div>
               </div>
               <div class="field">
                 <label for="cfg-size">Map</label>

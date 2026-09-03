@@ -66,10 +66,10 @@ export interface LobbyPlayer {
  *  should be in the world. */
 export interface HostPlan {
   empires: MemberKey[][];
-  simbots: number;
-  /** How hard the SimBot empires play. In the genesis record with everything
-   *  else, so it is a fact of the game rather than a claim about it. */
-  level?: Difficulty;
+  /** One entry per SimBot empire, naming how hard that one plays. Each goes
+   *  into the genesis record with everything else, so a game's opponents are a
+   *  fact of it rather than a claim about it. */
+  simbots: readonly Difficulty[];
   width: number;
   height: number;
 }
@@ -267,7 +267,7 @@ export class Lobby {
       control: CONTROL.HUMAN,
       members: keys.map((key) => ({ kind: MEMBER.HUMAN, key })),
     }));
-    for (let i = 0; i < plan.simbots; i++) empires.push(simbot(plan.level ?? "steady"));
+    for (const level of plan.simbots) empires.push(simbot(level));
 
     const genesis = makeGenesis({
       seed: seedFrom(`${this.code}:${Date.now()}`),

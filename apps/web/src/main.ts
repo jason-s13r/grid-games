@@ -5,7 +5,6 @@
 // strictly outside the simulation.
 
 import { seedFrom, PROTOCOL_VERSION, Sim } from "@tessera/sim";
-import type { Difficulty } from "@tessera/sim";
 import { Roster } from "@tessera/protocol";
 import { Archive, Lobby, Lockstep } from "@tessera/net";
 import pkg from "../package.json";
@@ -15,6 +14,7 @@ import { OnlineGame } from "./game/Online";
 import type { Driver } from "./game/Driver";
 import { myIdentity } from "./net/identity";
 import { LobbyPanel } from "./view/LobbyPanel";
+import { Rivals } from "./view/Rivals";
 import type { RosterView } from "./view/LobbyPanel";
 import { ChatPanel } from "./view/Chat";
 import { Camera, MIN_ZOOM, MAX_ZOOM, DOM_MIN_ZOOM } from "./view/Camera";
@@ -79,11 +79,11 @@ const MAP_SIZES: Record<string, { width: number; height: number }> = {
 const mapSize = () =>
   MAP_SIZES[pick<HTMLSelectElement>('[data-cfg="size"]').value] ?? MAP_SIZES.medium!;
 
-const soloSetup = () => ({
-  bots: Number(pick<HTMLSelectElement>('[data-cfg="bots"]').value),
-  level: pick<HTMLSelectElement>('[data-cfg="level"]').value as Difficulty,
-  ...mapSize(),
-});
+/** The rival empires the solo card is offering, each with its own difficulty.
+ *  It renders itself, so nothing here has to know how many there are. */
+const rivals = new Rivals(pick<HTMLElement>('[data-cfg="rivals"]'));
+
+const soloSetup = () => ({ bots: rivals.list, ...mapSize() });
 
 let MAP = { ...MAP_SIZES.medium! };
 

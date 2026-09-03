@@ -765,6 +765,23 @@ a.btn {
   font-size: 12px;
   overflow-wrap: anywhere;
 }
+.lobby-drop {
+  // Removing an empire is a small, reversible thing beside the button that
+  // starts the game, so it is sized like a footnote rather than an action.
+  padding: 2px 8px;
+  line-height: 1.2;
+  opacity: 0.7;
+  &:hover { opacity: 1; }
+}
+// The solo card asks the same question the lobby does, so it wears the same
+// rows — but stacked under its label rather than beside it, because a list that
+// grows cannot sit on one line with a caption.
+.field-stacked {
+  display: block;
+}
+.rivals .lobby-teams {
+  margin: 6px 0;
+}
 .lobby-team {
   font: inherit;
   font-size: 12px;

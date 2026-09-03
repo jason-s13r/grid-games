@@ -8,14 +8,14 @@ import type { MemberKey } from "@tessera/protocol";
 import { MAX_SEATS, composeTeams } from "@tessera/net";
 import type { Difficulty } from "@tessera/sim";
 import type { Lobby, LobbyPlayer } from "@tessera/net";
-import { empireTheme } from "./palette";
+import { EMPIRE_THEMES, empireTheme } from "./palette";
 
 export interface LobbyHandlers {
   host: () => void;
   join: (code: string) => void;
   /** Empires as the host has arranged them, each a list of member keys, plus
    *  however many whole SimBot empires to put in the world. */
-  start: (plan: { empires: MemberKey[][]; simbots: number; level: Difficulty }) => void;
+  start: (plan: { empires: MemberKey[][]; simbots: Difficulty[] }) => void;
   /** Tear the lobby down and go back to the opening choice. Every dead end
    *  needs one, or the only way out of a failed join is a page reload. */
   leave: () => void;
@@ -52,8 +52,10 @@ export class LobbyPanel {
   /** Which empire each player is on, by key. Sparse on purpose: a player with
    *  no entry gets an empire of their own. */
   private readonly teams = new Map<MemberKey, number>();
-  private simbots = 1;
-  private level: Difficulty = "steady";
+  /** One entry per bot empire, in the order they will be seated. Bot empires
+   *  are not interchangeable now that each has its own difficulty, so this is
+   *  a list rather than a count. */
+  private simbots: Difficulty[] = ["steady"];
   private roster: RosterView | null = null;
   /** What the roster looked like when it was last drawn. A game in progress
    *  offers this several times a second; redrawing an unchanged list would
@@ -69,6 +71,16 @@ export class LobbyPanel {
       if (!button) return;
       const action = button.dataset.lobbyAction;
       if (action === "host") this.handlers.host();
+      if (action === "add-bot" && this.simbots.length < MAX_SIMBOTS) {
+        // New ones arrive matching the last, because somebody adding a third
+        // opponent after setting two to hard meant the third to be hard too.
+        this.simbots.push(this.simbots.at(-1) ?? "steady");
+        this.render();
+      }
+      if (action === "drop-bot") {
+        this.simbots.splice(Number(button.dataset.index), 1);
+        this.render();
+      }
       if (action === "start") this.handlers.start(this.plan());
       if (action === "leave") this.handlers.leave();
       if (action === "invite" && button.dataset.key) this.handlers.invite(button.dataset.key);
@@ -86,12 +98,10 @@ export class LobbyPanel {
       const select = event.target as HTMLSelectElement;
       if (!(select instanceof HTMLSelectElement)) return;
       const key = select.dataset.lobbyTeam;
+      const bot = select.dataset.lobbyLevel;
       if (key !== undefined) this.teams.set(key, Number(select.value));
-      else if (select.dataset.lobbySimbots !== undefined) {
-        this.simbots = Number(select.value);
-      } else if (select.dataset.lobbyLevel !== undefined) {
-        this.level = select.value as Difficulty;
-      } else return;
+      else if (bot !== undefined) this.simbots[Number(bot)] = select.value as Difficulty;
+      else return;
       // The list of empires to choose from grows and shrinks with the
       // assignment, so the whole picker is rebuilt rather than patched.
       this.render();
@@ -186,9 +196,12 @@ export class LobbyPanel {
     }
 
     const { players, teamOf, empires } = this.compose();
-    const count = empires.length + this.simbots;
+    const count = empires.length + this.simbots.length;
     const alone = players.length === 1;
     const crowded = empires.some((keys) => keys.length > MAX_SEATS);
+    // Room for one more bot empire only while the palette can still tell it
+    // apart from everything else on the board.
+    const room = Math.min(MAX_SIMBOTS, Math.max(0, EMPIRE_THEMES.length - empires.length));
     const ready = count >= 2 && !crowded;
 
     return `
@@ -215,20 +228,17 @@ export class LobbyPanel {
              people than another.</p>`
           : ""
       }
-      <label class="lobby-field">Bot empires
-        <select class="lobby-team" data-lobby-simbots>
-          ${Array.from({ length: MAX_SIMBOTS + 1 }, (_, n) => option(String(n), String(n), n === this.simbots)).join("")}
-        </select>
-      </label>
-      ${
-        this.simbots > 0
-          ? `<label class="lobby-field">Difficulty
-               <select class="lobby-team" data-lobby-level>
-                 ${LEVELS.map((one) => option(one, one, one === this.level)).join("")}
-               </select>
-             </label>`
-          : ""
-      }
+      <p class="hint">Bot empires, each played by the simulation itself. Set them
+      separately: one hard opponent and two easy ones is a different game from
+      three of anything, and a better one.</p>
+      <ul class="lobby-teams lobby-rivals">
+        ${this.simbots.map((level, i) => this.rivalRow(level, empires.length + i + 1, i)).join("")}
+      </ul>
+      <div class="lobby-actions">
+        <button class="btn" data-lobby-action="add-bot"${
+          this.simbots.length >= room ? " disabled" : ""
+        }>Add a bot empire</button>
+      </div>
       ${
         count < 2
           ? `<p class="hint lobby-problem">A game needs at least two empires —
@@ -313,8 +323,23 @@ export class LobbyPanel {
     return { players, teamOf, empires };
   }
 
-  private plan(): { empires: MemberKey[][]; simbots: number; level: Difficulty } {
-    return { empires: this.compose().empires, simbots: this.simbots, level: this.level };
+  private plan(): { empires: MemberKey[][]; simbots: Difficulty[] } {
+    return { empires: this.compose().empires, simbots: [...this.simbots] };
+  }
+
+  /** One bot empire: the colour it will play, how hard, and a way to change
+   *  its mind about being here. */
+  private rivalRow(level: Difficulty, empire: number, index: number): string {
+    const theme = empireTheme(empire);
+    return `
+      <li class="lobby-seat">
+        <span class="lobby-who" style="color:${theme.c1}">${escape(theme.name)}</span>
+        <select class="lobby-team" data-lobby-level="${index}">
+          ${LEVELS.map((one) => option(one, one, one === level)).join("")}
+        </select>
+        <button class="btn lobby-drop" data-lobby-action="drop-bot" data-index="${index}"
+                title="Remove this empire">&times;</button>
+      </li>`;
   }
 }
 

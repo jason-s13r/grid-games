@@ -15,13 +15,12 @@ const MAX_STEPS_PER_FRAME = 240;
 
 export interface LocalOptions {
   seed: number;
-  /** Whole SimBot empires to play against. There is no such thing as a bot on
-   *  your own side: an empire's seats are people, and the one way another seat
-   *  joins one is a vote by the seats already in it. */
-  bots: number;
-  /** How hard those empires play. Written into the genesis record like every
-   *  other rule, so a replay of this game plays the same bots. */
-  level?: Difficulty;
+  /** One whole SimBot empire per entry, naming how hard that one plays. There
+   *  is no such thing as a bot on your own side: an empire's seats are people,
+   *  and the one way another seat joins one is a vote by the seats already in
+   *  it. Each level goes into the genesis record like every other rule, so a
+   *  replay of this game plays the same opponents. */
+  bots: readonly Difficulty[];
   width: number;
   height: number;
 }
@@ -41,7 +40,7 @@ export class LocalGame implements Driver {
   constructor(readonly options: LocalOptions) {
     const empires: EmpireSpec[] = [
       { control: CONTROL.HUMAN, members: [{ kind: MEMBER.HUMAN }] },
-      ...Array.from({ length: options.bots }, () => simbot(options.level ?? "steady")),
+      ...options.bots.map((level) => simbot(level)),
     ];
 
     this.sim = new Sim(

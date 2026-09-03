@@ -56,36 +56,36 @@ describe("checking a plan", () => {
   const here = ["a", "b"];
 
   it("accepts two people on two empires", () => {
-    expect(checkPlan({ empires: [["a"], ["b"]], simbots: 0 }, here)).toBe("");
+    expect(checkPlan({ empires: [["a"], ["b"]], simbots: [] }, here)).toBe("");
   });
 
   it("accepts a team of two against a bot empire", () => {
-    expect(checkPlan({ empires: [["a", "b"]], simbots: 1 }, here)).toBe("");
+    expect(checkPlan({ empires: [["a", "b"]], simbots: ["steady"] }, here)).toBe("");
   });
 
   // One empire wins on the first step, which is a game nobody gets to play.
   it("refuses a team of two with nobody to play against", () => {
-    expect(checkPlan({ empires: [["a", "b"]], simbots: 0 }, here)).toMatch(/two empires/);
+    expect(checkPlan({ empires: [["a", "b"]], simbots: [] }, here)).toMatch(/two empires/);
   });
 
   it("refuses a player seated twice", () => {
-    expect(checkPlan({ empires: [["a"], ["a", "b"]], simbots: 0 }, here)).toMatch(/twice/);
+    expect(checkPlan({ empires: [["a"], ["a", "b"]], simbots: [] }, here)).toMatch(/twice/);
   });
 
   it("refuses an empire with nobody on it", () => {
-    expect(checkPlan({ empires: [["a"], [], ["b"]], simbots: 0 }, here)).toMatch(/no members/);
+    expect(checkPlan({ empires: [["a"], [], ["b"]], simbots: [] }, here)).toMatch(/no members/);
   });
 
   it("refuses a key nobody here holds", () => {
-    expect(checkPlan({ empires: [["a"], ["z"]], simbots: 0 }, here)).toMatch(/stranger/);
+    expect(checkPlan({ empires: [["a"], ["z"]], simbots: [] }, here)).toMatch(/stranger/);
   });
 
   it("refuses a plan that forgot somebody", () => {
-    expect(checkPlan({ empires: [["a"]], simbots: 1 }, here)).toMatch(/no seat/);
+    expect(checkPlan({ empires: [["a"]], simbots: ["steady"] }, here)).toMatch(/no seat/);
   });
 
   it("refuses an empty plan", () => {
-    expect(checkPlan({ empires: [], simbots: 2 }, here)).toMatch(/nobody is seated/);
+    expect(checkPlan({ empires: [], simbots: ["steady", "steady"] }, here)).toMatch(/nobody is seated/);
   });
 });
 
@@ -97,13 +97,13 @@ describe("the seat cap", () => {
   // another simply by inviting them.
   it("accepts an empire filled to the cap", () => {
     const full = team.slice(0, MAX_SEATS);
-    const plan = { empires: [full, ["kz"]], simbots: 0 };
+    const plan = { empires: [full, ["kz"]], simbots: [] };
     expect(checkPlan(plan, [...full, "kz"])).toBe("");
   });
 
   it("refuses one seat past it", () => {
     const over = team.slice(0, MAX_SEATS + 1);
-    const plan = { empires: [over, ["kz"]], simbots: 0 };
+    const plan = { empires: [over, ["kz"]], simbots: [] };
     expect(checkPlan(plan, [...over, "kz"])).toContain("seats");
   });
 

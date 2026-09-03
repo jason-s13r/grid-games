@@ -5,6 +5,7 @@
 // a compaction and a validation, and both are worth being sure about.
 
 import { DEFAULT_RULES, SEAT_CEILING } from "@tessera/sim";
+import type { Difficulty } from "@tessera/sim";
 import type { MemberKey } from "@tessera/protocol";
 
 export interface Seated {
@@ -53,7 +54,11 @@ export function composeTeams(
 
 export interface Plan {
   empires: MemberKey[][];
-  simbots: number;
+  /** One entry per SimBot empire, naming how hard it plays. An array rather
+   *  than a count because bot empires are not interchangeable: a game against
+   *  one hard opponent and two easy ones is a different game from three of
+   *  anything, and it is the more interesting one. */
+  simbots: readonly Difficulty[];
 }
 
 /** Seats one empire may hold, which is the genesis rule every peer will check
@@ -84,6 +89,6 @@ export function checkPlan(plan: Plan, expected: Iterable<MemberKey>): string {
   }
 
   // One empire is last-empire-standing on the first step: a game nobody plays.
-  if (plan.empires.length + plan.simbots < 2) return "a game needs at least two empires";
+  if (plan.empires.length + plan.simbots.length < 2) return "a game needs at least two empires";
   return "";
 }
