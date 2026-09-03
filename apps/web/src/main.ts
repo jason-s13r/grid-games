@@ -6,7 +6,7 @@
 
 import { seedFrom, PROTOCOL_VERSION, Sim } from "@tessera/sim";
 import { Roster } from "@tessera/protocol";
-import { Lobby, Lockstep, PeerBot } from "@tessera/net";
+import { Archive, Lobby, Lockstep, PeerBot } from "@tessera/net";
 import pkg from "../package.json";
 import { LocalGame } from "./game/Local";
 import { boardClick } from "./game/input";
@@ -326,9 +326,35 @@ function leaveMesh(): void {
   lobby.close();
   lobby = undefined;
   mesh = undefined;
+  archive = undefined;
+  archiveBtn.hidden = true;
   chat.close();
   panel.detach();
 }
+
+/** Hand the player their own copy of the game.
+ *
+ *  This is the other half of a checkable result. `verifyArchive` rebuilds the
+ *  roster from the genesis record and checks every signature in the file
+ *  against it, so what comes down here is not a score anybody is asked to
+ *  believe — it is the inputs, and the hash they produce, for anyone to run
+ *  themselves. A tab holds the log anyway; all that was missing was a way to
+ *  get it out. */
+const archiveBtn = pick<HTMLButtonElement>('[data-action="archive"]');
+archiveBtn.addEventListener("click", () => {
+  if (!archive) return;
+  const game = archive.toJSON();
+  const url = URL.createObjectURL(
+    new Blob([JSON.stringify(game)], { type: "application/json" }),
+  );
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = `tessera-${(game.genesis.gameId ?? "game").slice(0, 12)}-${game.steps}.json`;
+  link.click();
+  // Revoked on the next turn rather than immediately: the click is synchronous
+  // but the fetch the browser starts for it is not.
+  setTimeout(() => URL.revokeObjectURL(url), 0);
+});
 
 pick<HTMLButtonElement>('[data-action="solo"]').addEventListener("click", () => {
   leaveMesh();
@@ -388,6 +414,13 @@ let lobby: Lobby | undefined;
  *  than through the Driver interface: a solo game has nobody to talk to, so
  *  there is nothing for LocalGame to implement. */
 let mesh: Lockstep | undefined;
+/** The game this tab has been writing down, for as long as it has been in it.
+ *
+ *  A tab is not a durable archive and is not pretending to be one — that is
+ *  what the observer is for. What it is, is the copy the person who actually
+ *  played holds: signed, replayable, and theirs to keep or to hand to anybody
+ *  who would like to check the result rather than take their word for it. */
+let archive: Archive | undefined;
 
 const chat = new ChatPanel(chatEl, {
   send: (body, channel) => void mesh?.say(body, channel),
@@ -488,6 +521,10 @@ async function begin(code?: string): Promise<void> {
       own.start();
       return new PeerBot({ lockstep: own });
     });
+    archive = new Archive(genesis, driver);
+    archive.attach(driver);
+    archiveBtn.hidden = false;
+
     driver.onMessage = (message, text) => chat.add(message, text);
     // Being voted a seat mid-game is the moment an observer becomes a player.
     // Nothing about the driver changes — it was already verifying every move —
