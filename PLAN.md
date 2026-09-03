@@ -250,7 +250,7 @@ The same process backs stats and rankings: it holds `{ genesis, moveLog }` and r
 > - **A bot needs no mechanism.** It is seated by `ROSTER_AMEND` like any substitute: it joins as an observer, prints its key, and an empire votes it in. From the mesh's side it is a player who never sleeps.
 > - **PeerJS wants globals.** It reads `RTCPeerConnection` off the global object with no injection point, so a headless peer needs `node-datachannel` — the only native dependency in the repository — installed where it looks before it looks. Its own load path needed fixing too: under Node the library resolves to CommonJS, and the interop namespace puts the exports object under `default`, which is not a constructor.
 >
-> What is still missing is the table. Every input a ranking needs exists and nothing yet gathers the files into one.
+> The table is `tessera-observe rank <dir>`, and it turned out to be mostly refusal rather than arithmetic. `rankArchives` verifies every archive it is given and builds the standings out of the replays, so no figure on it was ever reported by anyone; what it declines to count is the part worth designing. A fragment does not count, because the stats depend on the part that is missing. An edited log does not count. And a game counts *once* however many observers archived it — two observers on one game is how an archive is kept safe, not a corner case, so a duplicate is named rather than added twice. `verifyArchive` gained the outcome it was already computing: a second replay to find out who won would have been the only expensive thing in the file, done twice.
 
 ---
 

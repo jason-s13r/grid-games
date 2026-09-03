@@ -4,6 +4,8 @@ export { SnapshotStore, encodeSnapshot, decodeSnapshot } from "./snapshots.js";
 export type { Checkpointed } from "./snapshots.js";
 export { Archive, ARCHIVE_FORMAT, verifyArchive, seatsOf } from "./archive.js";
 export type { ArchivedGame, ArchiveOptions, ArchiveRecord, ArchiveSource, Verdict } from "./archive.js";
+export { rankArchives } from "./rankings.js";
+export type { Leaderboard, Standing } from "./rankings.js";
 export { Lockstep } from "./lockstep.js";
 export type { LockstepOptions, Seat, EjectionReason } from "./lockstep.js";
 export { PeerBot } from "./peerbot.js";

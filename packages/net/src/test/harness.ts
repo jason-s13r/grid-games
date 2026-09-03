@@ -8,7 +8,7 @@
 // verification, in arrival order.
 
 import { CONTROL, MEMBER, MOVE, STEPS_PER_SECOND, Sim, makeGenesis, validate } from "@tessera/sim";
-import type { EmpireSpec, Genesis, MemberKind, Move } from "@tessera/sim";
+import type { EmpireSpec, Genesis, MemberKind, Move, Rules } from "@tessera/sim";
 import { Identity, Roster, sealGenesis } from "@tessera/protocol";
 import type { Message } from "@tessera/protocol";
 import { LoopbackNetwork, Lockstep, LocalHub, PeerBot } from "../index.js";
@@ -90,6 +90,10 @@ export interface TableOptions {
   desyncTolerance?: number;
   snapshotInterval?: number;
   seed?: number;
+  /** Genesis rules to override. `endStep` is the useful one: a game that ends
+   *  inside a test run is the only way to watch anything downstream of victory,
+   *  a ranking included. */
+  rules?: Partial<Rules>;
 }
 
 export async function table(options: TableOptions): Promise<Table> {
@@ -126,6 +130,7 @@ export async function table(options: TableOptions): Promise<Table> {
       startedAt: 0,
       empires,
       map: { width: 32, height: 32 },
+      ...(options.rules ? { rules: options.rules } : {}),
     }),
   );
 

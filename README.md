@@ -75,6 +75,7 @@ checks archives, including ones it did not write:
 ```sh
 tessera-observe export archives/<gameId>     # the directory as one file
 tessera-observe verify archives/<gameId>     # genesis, signatures, and the hash
+tessera-observe rank   archives              # the table, from every game under it
 ```
 
 `verify` trusts nothing in the file. It re-hashes the genesis record, rebuilds
@@ -84,10 +85,27 @@ invented one, a deleted one and a simply-asserted outcome are four distinct
 failures and all four are caught. That is what makes a leaderboard checkable
 rather than reported. The browser client hands you the same file: **Save log**.
 
+`rank` is that leaderboard. It verifies every archive in a directory and builds
+the table out of the replays — so no figure in it was ever reported by anybody,
+and anyone holding the same files computes the same table. The refusals are
+printed alongside it, since a leaderboard that silently drops what it could not
+check is one nobody can audit. A game counts once however many observers kept
+it, and a fragment counts not at all: the stats depend on the part it is
+missing.
+
 The **bot** holds one seat, so a team can sleep without losing ground. It is
 seated the way any substitute is — it joins as an observer, prints its key, and
 an empire votes it in with `ROSTER_AMEND`. There is no bot-shaped mechanism
 anywhere in the protocol, and there should not be.
+
+How it plays is yours: `--play` picks defending, expanding, attacking, banking
+or cycling through all four, `--target` says whose capital to walk at, and
+`--rate` is how long it banks between claims. `--hours 22-07` and `--duty 20/40`
+are the balance lever — a seat that never sleeps has reflexes nobody can match
+by staying awake, so it can be told to keep to a shift. What it *costs* the
+empire is not configurable: accrual and cap are hashed state keyed off the
+seat's kind, so the host prices the seat and the bot only decides how to play
+it.
 
 The one unpleasant dependency lives here: PeerJS wants a global
 `RTCPeerConnection`, so a headless peer needs `node-datachannel`, a native
@@ -100,9 +118,6 @@ is portable TypeScript.
 - [x] Browser client, local play against bots
 - [x] P2P mesh: signed moves, hash voting, snapshot resume, team chat
 - [x] Observer and archive peers, and logs anyone can verify
-- [ ] A leaderboard that reads them
-
-Everything a ranking needs exists — signed logs, a verifier, and an archive
-format — and nothing yet collects them into a table.
+- [x] A leaderboard that reads them, and refuses what it cannot check
 
 See [PLAN.md](PLAN.md) for the full architecture.

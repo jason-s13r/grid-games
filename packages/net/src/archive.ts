@@ -15,7 +15,7 @@
 // difference between a leaderboard that is reported and one that is checkable.
 
 import { MOVE, Sim, hex } from "@tessera/sim";
-import type { Genesis, Move } from "@tessera/sim";
+import type { EmpireSummary, Genesis, Move } from "@tessera/sim";
 import { Roster, inspectGenesis, verifyAmendment, verifyMessage, verifyMove } from "@tessera/protocol";
 import type { Message, Seat, SignedAmendment, SignedMessage, SignedMove } from "@tessera/protocol";
 
@@ -198,6 +198,15 @@ export interface Verdict {
   verified: number;
   /** Everything wrong with it, empty when nothing is. */
   problems: string[];
+  /** The empire that won, or zero for a game that has not ended — and for the
+   *  rare one that ended with nobody left. Read off the replay rather than off
+   *  the archive, so it is a result nobody had the chance to assert. */
+  winner: number;
+  /** The result of the game the replay just played, from the same hashed state
+   *  the hash above was taken from. Here rather than in a second pass because
+   *  a ranking wants both, and replaying a multi-day log twice to get them is
+   *  a waste of the only expensive thing in this file. */
+  summary: EmpireSummary[];
 }
 
 function unwrap(entry: SignedMove | Move): Move {
@@ -217,7 +226,16 @@ export async function verifyArchive(game: ArchivedGame): Promise<Verdict> {
   const problems: string[] = [];
 
   if (!game || typeof game !== "object" || !game.genesis || !Array.isArray(game.moveLog)) {
-    return { ok: false, hash: "", steps: 0, moves: 0, verified: 0, problems: ["not an archive"] };
+    return {
+      ok: false,
+      hash: "",
+      steps: 0,
+      moves: 0,
+      verified: 0,
+      problems: ["not an archive"],
+      winner: 0,
+      summary: [],
+    };
   }
   if (game.format !== ARCHIVE_FORMAT) problems.push(`unknown archive format ${game.format}`);
 
@@ -293,7 +311,16 @@ export async function verifyArchive(game: ArchivedGame): Promise<Verdict> {
     problems.push(`hash mismatch: the log reaches ${hash}, the archive claims ${game.hash}`);
   }
 
-  return { ok: problems.length === 0, hash, steps, moves: moves.length, verified, problems };
+  return {
+    ok: problems.length === 0,
+    hash,
+    steps,
+    moves: moves.length,
+    verified,
+    problems,
+    winner: sim.state.winner,
+    summary: sim.summary(),
+  };
 }
 
 /** Seats that ever held the game, for a ranking to attribute results to. Read

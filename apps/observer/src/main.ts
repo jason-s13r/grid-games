@@ -18,17 +18,20 @@
 // up — which is why `--as` exists. Give the observer a stable id and it becomes
 // the door back into a game that would otherwise have no door at all.
 //
-// Three things to do with it:
+// Four things to do with it:
 //
 //   tessera-observe <code>            follow a game and write it down
 //   tessera-observe export <dir>      assemble the directory into one file
 //   tessera-observe verify <path>     check an archive end to end
+//   tessera-observe rank <dir>        the table, from every archive under it
 
-import { readFile, writeFile } from "node:fs/promises";
+import { readdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { parseArgs } from "node:util";
+import { MEMBER } from "@tessera/sim";
 import { fingerprint } from "@tessera/protocol";
-import { verifyArchive } from "@tessera/net";
+import { rankArchives, verifyArchive } from "@tessera/net";
+import type { ArchivedGame } from "@tessera/net";
 import { FileArchive, identityAt, joinGame, readArchive } from "@tessera/headless";
 
 const USAGE = `tessera-observe — follow a Tessera game and archive it
@@ -36,6 +39,7 @@ const USAGE = `tessera-observe — follow a Tessera game and archive it
   tessera-observe <room-code> [options]
   tessera-observe export <dir> [file.json]
   tessera-observe verify <dir|file.json>
+  tessera-observe rank <dir>
 
 Options:
   --dir <path>    where archives go (default ./archives)
@@ -137,6 +141,67 @@ async function verify(path: string): Promise<void> {
   if (!verdict.ok) process.exitCode = 1;
 }
 
+/** Every archive under a directory: the game folders an observer writes, and
+ *  any exported .json files sitting beside them. Anything that will not read is
+ *  named and skipped rather than taking the table down with it. */
+async function gather(dir: string): Promise<Array<{ path: string; game: ArchivedGame }>> {
+  const found: Array<{ path: string; game: ArchivedGame }> = [];
+  for (const entry of (await readdir(dir, { withFileTypes: true })).sort((a, b) =>
+    a.name < b.name ? -1 : 1,
+  )) {
+    const path = join(dir, entry.name);
+    if (entry.isDirectory()) {
+      const game = await readArchive(path).catch(() => undefined);
+      if (game) found.push({ path, game });
+    } else if (entry.name.endsWith(".json")) {
+      const game = await readFile(path, "utf8")
+        .then((text) => JSON.parse(text) as ArchivedGame)
+        .catch(() => undefined);
+      if (game) found.push({ path, game });
+    }
+  }
+  return found;
+}
+
+const pad = (text: string, width: number): string => text.padEnd(width);
+const num = (value: number | string, width: number): string => String(value).padStart(width);
+
+/** The table. Every figure in it came out of a replay of a signed log, so what
+ *  is printed here is reproducible by anyone holding the same directory — and
+ *  the refusals are printed too, because a leaderboard that quietly drops what
+ *  it could not verify is one nobody can audit. */
+async function rank(dir: string): Promise<void> {
+  const archives = await gather(dir);
+  if (archives.length === 0) {
+    console.error(`no archives under ${dir}`);
+    process.exitCode = 1;
+    return;
+  }
+
+  const board = await rankArchives(archives.map((one) => one.game));
+  const named = await Promise.all(
+    board.standings.map(async (row) => ({ row, who: await fingerprint(row.key) })),
+  );
+
+  console.log(
+    `${pad("player", 20)}${num("games", 6)}${num("wins", 5)}${num("tiles", 8)}` +
+      `${num("pop", 10)}${num("moves", 7)}${num("best", 6)}`,
+  );
+  for (const { row, who } of named) {
+    const label = row.kind === MEMBER.BOT ? `${who} (bot)` : who;
+    console.log(
+      `${pad(label, 20)}${num(row.games, 6)}${num(row.wins, 5)}${num(row.tilesTaken, 8)}` +
+        `${num(row.popSpent, 10)}${num(row.moves, 7)}${num(row.bestMove, 6)}`,
+    );
+  }
+
+  console.log(``);
+  console.log(`counted   ${board.counted.length} games${board.unfinished ? `, ${board.unfinished} still being played` : ""}`);
+  for (const { index, problems } of board.refused) {
+    console.log(`refused   ${archives[index]!.path}: ${problems[0]}`);
+  }
+}
+
 const [command, ...rest] = positionals;
 
 if (values.help || !command) {
@@ -148,6 +213,12 @@ if (values.help || !command) {
     process.exit(1);
   }
   await exportGame(rest[0], rest[1]);
+} else if (command === "rank") {
+  if (!rest[0]) {
+    console.error("rank needs a directory of archives");
+    process.exit(1);
+  }
+  await rank(rest[0]);
 } else if (command === "verify") {
   if (!rest[0]) {
     console.error("verify needs an archive");
