@@ -5,8 +5,8 @@
 // written straight into state. Swapping this for the mesh means changing where
 // moves come from, not how the game runs.
 
-import { Sim, makeGenesis, CLAIM, MOVE, MEMBER, CONTROL, STEPS_PER_SECOND } from "@tessera/sim";
-import type { Move, EmpireSpec } from "@tessera/sim";
+import { Sim, makeGenesis, simbot, CLAIM, MOVE, MEMBER, CONTROL, STEPS_PER_SECOND } from "@tessera/sim";
+import type { Difficulty, Move, EmpireSpec } from "@tessera/sim";
 import type { Driver } from "./Driver";
 
 /** Never simulate more than this in one frame: a backgrounded tab must catch up
@@ -19,6 +19,9 @@ export interface LocalOptions {
    *  your own side: an empire's seats are people, and the one way another seat
    *  joins one is a vote by the seats already in it. */
   bots: number;
+  /** How hard those empires play. Written into the genesis record like every
+   *  other rule, so a replay of this game plays the same bots. */
+  level?: Difficulty;
   width: number;
   height: number;
 }
@@ -38,10 +41,7 @@ export class LocalGame implements Driver {
   constructor(readonly options: LocalOptions) {
     const empires: EmpireSpec[] = [
       { control: CONTROL.HUMAN, members: [{ kind: MEMBER.HUMAN }] },
-      ...Array.from({ length: options.bots }, () => ({
-        control: CONTROL.SIMBOT,
-        members: [{ kind: MEMBER.BOT }],
-      })),
+      ...Array.from({ length: options.bots }, () => simbot(options.level ?? "steady")),
     ];
 
     this.sim = new Sim(

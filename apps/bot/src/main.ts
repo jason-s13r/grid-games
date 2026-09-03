@@ -8,13 +8,17 @@
 // a browser tab. A tab is the problem: the cover a marathon game needs is cover
 // that survives the laptop closing.
 //
-// It costs the empire something, or free night cover would be strictly better
-// than none and therefore the only way to play. The price is charged by the
-// rules rather than here: a BOT member accrues at half rate, caps at 499
-// instead of 999, and its coin claims fire without triggering the coins they
-// land on. It also only ever defends — a bot that attacked would take ground
-// its team never chose to take, on a front nobody was awake to hold. Cover, not
-// initiative.
+// It costs the empire a seat, and that is the whole price. A bot used to be
+// charged for being one — half accrual, a lower cap, coin claims that never
+// chained — but a discounted player is not an easier one, and what actually
+// keeps sides comparable is that every empire holds the same number of seats.
+// A bot fills one of them, so an empire that wants night cover gives up a chair
+// at its own table to get it.
+//
+// It defends by default, because a bot that attacked would take ground its team
+// never chose to take, on a front nobody was awake to hold. Cover, not
+// initiative — but that is a default rather than a limit, and --play says
+// otherwise.
 //
 // It is seated the way any substitute is: it joins as an observer, prints the
 // key it is holding, and an empire votes it in with ROSTER_AMEND. There is no
@@ -23,11 +27,12 @@
 //
 //   tessera-bot <room-code> [--play cycle] [--rate patient] [--hours 22-07]
 //
-// What is *not* configurable here is what a bot costs. Population accrual is
-// hashed state, decided by the seat's kind in the genesis record — a BOT member
-// accrues at half rate and caps at 499 — so a bot that chose its own growth
-// would either desync or be a cheat that validated. The host prices the seat;
-// the bot only decides how to play it.
+// What is *not* configurable here is how fast it may act. The floor is a
+// genesis rule, because an always-on seat that out-reflexed the people it plays
+// against would be the one thing night cover must never be. Its population
+// ceiling is hashed state too, so a bot that chose its own growth would either
+// desync or be a cheat that validated. The game sets the limits; the bot
+// decides how to play inside them.
 
 import { parseArgs } from "node:util";
 import { fingerprint } from "@tessera/protocol";
@@ -61,13 +66,13 @@ Options:
                   front is where its tiles already are.
 
   --rate <how>    brisk | steady (default) | patient | <seconds>
-                  How long it banks between claims, which is style rather than
-                  strength. A bot accrues 6 population a second and caps at 499,
-                  so brisk (2s) spends about 12 a claim and can only take empty
-                  ground, while patient (85s) spends the full bank in one hit.
-                  Slower than 85s only wastes accrual. Never faster than the
-                  genesis rule: an always-on seat must not out-reflex the people
-                  it is covering for.
+                  How long it banks between claims, which is the difference
+                  between sprawling and hitting hard. A seat accrues 12
+                  population a second and banks to 999, so brisk (2s) spends
+                  about 24 a claim and can only take empty ground, while patient
+                  (85s) spends a full bank in one blow. Slower than 85s only
+                  wastes accrual, and faster is refused: the genesis rule sets
+                  the floor, not this flag.
 
   --hours <a-b>   only play between these local hours, e.g. 22-07 for a night
                   shift. Wraps midnight.
@@ -97,7 +102,7 @@ const { values, positionals } = parseArgs({
 
 const PLAYS: readonly Play[] = ["defend", "expand", "attack", "home", "cycle"];
 
-/** Seconds between claims, by name. A bot fills its 499 cap in about 85
+/** Seconds between claims, by name. A seat fills its 999 bank in about 83
  *  seconds, so `patient` is the slowest setting that wastes nothing. */
 const RATES: Record<string, number> = { brisk: 2, steady: 15, patient: 85 };
 

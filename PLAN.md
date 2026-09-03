@@ -146,7 +146,16 @@ Both share one targeting policy — `policy(state, empire, member, rng) -> move`
 | Use | demo, single-player, filler empires | night shift, AFK cover |
 | Can it drop? | never | yes, empire simply idles |
 
-**PeerBots cost the empire something**, or night cover is strictly free and therefore overpowered. Proposal, all tunable at genesis: a `BOT` member accrues at **50% rate**, caps at **499** rather than 999, and **cannot chain cascades** (its coin claims fire, but triggered coins do not re-trigger). A bot holds the line; it cannot execute the big farming play. That keeps cascade mastery as the human skill expression while still letting a team sleep.
+~~**PeerBots cost the empire something**, or night cover is strictly free and therefore overpowered: a `BOT` member accrues at **50% rate**, caps at **499** rather than 999, and **cannot chain cascades**.~~ **Replaced.** A discounted player is not an easier one, it is a worse one, and the two are different things. A bot now accrues at the rate everybody accrues at and its coins chain like anybody's; what it costs the empire is a seat, and the seat cap is what keeps sides comparable.
+
+**Difficulty is a profile in the genesis record**, `BotProfile`, and it applies to both kinds of bot:
+
+- `popMax` — the ceiling this seat banks to. A claim spends everything banked, and in `interval` steps a seat banks `interval`, so a claim is worth `min(interval, popMax)`. Everything an empire spends in a minute is capped by what it grew in that minute, so **a bot cannot be made stronger by clicking more** — only weaker, by banking less than it grew and pouring away the difference. That is the whole strength dial.
+- `interval` — steps between claims, floored by `rules.botActionInterval`. Not strength but shape: fast is a sprawl of thin tiles, slow is a small empire of walls.
+- `weights` — appetite for expand / attack / defend / home, chosen per twenty-second phase from a hash of the window rather than from the shared RNG, so weighting a bot costs no draws and moves no stream.
+- `coins` — how eagerly it takes an adjacent coin. The one way in the game to gain ground faster than population accrues, and therefore the one lever that beats the conservation law above.
+
+`easy`, `steady` and `hard` are presets in [specs.ts](packages/sim/src/specs.ts). Over five minutes on a medium map they hold about 1900, 4200 and 5000 population in tiles averaging 54, 85 and 119 — a scale in what a bot is worth fighting, not in what it is allowed to do.
 
 Genesis picks per empire: `control: HUMAN | SIMBOT`, plus a member list that may include bot keys.
 

@@ -10,18 +10,20 @@
 // still hold its ground, because the empty seat keeps answering — it heartbeats,
 // it promises readiness, and so it never blocks the peers still playing.
 //
-// It costs the empire something, or night cover would be strictly free and
-// therefore overpowered. The price is charged by the rules, not here: a BOT
-// member accrues at half rate, caps at 499 instead of 999, and its coin claims
-// fire without triggering the coins they land on. A bot holds the line; it
-// cannot execute the big farming play. Cascade mastery stays the human skill.
+// It costs the empire a seat, and that is the price. A BOT member used to be
+// charged for being one — half accrual, a 499 cap, coin claims that never
+// chained — on the theory that free night cover would otherwise be strictly
+// better than none. But a discounted player is not an easier one; it is a
+// worse one, which is a different thing. What keeps sides comparable is that
+// every empire holds the same number of seats, so cover costs a chair.
 //
-// It also only ever defends. A night-shift bot that attacked would take ground
+// It defends by default. A night-shift bot that attacked would take ground
 // its team never chose to take, on a front nobody was awake to hold, and would
 // hand the empire a war it had to wake up to. Pinned to defence it reinforces
 // the thinnest contested tile and nothing else — it does not expand, it does
 // not grab coins, and with no line to hold it banks its population for the
-// morning. Cover, not initiative.
+// morning. Cover, not initiative — which is a default, not a limit: an empire
+// that wants something else says so with `mode`.
 //
 // Its randomness is its own business. A SimBot must draw from the shared seeded
 // stream because every peer re-derives its moves; a PeerBot's moves are

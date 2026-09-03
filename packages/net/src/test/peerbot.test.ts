@@ -49,10 +49,11 @@ describe("a bot covers a seat", () => {
 });
 
 describe("what a bot seat costs the empire", () => {
-  // The rate, the cap and the cascade depth are rules, and packages/sim tests
-  // them directly. What is worth checking here is that a BOT member is charged
-  // them inside a *human* empire — the seat a PeerBot exists to fill — and not
-  // only inside a SimBot one.
+  // A seat, and nothing else. A BOT member used to accrue at half rate and cap
+  // at 499, on the theory that free night cover would be strictly better than
+  // none — but a discounted player is not an easier one, and what actually
+  // keeps sides comparable is that every empire gets the same number of seats.
+  // A bot fills one of them; that is the price.
   let t: Table;
 
   beforeAll(async () => {
@@ -62,11 +63,10 @@ describe("what a bot seat costs the empire", () => {
     await run(t, 240);
   });
 
-  it("a bot seat accrues at half the human rate beside it", () => {
+  it("a bot seat accrues exactly like the human beside it", () => {
     const [alive, nightshift] = t.peers[0]!.driver.sim.state.empires[0]!.members;
-    // Halved by an accumulator rather than a division, so on an odd step the
-    // bot is holding the remainder rather than a fraction.
-    expect(nightshift!.popTimer).toBe(Math.floor(alive!.popTimer / 2));
+    expect(nightshift!.popTimer).toBe(alive!.popTimer);
+    expect(nightshift!.popMax).toBe(alive!.popMax);
   });
 
   it("and it is still a live seat nobody is waiting on", () => {

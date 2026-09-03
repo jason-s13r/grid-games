@@ -17,8 +17,8 @@
 // with it, so anything that turns up in that gap is buffered here and replayed
 // into the driver the moment it exists.
 
-import { CONTROL, MEMBER, PROTOCOL_VERSION, makeGenesis, seedFrom } from "@tessera/sim";
-import type { EmpireSpec, Genesis } from "@tessera/sim";
+import { CONTROL, MEMBER, PROTOCOL_VERSION, makeGenesis, seedFrom, simbot } from "@tessera/sim";
+import type { Difficulty, EmpireSpec, Genesis } from "@tessera/sim";
 import {
   FRAME,
   Identity,
@@ -67,6 +67,9 @@ export interface LobbyPlayer {
 export interface HostPlan {
   empires: MemberKey[][];
   simbots: number;
+  /** How hard the SimBot empires play. In the genesis record with everything
+   *  else, so it is a fact of the game rather than a claim about it. */
+  level?: Difficulty;
   width: number;
   height: number;
 }
@@ -264,9 +267,7 @@ export class Lobby {
       control: CONTROL.HUMAN,
       members: keys.map((key) => ({ kind: MEMBER.HUMAN, key })),
     }));
-    for (let i = 0; i < plan.simbots; i++) {
-      empires.push({ control: CONTROL.SIMBOT, members: [{ kind: MEMBER.BOT }] });
-    }
+    for (let i = 0; i < plan.simbots; i++) empires.push(simbot(plan.level ?? "steady"));
 
     const genesis = makeGenesis({
       seed: seedFrom(`${this.code}:${Date.now()}`),

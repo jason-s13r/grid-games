@@ -5,6 +5,7 @@
 // strictly outside the simulation.
 
 import { seedFrom, PROTOCOL_VERSION, Sim } from "@tessera/sim";
+import type { Difficulty } from "@tessera/sim";
 import { Roster } from "@tessera/protocol";
 import { Archive, Lobby, Lockstep } from "@tessera/net";
 import pkg from "../package.json";
@@ -80,6 +81,7 @@ const mapSize = () =>
 
 const soloSetup = () => ({
   bots: Number(pick<HTMLSelectElement>('[data-cfg="bots"]').value),
+  level: pick<HTMLSelectElement>('[data-cfg="level"]').value as Difficulty,
   ...mapSize(),
 });
 

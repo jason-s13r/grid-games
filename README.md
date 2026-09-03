@@ -98,7 +98,10 @@ seated the way any substitute is — it joins as an observer, prints its key, an
 an empire votes it in with `ROSTER_AMEND`. There is no bot-shaped mechanism
 anywhere in the protocol, and there should not be: no host composes seats onto
 somebody else's team, and an empire is capped at four seats, so night cover
-costs a seat rather than adding one.
+costs a seat rather than adding one. It is not handicapped for being a program
+either — it accrues like anybody and its coins chain like anybody's. What makes
+one bot easier than another is a profile in the genesis record: how high it
+banks, how long it waits, and what it spends its phases doing.
 
 How it plays is yours: `--play` picks defending, expanding, attacking, banking
 or cycling through all four, `--target` says whose capital to walk at, and

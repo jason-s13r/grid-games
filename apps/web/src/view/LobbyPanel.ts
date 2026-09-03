@@ -6,6 +6,7 @@
 
 import type { MemberKey } from "@tessera/protocol";
 import { MAX_SEATS, composeTeams } from "@tessera/net";
+import type { Difficulty } from "@tessera/sim";
 import type { Lobby, LobbyPlayer } from "@tessera/net";
 import { empireTheme } from "./palette";
 
@@ -14,7 +15,7 @@ export interface LobbyHandlers {
   join: (code: string) => void;
   /** Empires as the host has arranged them, each a list of member keys, plus
    *  however many whole SimBot empires to put in the world. */
-  start: (plan: { empires: MemberKey[][]; simbots: number }) => void;
+  start: (plan: { empires: MemberKey[][]; simbots: number; level: Difficulty }) => void;
   /** Tear the lobby down and go back to the opening choice. Every dead end
    *  needs one, or the only way out of a failed join is a page reload. */
   leave: () => void;
@@ -42,6 +43,8 @@ const escape = (text: string): string =>
  *  room left for the people. */
 const MAX_SIMBOTS = 4;
 
+const LEVELS: Difficulty[] = ["easy", "steady", "hard"];
+
 export class LobbyPanel {
   private lobby?: Lobby;
   private status = "";
@@ -50,6 +53,7 @@ export class LobbyPanel {
    *  no entry gets an empire of their own. */
   private readonly teams = new Map<MemberKey, number>();
   private simbots = 1;
+  private level: Difficulty = "steady";
   private roster: RosterView | null = null;
   /** What the roster looked like when it was last drawn. A game in progress
    *  offers this several times a second; redrawing an unchanged list would
@@ -85,6 +89,8 @@ export class LobbyPanel {
       if (key !== undefined) this.teams.set(key, Number(select.value));
       else if (select.dataset.lobbySimbots !== undefined) {
         this.simbots = Number(select.value);
+      } else if (select.dataset.lobbyLevel !== undefined) {
+        this.level = select.value as Difficulty;
       } else return;
       // The list of empires to choose from grows and shrinks with the
       // assignment, so the whole picker is rebuilt rather than patched.
@@ -215,6 +221,15 @@ export class LobbyPanel {
         </select>
       </label>
       ${
+        this.simbots > 0
+          ? `<label class="lobby-field">Difficulty
+               <select class="lobby-team" data-lobby-level>
+                 ${LEVELS.map((one) => option(one, one, one === this.level)).join("")}
+               </select>
+             </label>`
+          : ""
+      }
+      ${
         count < 2
           ? `<p class="hint lobby-problem">A game needs at least two empires —
              put someone on their own, or add a bot empire.</p>`
@@ -298,8 +313,8 @@ export class LobbyPanel {
     return { players, teamOf, empires };
   }
 
-  private plan(): { empires: MemberKey[][]; simbots: number } {
-    return { empires: this.compose().empires, simbots: this.simbots };
+  private plan(): { empires: MemberKey[][]; simbots: number; level: Difficulty } {
+    return { empires: this.compose().empires, simbots: this.simbots, level: this.level };
   }
 }
 
