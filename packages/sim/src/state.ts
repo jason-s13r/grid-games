@@ -17,7 +17,7 @@ import { Rng } from "./rng.js";
 import { fnv1a } from "./hash.js";
 
 const MAGIC = 0x54455353; // "TESS"
-const LAYOUT_VERSION = 2;
+const LAYOUT_VERSION = 3;
 
 export interface State {
   width: number;
@@ -72,6 +72,10 @@ export function createState(genesis: Genesis): State {
       stats: new Uint32Array(STAT_SLOTS),
       members: spec.members.map((m) => ({
         kind: m.kind ?? MEMBER.HUMAN,
+        // Clamped rather than trusted: a profile may ask for less than the
+        // game allows, never for more, so a difficulty setting can only ever
+        // hold a seat back.
+        popMax: Math.max(1, Math.min(m.bot?.popMax ?? genesis.rules.popMax, genesis.rules.popMax)),
         popTimer: 0,
         popAcc: 0,
         lastBeat: 0,
@@ -101,7 +105,7 @@ function byteLength(state: State): number {
   size += n * 3 + n * 4; // owner, terrain, item (1 byte each) + pop (4)
   for (const e of state.empires) {
     size += 4 + 2 + 2 + 2 + 2 + 2 + 4 + 4 + 1 + 1 + 4 + 1 + STAT_SLOTS * 4;
-    size += e.members.length * (1 + 4 + 4 + 4 + 4 + STAT_SLOTS * 4);
+    size += e.members.length * (1 + 2 + 4 + 4 + 4 + 4 + STAT_SLOTS * 4);
   }
   size += state.events.size * (4 + 4 + 1 + 4);
   return size;
@@ -154,6 +158,7 @@ export function snapshot(state: State): ArrayBuffer {
     for (let s = 0; s < STAT_SLOTS; s++) u32(e.stats[s]!);
     for (const m of e.members) {
       u8(m.kind);
+      u16(m.popMax);
       i32(m.popTimer);
       i32(m.popAcc);
       u32(m.lastBeat);
@@ -230,6 +235,7 @@ export function restore(state: State, buffer: ArrayBuffer): State {
     for (let m = 0; m < memberCount; m++) {
       const member: Member = {
         kind: u8() as Member["kind"],
+        popMax: u16(),
         popTimer: i32(),
         popAcc: i32(),
         lastBeat: u32(),

@@ -118,16 +118,24 @@ export class Sim {
 
   private runSimBots(dirty: DirtySet): void {
     const state = this.state;
-    const interval = state.genesis.rules.botActionInterval;
+    const floor = state.genesis.rules.botActionInterval;
 
     for (const empire of state.empires) {
       if (!empire.alive || empire.control !== CONTROL.SIMBOT) continue;
-      // Stagger by empire id so bots do not all fire on the same step.
-      if ((state.step + empire.id) % interval !== 0) continue;
 
       for (let m = 0; m < empire.members.length; m++) {
+        // The profile is read from the genesis record rather than held in
+        // state, because a SimBot empire only ever exists in one: an amendment
+        // needs a quorum of keyed seats to endorse it and a SimBot empire has
+        // none, so nothing can be voted into one.
+        const profile = state.genesis.empires[empire.id - 1]?.members[m]?.bot;
+        // Never faster than the rules allow, whatever a profile asks for.
+        const interval = Math.max(profile?.interval ?? floor, floor);
+        // Stagger by empire and seat so bots do not all fire on the same step.
+        if ((state.step + empire.id + m) % interval !== 0) continue;
+
         empire.members[m]!.lastBeat = state.step; // a SimBot is always present
-        const move = policy(state, empire, m, state.rng);
+        const move = policy(state, empire, m, state.rng, undefined, undefined, profile);
         if (move && validate(state, move)) applyMove(state, move, dirty);
       }
     }

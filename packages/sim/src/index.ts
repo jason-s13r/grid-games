@@ -31,9 +31,10 @@ export {
 export type { DirtySet } from "./rules.js";
 export { checkVictory, isLive } from "./victory.js";
 export { policy } from "./policy.js";
-export type { Mode } from "./policy.js";
+export type { Mode, Weights } from "./policy.js";
 export { summarise } from "./stats.js";
 export type { EmpireSummary } from "./stats.js";
 export { Sim, makeGenesis, CLAIM, HEARTBEAT } from "./sim.js";
-export { humans, simbot } from "./specs.js";
+export { DIFFICULTY, humans, simbot } from "./specs.js";
+export type { Difficulty } from "./specs.js";
 export type { GenesisInit } from "./sim.js";

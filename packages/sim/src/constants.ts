@@ -46,17 +46,9 @@ export const DEFAULT_RULES: Rules = {
   popMax: 999,
   popRateNum: 1,
   popRateDen: 1,
-  // A PeerBot holds the line but cannot match a human, or night cover would be
-  // strictly free and therefore overpowered.
-  botPopMax: 499,
-  botPopRateNum: 1,
-  botPopRateDen: 2,
   maxMultiplier: 4,
 
   cascadeTileCap: 4096,
-  // 0 = a bot's coin claim fires but triggered coins never re-trigger, so
-  // cascade mastery stays the human skill expression.
-  botCascadeDepth: 0,
   coinIntervalMin: seconds(1.5),
   coinIntervalMax: seconds(4),
   // Diamonds buy every item in the shop at three apiece, so the replacement
@@ -96,6 +88,8 @@ export const DEFAULT_RULES: Rules = {
   elimination: ELIMINATION.CAPITAL,
   endStep: 0, // 0 = no timeout
 
+  // The floor rather than the norm: a difficulty profile names its own tempo,
+  // and this is the fastest any of them may ask to be.
   botActionInterval: seconds(2),
 
   // Three people rotating shifts, plus a bot to hold the seat overnight. Big

@@ -8,8 +8,10 @@ import { beforeAll, describe, expect, it } from "vitest";
 import { Sim, makeGenesis, CLAIM } from "../sim.js";
 import { MOVE, MEMBER, CONTROL, TERRAIN, ITEM, WIN } from "../types.js";
 import { idx } from "../geometry.js";
-import { DEFAULT_RULES, STEPS_PER_SECOND } from "../constants.js";
+import { DEFAULT_RULES, STAT, STEPS_PER_SECOND } from "../constants.js";
 import { arena, at, claimNow, held, humans, own, ownerAt, popAt } from "./testkit.js";
+import { DIFFICULTY, simbot } from "../specs.js";
+import type { Difficulty } from "../specs.js";
 
 describe("surround multiplier", () => {
   it("one adjacent tile places 999", () => {
@@ -136,7 +138,11 @@ describe("coin cascade", () => {
     expect(popAt(sim, 12, 13)).toBe(796);
   });
 
-  it("a bot's cascade does not chain", () => {
+  // A coin does the same thing for a bot as for a person. It used to stop
+  // chaining for a BOT seat, on the theory that cascade mastery should stay the
+  // human skill expression — but that made a bot a discounted player rather
+  // than an easier one, and difficulty now lives in how a bot plays.
+  it("and does the same for a bot", () => {
     const bot = arena([
       { control: CONTROL.HUMAN, members: [{ kind: MEMBER.BOT }] },
       humans(1),
@@ -147,7 +153,8 @@ describe("coin cascade", () => {
     bot.state.itemCount = 2;
     bot.state.empires[0]!.members[0]!.popTimer = 999;
     claimNow(bot, 1, 0, 11, 12);
-    expect(ownerAt(bot, 15, 12)).toBe(0);
+    expect(ownerAt(bot, 15, 12)).toBe(1);
+    expect(popAt(bot, 12, 13)).toBe(796);
   });
 });
 
@@ -322,14 +329,22 @@ describe("team empires", () => {
     });
   });
 
-  // Night cover has to cost the empire something, or a bot seat is strictly
-  // free and therefore overpowered.
-  describe("a bot member is cheaper to run and worth less", () => {
+  // A bot is not a discounted player. It grows at the rate everybody grows at,
+  // and what makes one easy is the ceiling it grows to — which is a difficulty
+  // setting rather than a penalty for being a program.
+  describe("a bot seat grows like everyone else, up to its own ceiling", () => {
     let sim: Sim;
 
     beforeAll(() => {
       sim = arena([
-        { control: CONTROL.HUMAN, members: [{ kind: MEMBER.HUMAN }, { kind: MEMBER.BOT }] },
+        {
+          control: CONTROL.HUMAN,
+          members: [
+            { kind: MEMBER.HUMAN },
+            { kind: MEMBER.BOT, bot: { popMax: 60 } },
+            { kind: MEMBER.BOT },
+          ],
+        },
         humans(1),
       ]);
       own(sim, 5, 5, 1);
@@ -340,8 +355,24 @@ describe("team empires", () => {
       expect(sim.state.empires[0]!.members[0]!.popTimer).toBe(200);
     });
 
-    it("a bot member accrues at half rate", () => {
-      expect(sim.state.empires[0]!.members[1]!.popTimer).toBe(100);
+    it("a bot with no profile does too", () => {
+      expect(sim.state.empires[0]!.members[2]!.popTimer).toBe(200);
+    });
+
+    // The whole of what makes this seat easy: it filled in five seconds and
+    // spent the next eleven pouring its growth away.
+    it("and one dialled down stops at its cap", () => {
+      expect(sim.state.empires[0]!.members[1]!.popTimer).toBe(60);
+    });
+
+    it("a cap above the game's own is clamped, not honoured", () => {
+      const greedy = arena([
+        { control: CONTROL.HUMAN, members: [{ kind: MEMBER.BOT, bot: { popMax: 5000 } }] },
+        humans(1),
+      ]);
+      expect(greedy.state.empires[0]!.members[0]!.popMax).toBe(
+        greedy.state.genesis.rules.popMax,
+      );
     });
   });
 
@@ -474,5 +505,63 @@ describe("win conditions", () => {
     });
 
     it("and the bigger population takes it", () => expect(sim.state.winner).toBe(2));
+  });
+});
+
+// Difficulty, which is now the whole of what makes one bot different from
+// another: how high it banks, how long it waits, and what it spends its phases
+// doing. None of it is a penalty — an easy bot and a hard one grow at exactly
+// the same rate, and the easy one throws most of it away.
+describe("bot difficulty is a scale", () => {
+  const play = (level: Difficulty): { tiles: number; pop: number } => {
+    const sim = arena([simbot(level), humans(1)], 5);
+    own(sim, 6, 6, 1);
+    // Five minutes, which is long enough for the slowest profile to have acted
+    // several times over.
+    for (let i = 0; i < STEPS_PER_SECOND * 300; i++) sim.advance([]);
+    const empire = sim.state.empires[0]!;
+    return { tiles: empire.tilesOwned, pop: empire.popTotal };
+  };
+
+  let easy: { tiles: number; pop: number };
+  let hard: { tiles: number; pop: number };
+
+  beforeAll(() => {
+    easy = play("easy");
+    hard = play("hard");
+  });
+
+  it("every profile actually plays", () => {
+    expect(easy.tiles).toBeGreaterThan(1);
+    expect(hard.tiles).toBeGreaterThan(1);
+  });
+
+  // The arithmetic behind it: easy banks 60 and waits 180 steps, so two thirds
+  // of everything it grows is poured away, while hard banks all 720 it grew.
+  it("an easy bot ends the same game much weaker than a hard one", () => {
+    expect(hard.pop).toBeGreaterThan(easy.pop * 3);
+  });
+
+  it("and its tiles are thin enough to take back", () => {
+    expect(easy.pop / easy.tiles).toBeLessThan(hard.pop / hard.tiles);
+  });
+
+  // A profile that asks to act faster than the rules allow does not get to.
+  // An always-on seat must not out-reflex the people it plays against, and that
+  // is a floor in the rules rather than an honour system.
+  it("no profile may act faster than the rules allow", () => {
+    const sim = arena([{ control: CONTROL.SIMBOT, members: [{ kind: MEMBER.BOT, bot: { interval: 1 } }] }, humans(1)], 5);
+    own(sim, 6, 6, 1);
+    const floor = sim.state.genesis.rules.botActionInterval;
+    for (let i = 0; i < floor * 4; i++) sim.advance([]);
+    // Four intervals at the floor, so at most four claims however eager it is.
+    expect(sim.state.empires[0]!.members[0]!.stats[STAT.MOVES]!).toBeLessThanOrEqual(4);
+  });
+
+  it("the presets stay inside what the game allows", () => {
+    for (const profile of Object.values(DIFFICULTY)) {
+      expect(profile.popMax!).toBeLessThanOrEqual(999);
+      expect(profile.weights!).toHaveLength(4);
+    }
   });
 });

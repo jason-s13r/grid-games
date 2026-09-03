@@ -333,6 +333,11 @@ export function applyMove(state: State, move: Move, dirty: DirtySet): void {
       // reaches the sim; here it is a deterministic roster append.
       empire.members.push({
         kind: move.x === MEMBER.BOT ? MEMBER.BOT : MEMBER.HUMAN,
+        // A seat voted in mid-game plays on the plain rules. Difficulty is
+        // something a game is composed with, not something an empire recruits:
+        // a substitute is a substitute, and a headless bot that wants to hold
+        // back does it with its own click rate.
+        popMax: rules.popMax,
         popTimer: 0,
         popAcc: 0,
         lastBeat: state.step,
@@ -480,9 +485,6 @@ function cascade(
   // to take a neutral tile, which is the least a coin should ever do.
   const perTile = Math.max(1, Math.floor(base / shape.length));
 
-  const maxDepth =
-    member.kind === MEMBER.BOT ? rules.botCascadeDepth : Number.MAX_SAFE_INTEGER;
-
   takeCoin(state, origin, originItem, empire, member);
 
   const queue: Array<[number, number, number]> = [
@@ -510,7 +512,7 @@ function cascade(
       const found = state.item[ti]! as Item;
       if (found === ITEM.DIAMOND) {
         collectDiamond(state, ti, empire, member);
-      } else if (found !== ITEM.NONE && depth < maxDepth) {
+      } else if (found !== ITEM.NONE) {
         takeCoin(state, ti, found, empire, member);
         queue.push([ti, COIN_RADIUS[found]!, depth + 1]);
       }
@@ -581,21 +583,21 @@ function collectDiamond(
 
 /** Per-member accrual, integer only — no float drift. Three teammates means
  *  three independent click streams into one shared empire, which is what
- *  produces simultaneous battle fronts. */
+ *  produces simultaneous battle fronts.
+ *
+ *  Every seat grows at the same rate, a bot's included. What differs is the
+ *  ceiling it grows to: a seat dialled down to 60 fills in five seconds and
+ *  then throws the rest away, which is a difficulty setting rather than a
+ *  penalty for being a program. See BotProfile. */
 export function accrue(state: State): void {
   const rules = state.genesis.rules;
   for (const empire of state.empires) {
     if (!empire.alive) continue;
     for (const m of empire.members) {
-      const bot = m.kind === MEMBER.BOT;
-      const num = bot ? rules.botPopRateNum : rules.popRateNum;
-      const den = bot ? rules.botPopRateDen : rules.popRateDen;
-      const cap = bot ? rules.botPopMax : rules.popMax;
-
-      m.popAcc += num;
-      while (m.popAcc >= den) {
-        m.popAcc -= den;
-        if (m.popTimer < cap) m.popTimer++;
+      m.popAcc += rules.popRateNum;
+      while (m.popAcc >= rules.popRateDen) {
+        m.popAcc -= rules.popRateDen;
+        if (m.popTimer < m.popMax) m.popTimer++;
       }
     }
   }

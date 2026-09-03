@@ -20,7 +20,7 @@
 // in-sim bot is the one it always was.
 
 import { MOVE, ITEM } from "./types.js";
-import type { Empire, Move } from "./types.js";
+import type { BotProfile, Empire, Move } from "./types.js";
 import { PASSABLE } from "./constants.js";
 import { ORTHO, idx, xOf, yOf, inBounds, dist2 } from "./geometry.js";
 import type { Rng } from "./rng.js";
@@ -30,12 +30,49 @@ const MODES = ["expand", "attack", "defend", "home"] as const;
 export type Mode = (typeof MODES)[number];
 
 const PHASE_STEPS = 240; // ~20s of game time per coherent phase
+/** Appetite for an adjacent coin when a profile does not say. */
+const DEFAULT_COINS = 70;
 
-function pickMode(state: State, empire: Empire, rng: Rng): Mode {
-  const phase = Math.floor(state.step / PHASE_STEPS) + empire.id;
-  const base = MODES[phase % MODES.length]!;
-  // Occasional deviation so two bots in the same phase don't move in lockstep.
-  return rng.int(100) < 25 ? MODES[rng.int(MODES.length)]! : base;
+/** Even, which is what a seat with no profile plays. */
+const EVEN: Weights = [1, 1, 1, 1];
+export type Weights = [number, number, number, number];
+
+/** A pure integer mix, so which phase a window is can be a function of state
+ *  rather than a draw from the shared stream. */
+function mix(a: number, b: number, c: number): number {
+  let h = (0x811c9dc5 ^ (a >>> 0)) >>> 0;
+  h = Math.imul(h ^ (b >>> 0), 0x01000193) >>> 0;
+  h = Math.imul(h ^ (c >>> 0), 0x01000193) >>> 0;
+  return (h ^ (h >>> 15)) >>> 0;
+}
+
+/** Which mode a weighted roll lands on. */
+function modeAt(weights: Weights, roll: number): Mode {
+  const total = weights.reduce((sum, w) => sum + Math.max(0, w), 0);
+  if (total <= 0) return MODES[roll % MODES.length]!;
+  let left = roll % total;
+  for (let i = 0; i < MODES.length; i++) {
+    left -= Math.max(0, weights[i]!);
+    if (left < 0) return MODES[i]!;
+  }
+  return MODES[MODES.length - 1]!;
+}
+
+/** The phase a bot is in, and how strongly it prefers one.
+ *
+ *  A phase lasts twenty seconds because a bot that re-chose every action would
+ *  have no behaviour at all, only an average. Which phase this window is comes
+ *  from hashing the window number rather than from the shared RNG: it is a pure
+ *  function of state, identical on every peer, and it consumes no draws — so
+ *  weighting a bot's appetites cannot shift the stream that everything else in
+ *  the simulation reads from.
+ *
+ *  The occasional deviation still costs a draw, and still exists so that two
+ *  bots in the same window do not move in lockstep. */
+function pickMode(state: State, empire: Empire, weights: Weights, rng: Rng): Mode {
+  const window = Math.floor(state.step / PHASE_STEPS) + empire.id;
+  const base = modeAt(weights, mix(state.genesis.seed, empire.id, window));
+  return rng.int(100) < 25 ? modeAt(weights, rng.int(1 << 20)) : base;
 }
 
 interface Scan {
@@ -116,6 +153,7 @@ export function policy(
   rng: Rng,
   forced?: Mode,
   focus?: number,
+  profile?: BotProfile,
 ): Move | null {
   const member = empire.members[memberIndex];
   if (!member || member.popTimer <= 0) return null;
@@ -123,16 +161,21 @@ export function policy(
   const { owned, frontier, coins, threatened } = scan(state, empire);
   if (owned.length === 0) return null;
 
+  const weights = profile?.weights ?? EVEN;
   // A forced mode draws nothing here — a caller that pins the mode has already
   // made the decision this draw would have made.
-  const mode = forced ?? pickMode(state, empire, rng);
+  const mode = forced ?? pickMode(state, empire, weights, rng);
   let target = -1;
 
   // A coin is worth far more than a plain tile, so take one when adjacent
   // regardless of the current phase — but a coin sits on neutral ground by
   // definition, so taking one is expansion, and a bot pinned to defence does
   // not expand.
-  if (!forced && coins.length > 0 && rng.int(100) < 70) {
+  //
+  // How eagerly is the spidering knob: a bot that always takes the coin beside
+  // it walks outward towards wherever the population is, and one that rarely
+  // does stays where it started.
+  if (!forced && coins.length > 0 && rng.int(100) < (profile?.coins ?? DEFAULT_COINS)) {
     target = coins[rng.int(coins.length)]!;
   } else if (mode === "expand" && frontier.length > 0) {
     target = weakest(state, frontier, rng);
