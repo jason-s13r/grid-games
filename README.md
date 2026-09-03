@@ -27,7 +27,12 @@ even when no exported signature changed. See [`dispat.yaml`](dispat.yaml).
 | Package | What it is |
 |---|---|
 | [`packages/sim`](packages/sim) | `@tessera/sim` — the deterministic core. Rules, RNG, snapshots, bots, victory. No DOM. |
+| [`packages/protocol`](packages/protocol) | `@tessera/protocol` — identities, signed records, the genesis seal, the wire format. |
+| [`packages/net`](packages/net) | `@tessera/net` — the mesh, the lockstep driver, the lobby, and the archive. |
+| [`packages/headless`](packages/headless) | `@tessera/headless` — running a peer with no browser around it: WebRTC under Node, a key in a file, an archive on disk. |
 | [`apps/web`](apps/web) | The browser client: virtualised viewport, LOD renderer, minimap. |
+| [`apps/observer`](apps/observer) | An always-on peer with no seat. It keeps a game alive and writes it down. |
+| [`apps/bot`](apps/bot) | A headless peer that holds one seat — night cover for an empire that is asleep. |
 | [`apps/prototype`](apps/prototype) | The original single-player prototype, frozen as reference. |
 
 ## Running it
@@ -50,17 +55,54 @@ would prove little, since it is V8 as Node is. The browsers come from
 Playwright; `pnpm --filter @tessera/web exec playwright install` fetches them,
 and `BROWSERS=chromium pnpm --filter @tessera/web test` narrows the loop.
 
+## Peers without a browser
+
+A game that runs for days needs somebody awake in it, and "somebody" should not
+have to mean a server with power over the result. Two programs cover it, and
+neither can do anything a browser tab could not:
+
+```sh
+pnpm --filter @tessera/observer start tsr-abc123 --as tsr-nightwatch
+pnpm --filter @tessera/bot      start tsr-abc123
+```
+
+The **observer** holds no seat. It validates every move, hashes every step and
+writes the game down — and with `--as` it claims a stable peer id, which
+matters more than it sounds: a room code *is* a peer id, so a game whose host
+has closed their laptop is reachable at whatever peer is still up. It also
+checks archives, including ones it did not write:
+
+```sh
+tessera-observe export archives/<gameId>     # the directory as one file
+tessera-observe verify archives/<gameId>     # genesis, signatures, and the hash
+```
+
+`verify` trusts nothing in the file. It re-hashes the genesis record, rebuilds
+the roster from it, checks every signature against that roster, and replays the
+log to see whether it reaches the hash it claims — so an edited move, an
+invented one, a deleted one and a simply-asserted outcome are four distinct
+failures and all four are caught. That is what makes a leaderboard checkable
+rather than reported. The browser client hands you the same file: **Save log**.
+
+The **bot** holds one seat, so a team can sleep without losing ground. It is
+seated the way any substitute is — it joins as an observer, prints its key, and
+an empire votes it in with `ROSTER_AMEND`. There is no bot-shaped mechanism
+anywhere in the protocol, and there should not be.
+
+The one unpleasant dependency lives here: PeerJS wants a global
+`RTCPeerConnection`, so a headless peer needs `node-datachannel`, a native
+module with prebuilt binaries per platform. Everything else in this repository
+is portable TypeScript.
+
 ## Status
 
-- [x] Deterministic simulation core, verified headlessly and in three browsers
+- [x] Deterministic simulation core, verified headlessly and in four engines
 - [x] Browser client, local play against bots
 - [x] P2P mesh: signed moves, hash voting, snapshot resume, team chat
-- [ ] Observer/archive peers and verifiable rankings
+- [x] Observer and archive peers, and logs anyone can verify
+- [ ] A leaderboard that reads them
 
-An observer already works in the browser: a peer whose key is not in the roster
-validates and follows the game and simply holds nothing. What is missing is the
-*durable* half — a headless peer that keeps a multi-day game alive while every
-player is asleep, and the recorded log that makes a leaderboard checkable
-rather than reported. Snapshots today are a short in-memory tail.
+Everything a ranking needs exists — signed logs, a verifier, and an archive
+format — and nothing yet collects them into a table.
 
 See [PLAN.md](PLAN.md) for the full architecture.

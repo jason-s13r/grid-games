@@ -241,6 +241,17 @@ An observer is a peer with no empire: it validates, hashes, and stores, but cann
 
 The same process backs stats and rankings: it holds `{ genesis, moveLog }` and replays it through the identical simulation to verify any claimed outcome. **Cheat-proof leaderboards without trusting a single client**, reusing `tools/replay.js` unchanged.
 
+> **Built.** `@tessera/headless` is the runtime and [apps/observer](apps/observer) and [apps/bot](apps/bot) are the two programs. The archive format is the one `pnpm replay --log` already read, so nothing new had to be taught to check it, and `verifyArchive` adds the half replay never covered: the roster is rebuilt from the genesis record and every signature in the log is checked against it, so a file proves *who* played and not merely that a game did.
+>
+> Four things turned out to be worth naming rather than assuming:
+>
+> - **A room code is a peer id.** A game is reachable only at a peer that is still connected, so an always-on observer is not just a witness — with `--as` it is the door back in, and without one a game whose host went to bed has no address at all.
+> - **An archive can be a fragment.** A peer that joined an hour in holds a log that does not replay from genesis. `from` records where the log actually starts and verification says so, rather than leaving a reader with an unexplained hash mismatch.
+> - **A bot needs no mechanism.** It is seated by `ROSTER_AMEND` like any substitute: it joins as an observer, prints its key, and an empire votes it in. From the mesh's side it is a player who never sleeps.
+> - **PeerJS wants globals.** It reads `RTCPeerConnection` off the global object with no injection point, so a headless peer needs `node-datachannel` — the only native dependency in the repository — installed where it looks before it looks. Its own load path needed fixing too: under Node the library resolves to CommonJS, and the interop namespace puts the exports object under `default`, which is not a constructor.
+>
+> What is still missing is the table. Every input a ranking needs exists and nothing yet gathers the files into one.
+
 ---
 
 ## Toolchain
