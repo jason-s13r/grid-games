@@ -22,6 +22,10 @@ The state hash is therefore the compatibility contract, which makes versioning
 stricter than usual: **any change that moves the hash is a breaking change**,
 even when no exported signature changed. See [`dispat.yaml`](dispat.yaml).
 
+[ARCHITECTURE.md](ARCHITECTURE.md) is how the pieces fit together;
+[MOVES.md](MOVES.md) is the move vocabulary — every state change a peer can
+sign, and what each peer checks before believing it.
+
 ## Layout
 
 | Package | What it is |

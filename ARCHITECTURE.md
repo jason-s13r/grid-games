@@ -1,7 +1,8 @@
 # Architecture
 
 How Tessera is put together, and why the pieces sit where they do. [README.md](README.md)
-says what the thing is; this says how to work on it.
+says what the thing is; this says how to work on it, and [MOVES.md](MOVES.md)
+takes the move vocabulary itself one level deeper.
 
 The whole design falls out of one requirement: **peers exchange moves, never
 board state.** Everything below is either a consequence of that or a defence of
@@ -369,6 +370,13 @@ The two validations are not redundancy. The first is so a rejected click feels
 rejected; the second is the one that decides, and it is the entire anti-cheat
 story — `validate()` in [`rules.ts`](packages/sim/src/rules.ts) is a pure
 function of state, so every peer reaches the same verdict without asking anyone.
+
+Every move takes that path, a purchase included: `BUY_BRIDGE` and `BUY_MARCH`
+are signed, gossiped and validated exactly as a claim is, and no message
+anywhere reports a diamond balance — every peer derives every empire's stock,
+unlocks and stat counters, because all of it is inside the hashed snapshot. The
+eleven move types, their fields and their validation are catalogued in
+[MOVES.md](MOVES.md).
 
 ## What is hashed, and what is not
 
