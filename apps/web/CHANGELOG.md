@@ -1,5 +1,66 @@
 # Changelog
 
+## web@0.10.0 (2026-09-04)
+
+### Features
+
+- every bot empire picks its own difficulty
+  A count and one difficulty was half a control. One hard opponent beside two
+  easy ones is a different game from three of anything, and the more interesting
+  one — the easy pair sprawl into thin ground you can take straight back while
+  the hard one builds something you have to prepare for. A single dropdown could
+  not ask for that.
+
+  So `simbots` is a list of difficulties rather than a number, and its length is
+  the count. Both surfaces get the same control: a row per empire showing the
+  colour it will play and how hard, an Add button, and a way to change its mind
+  about being there.
+
+  Capped at five rivals, or in the lobby at however many colours the human
+  empires have left over. There are six themes, and a board you cannot read is
+  not a harder game, only a worse one.
+
+  Verified in a browser against the built bundle: a game started from
+  [hard, steady x4] comes up with the member caps it asked for, which is the
+  picker's whole job.
+
+- pick how hard the bots play
+  The difficulty a game is composed with has to be chosen somewhere, and every
+  surface that composes a game now offers it, writing it into the genesis record
+  with everything else so a replay plays the same bots. HostPlan gains an
+  optional level; nothing here is a break.
+
+- an empire is the people in it
+  Bot teammates in a solo game and bot seats inside a human empire were both a
+  host arranging its own side some extra hands. In a multiplayer lobby that is
+  not a feature, it is an unfair setup with a UI.
+
+  So a seat in a human empire is a person who is there, and another one joins the
+  way a substitute always has: ROSTER_AMEND, endorsed by a quorum of the empire
+  already holding the seats. A headless bot is seated by exactly that route.
+  Deterministic SimBot empires are untouched — a default opponent is the one kind
+  of bot a lobby should be composing.
+
+  The seat cap replaces them, refused a layer earlier each time: checkPlan while
+  the host can still fix it, inspectGenesis for a record born oversized, and the
+  simulation for the amendment. Only the last is load-bearing.
+
+  The lobby loses the keypairs it minted for bot seats, and with them the hub
+  that divided one connection between several drivers. A page runs one seat.
+
+- the log you played is yours to take away
+  A tab already holds every move it fed to the simulation and had no way to let
+  go of one. Save log downloads the same signed, replayable file the observer
+  writes — genesis record, every move in its envelope, the chat, and the hash it
+  arrives at. A tab is not a durable archive and does not pretend to be one.
+
+### Dependencies
+
+- sim: 1.1.0 -> 2.0.0
+- net: 0.6.0 -> 0.7.0
+- protocol: 0.4.0 -> 0.5.0
+
+
 ## web@0.9.0 (2026-09-03)
 
 ### Features

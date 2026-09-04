@@ -1,6 +1,6 @@
 {
   "name": "@tessera/bot",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "private": true,
   "description": "A headless peer that holds one seat: night cover for an empire whose players are asleep.",
   "license": "MIT",

@@ -1,5 +1,32 @@
 # Changelog
 
+## protocol@0.5.0 (2026-09-04)
+
+### Features
+
+- an empire is the people in it
+  Bot teammates in a solo game and bot seats inside a human empire were both a
+  host arranging its own side some extra hands. In a multiplayer lobby that is
+  not a feature, it is an unfair setup with a UI.
+
+  So a seat in a human empire is a person who is there, and another one joins the
+  way a substitute always has: ROSTER_AMEND, endorsed by a quorum of the empire
+  already holding the seats. A headless bot is seated by exactly that route.
+  Deterministic SimBot empires are untouched — a default opponent is the one kind
+  of bot a lobby should be composing.
+
+  The seat cap replaces them, refused a layer earlier each time: checkPlan while
+  the host can still fix it, inspectGenesis for a record born oversized, and the
+  simulation for the amendment. Only the last is load-bearing.
+
+  The lobby loses the keypairs it minted for bot seats, and with them the hub
+  that divided one connection between several drivers. A page runs one seat.
+
+### Dependencies
+
+- sim: 1.1.0 -> 2.0.0
+
+
 ## protocol@0.4.0 (2026-09-01)
 
 ### Features

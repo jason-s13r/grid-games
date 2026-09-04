@@ -1,5 +1,138 @@
 # Changelog
 
+## net@0.7.0 (2026-09-04)
+
+### Features
+
+- the headless bot speaks the same vocabulary
+  A profile is how a game says what a bot is like, and there was no reason for
+  the two kinds of bot to be configured out of different words. PeerBot takes
+  one: under `--play cycle` it runs the phases the profile declares at the tempo
+  each asks for, so "quick to expand and slow to attack" means the same thing
+  whichever kind of bot is playing. `--level` picks which cycle.
+
+  What a headless bot cannot pick is its ceiling. popMax is hashed state, set by
+  whoever seated it, so a bot may choose to play weakly and may not choose to
+  play strongly. Additive on both sides.
+
+- every bot empire picks its own difficulty
+  A count and one difficulty was half a control. One hard opponent beside two
+  easy ones is a different game from three of anything, and the more interesting
+  one — the easy pair sprawl into thin ground you can take straight back while
+  the hard one builds something you have to prepare for. A single dropdown could
+  not ask for that.
+
+  So `simbots` is a list of difficulties rather than a number, and its length is
+  the count. Both surfaces get the same control: a row per empire showing the
+  colour it will play and how hard, an Add button, and a way to change its mind
+  about being there.
+
+  Capped at five rivals, or in the lobby at however many colours the human
+  empires have left over. There are six themes, and a board you cannot read is
+  not a harder game, only a worse one.
+
+  Verified in a browser against the built bundle: a game started from
+  [hard, steady x4] comes up with the member caps it asked for, which is the
+  picker's whole job.
+
+- pick how hard the bots play
+  The difficulty a game is composed with has to be chosen somewhere, and every
+  surface that composes a game now offers it, writing it into the genesis record
+  with everything else so a replay plays the same bots. HostPlan gains an
+  optional level; nothing here is a break.
+
+- an empire is the people in it
+  Bot teammates in a solo game and bot seats inside a human empire were both a
+  host arranging its own side some extra hands. In a multiplayer lobby that is
+  not a feature, it is an unfair setup with a UI.
+
+  So a seat in a human empire is a person who is there, and another one joins the
+  way a substitute always has: ROSTER_AMEND, endorsed by a quorum of the empire
+  already holding the seats. A headless bot is seated by exactly that route.
+  Deterministic SimBot empires are untouched — a default opponent is the one kind
+  of bot a lobby should be composing.
+
+  The seat cap replaces them, refused a layer earlier each time: checkPlan while
+  the host can still fix it, inspectGenesis for a record born oversized, and the
+  simulation for the amendment. Only the last is load-bearing.
+
+  The lobby loses the keypairs it minted for bot seats, and with them the hub
+  that divided one connection between several drivers. A page runs one seat.
+
+- the table, and what it refuses to count
+  Every input a leaderboard needs has existed since the archive shipped, and
+  nothing gathered the files into a table. rankArchives is that, and the
+  interesting half is refusal rather than arithmetic.
+
+  A game counts only once it has survived verifyArchive, so an edited log
+  contributes nothing rather than something slightly wrong. A fragment counts not
+  at all, however genuine its signatures, because the stats depend on the part
+  that is missing. And a game counts once however many observers archived it,
+  since two observers on one game is how an archive is kept safe. A refusal names
+  the file by its position in the pile, because two archives of one game share a
+  game id and which was the duplicate is the point of saying so.
+
+  The table is built on the member key, which is the only identity this game has.
+  Ordering is wins, then tiles taken, then the best single move — plain counts and
+  a plain sort, because a table nobody can explain gives back what the signatures
+  were for. `tessera-observe rank <dir>` prints it, refusals included.
+
+  Verdict gains winner and summary, which verification was already computing and
+  throwing away.
+
+- a bot you can tell how to play
+  --attack was the whole configuration surface, so a seat could be covered but
+  only in one style, at one speed, around the clock. Five flags now, each a
+  question a team covering a night shift has an opinion about: --play picks the
+  posture, --target says whose ground to walk at by name or nearest or in
+  rotation, --rate is how long it banks between claims, and --hours and --duty
+  keep it to a shift.
+
+  Those last two are the balance lever. A seat that never sleeps has reflexes
+  nobody can match by staying awake, and a resting bot is still a connected peer
+  — it heartbeats, it promises readiness, it banks rather than spends. Resting
+  must not cost the empire the seat, which is what the new tests are pointed at.
+
+  What a bot cannot configure is what it costs. Accrual and cap are hashed state
+  in the genesis record, so the host prices the seat and the bot only decides how
+  to play it. policy() takes an optional focus; a SimBot passes none, so the draw
+  order is unchanged and the hash does not move.
+
+- what a peer needs when there is no browser around it
+  Three things the headless runtime tripped over.
+
+  PeerJS resolves to CommonJS under Node, whose interop namespace puts the whole
+  exports object under `default` — so `default ?? Peer` handed `new` an object.
+  It now looks for the constructor in all three places it can be.
+
+  A joiner takes whatever id the broker offers, which is right for a tab nobody
+  dials. An always-on peer wants a stable address, because a room code IS a peer
+  id: a game is reachable at whatever peer is still up and nowhere else. So `id`
+  joins the mesh options and the lobby passes it through with the ICE servers.
+
+  And `from` records where a log actually starts, so an archive kept by a peer
+  who arrived late can say it is a fragment instead of failing its hash for
+  reasons nobody can account for.
+
+- an archive a stranger can check
+  An observer validated every move and wrote none of it down, so closing the
+  tab took the game's history with it. Archive hangs off the driver's existing
+  callbacks and produces exactly the shape `pnpm replay --log` already reads.
+
+  Signatures are kept rather than stripped, which is the difference between a
+  leaderboard that is reported and one that is checkable: verifyArchive rebuilds
+  the roster from the genesis record, checks every signature against it, and
+  replays the log to see whether it reaches the hash on the tin.
+
+  The driver gains onAmended and an envelope on onMessage, so an amended seat
+  has its authority recorded and an archived chat is attributable.
+
+### Dependencies
+
+- sim: 1.1.0 -> 2.0.0
+- protocol: 0.4.0 -> 0.5.0
+
+
 ## net@0.6.0 (2026-09-02)
 
 ### Features

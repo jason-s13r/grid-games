@@ -1,6 +1,6 @@
 {
   "name": "@tessera/headless",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "private": true,
   "description": "Running a peer with no browser around it: WebRTC under Node, a key in a file, an archive on disk.",
   "license": "MIT",
