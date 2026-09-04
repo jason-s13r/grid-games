@@ -127,5 +127,3 @@ is portable TypeScript.
 - [x] P2P mesh: signed moves, hash voting, snapshot resume, team chat
 - [x] Observer and archive peers, and logs anyone can verify
 - [x] A leaderboard that reads them, and refuses what it cannot check
-
-See [PLAN.md](PLAN.md) for the full architecture.
