@@ -151,42 +151,71 @@ export interface MemberSpec {
   bot?: BotProfile;
 }
 
-/** What makes one bot easier than another.
+/** How long a bot stays in one phase, and how fast it clicks while it is
+ *  there.
  *
- *  A bot is not handicapped any more. It accrues at the same rate as a person,
- *  its coins chain like a person's, and everything below is a way of *playing*
- *  rather than a penalty for being a program — which is what makes difficulty a
- *  scale rather than a discount.
+ *  Speed belongs to the phase rather than to the bot, because the same bot
+ *  wants different tempos for different work: quick, cheap claims while it is
+ *  spreading into empty ground, and a long bank before it puts something heavy
+ *  on a tile it means to hold. `rate` is a span rather than a number, and one
+ *  interval is drawn from it per visit to the phase — so two passes through
+ *  the same phase are not identical, and neither is a bot spending a draw on
+ *  every single claim. */
+export interface BotPhase {
+  /** Steps this phase lasts. Zero — or absent — means the bot never enters it,
+   *  which is how a bot that never sleeps is written. Time in a phase is its
+   *  share of the cycle, so duration is the appetite: there is no separate
+   *  weight to keep in step with it. */
+  steps: number;
+  /** Steps between claims while in this phase, as [shortest, longest]. */
+  rate: [number, number];
+}
+
+/** What makes one bot different from another.
  *
- *  The two numeric knobs interact, and the interaction is the design. In
- *  `interval` steps a seat banks `interval` population, so a claim spends
- *  `min(interval, popMax)`: an interval longer than the cap is accrual poured
- *  away, and an interval shorter than it is a bot that never banks. So
+ *  A bot is not handicapped. It accrues at the same rate as a person — one
+ *  population a step, 12 a second — and its coins chain like a person's.
+ *  Everything below is a way of *playing* rather than a penalty for being a
+ *  program, which is what makes difficulty a scale rather than a discount.
  *
- *    - popMax >= interval  — every claim spends everything it grew. Thick tiles
- *      at a slow tempo when both are large, thin tiles at a fast one when both
- *      are small; either way the empire grows at full speed.
- *    - popMax < interval   — the seat fills up and then idles, throwing the
- *      rest away. This is the genuinely weak bot: fewer tiles per minute *and*
- *      thin ones, because it is losing growth it never spends.
+ *  Strength belongs to the bot and speed belongs to the phase. A seat banks a
+ *  population a step and a claim spends the lot, so a claim is worth
+ *  `min(steps waited, popMax)`: popMax is the most a bot can ever put on one
+ *  tile, and the phase decides whether it waits long enough to get there. A
+ *  bot capped at 333 that waits the full 83 seconds a person needs for 999
+ *  still lands 333 — that is the whole of its weakness, and it is legible on
+ *  the board rather than hidden in an accrual table.
  *
  *  Everything here is in the genesis record and therefore agreed before the
  *  game starts. A bot's difficulty is something every peer can check, not
  *  something the peer running it asserts. */
 export interface BotProfile {
-  /** Population this seat banks to, never above `rules.popMax`. The ceiling on
-   *  how expensive a tile it can leave behind. */
+  /** Population this seat banks to, never above `rules.popMax`. The most
+   *  expensive tile it can ever leave behind, and the bot's whole strength. */
   popMax?: number;
-  /** Steps between claims. Longer is a slower, heavier player. */
-  interval?: number;
-  /** Relative appetite for each phase, in MODES order: expand, attack, defend,
-   *  home. A bot that mostly sits at home is easy; one that mostly expands and
-   *  attacks is not. Zero is allowed; all-zero falls back to even. */
-  weights?: [number, number, number, number];
+  /** The cycle. A bot moves through the phases it has durations for, in the
+   *  order they are declared here, and starts over. */
+  phases?: Partial<Record<BotMode, BotPhase>>;
   /** Percent chance of taking an adjacent coin instead of following the phase.
-   *  The spidering-outward appetite: coins are where the population is. */
+   *  Coins are the one way in the game to gain ground faster than population
+   *  accrues, so this is the appetite for spidering outward. */
   coins?: number;
 }
+
+/** What a bot is doing for the next while.
+ *
+ *  expand   spiral along its own border, so it grows in every direction rather
+ *           than growing a finger.
+ *  attack   steer at the nearest tile somebody else is holding.
+ *  defend   thicken the tiles it already has, starting where they are thinnest
+ *           and an enemy is beside them.
+ *  fortify  thicken the capital and the ring around it.
+ *  heal     reconnect a pocket the capital can no longer reach, before upkeep
+ *           decays it away.
+ *  sleep    nothing at all. The population still accrues, so a bot coming out
+ *           of a sleep phase opens with a full bank — which is exactly what a
+ *           person returning from an hour away does. */
+export type BotMode = "expand" | "attack" | "defend" | "fortify" | "heal" | "sleep";
 
 export interface EmpireSpec {
   control?: Control;

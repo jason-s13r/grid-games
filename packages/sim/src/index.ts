@@ -30,8 +30,8 @@ export {
 } from "./rules.js";
 export type { DirtySet } from "./rules.js";
 export { checkVictory, isLive } from "./victory.js";
-export { policy } from "./policy.js";
-export type { Mode, Weights } from "./policy.js";
+export { policy, turnOf, MODES } from "./policy.js";
+export type { Mode, Turn } from "./policy.js";
 export { summarise } from "./stats.js";
 export type { EmpireSummary } from "./stats.js";
 export { Sim, makeGenesis, CLAIM, HEARTBEAT } from "./sim.js";

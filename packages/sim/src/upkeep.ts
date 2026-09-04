@@ -31,7 +31,7 @@ import type { Empire } from "./types.js";
 
 /** Flood the empire's own tiles outward from its capital. Returns a mask over
  *  the whole map: 1 where the capital still reaches. */
-function reachable(state: State, empire: Empire): Uint8Array {
+export function reachable(state: State, empire: Empire): Uint8Array {
   const { width, height, owner } = state;
   const seen = new Uint8Array(owner.length);
 

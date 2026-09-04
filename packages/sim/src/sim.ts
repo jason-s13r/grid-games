@@ -20,7 +20,7 @@ import { upkeep } from "./upkeep.js";
 import { accrue, applyMove, validate } from "./rules.js";
 import type { DirtySet } from "./rules.js";
 import { checkVictory } from "./victory.js";
-import { policy } from "./policy.js";
+import { policy, turnOf } from "./policy.js";
 import { summarise } from "./stats.js";
 import type { EmpireSummary } from "./stats.js";
 
@@ -124,17 +124,21 @@ export class Sim {
       if (!empire.alive || empire.control !== CONTROL.SIMBOT) continue;
 
       for (let m = 0; m < empire.members.length; m++) {
+        empire.members[m]!.lastBeat = state.step; // a SimBot is always present
+
         // The profile is read from the genesis record rather than held in
         // state, because a SimBot empire only ever exists in one: an amendment
         // needs a quorum of keyed seats to endorse it and a SimBot empire has
         // none, so nothing can be voted into one.
         const profile = state.genesis.empires[empire.id - 1]?.members[m]?.bot;
-        // Never faster than the rules allow, whatever a profile asks for.
-        const interval = Math.max(profile?.interval ?? floor, floor);
-        // Stagger by empire and seat so bots do not all fire on the same step.
-        if ((state.step + empire.id + m) % interval !== 0) continue;
+        const turn = turnOf(state, empire, m, profile);
+        if (turn.mode === "sleep") continue;
 
-        empire.members[m]!.lastBeat = state.step; // a SimBot is always present
+        // Never faster than the rules allow, whatever a phase asks for: an
+        // always-on seat must not out-reflex the people it plays against.
+        const interval = Math.max(turn.interval, floor);
+        if ((state.step - turn.since) % interval !== 0) continue;
+
         const move = policy(state, empire, m, state.rng, undefined, undefined, profile);
         if (move && validate(state, move)) applyMove(state, move, dirty);
       }

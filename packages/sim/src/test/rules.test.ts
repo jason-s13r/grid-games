@@ -11,7 +11,9 @@ import { idx } from "../geometry.js";
 import { DEFAULT_RULES, STAT, STEPS_PER_SECOND } from "../constants.js";
 import { arena, at, claimNow, held, humans, own, ownerAt, popAt } from "./testkit.js";
 import { DIFFICULTY, simbot } from "../specs.js";
+import { turnOf } from "../policy.js";
 import type { Difficulty } from "../specs.js";
+import type { BotProfile } from "../types.js";
 
 describe("surround multiplier", () => {
   it("one adjacent tile places 999", () => {
@@ -508,17 +510,18 @@ describe("win conditions", () => {
   });
 });
 
-// Difficulty, which is now the whole of what makes one bot different from
-// another: how high it banks, how long it waits, and what it spends its phases
-// doing. None of it is a penalty — an easy bot and a hard one grow at exactly
-// the same rate, and the easy one throws most of it away.
+// Difficulty, which is now two things and not one: how high a bot banks, and
+// how long each of its phases makes it wait before spending. Neither is a
+// penalty — an easy bot and a hard one grow at exactly the same rate, and the
+// easy one throws most of it away because it fills its ceiling and then idles.
 describe("bot difficulty is a scale", () => {
   const play = (level: Difficulty): { tiles: number; pop: number } => {
     const sim = arena([simbot(level), humans(1)], 5);
     own(sim, 6, 6, 1);
-    // Five minutes, which is long enough for the slowest profile to have acted
-    // several times over.
-    for (let i = 0; i < STEPS_PER_SECOND * 300; i++) sim.advance([]);
+    // Ten minutes, which is more than one full cycle of every profile — the
+    // slowest phases are ninety seconds, so a shorter run would sample one
+    // bot's attack phase and another's sleep.
+    for (let i = 0; i < STEPS_PER_SECOND * 600; i++) sim.advance([]);
     const empire = sim.state.empires[0]!;
     return { tiles: empire.tilesOwned, pop: empire.popTotal };
   };
@@ -536,32 +539,92 @@ describe("bot difficulty is a scale", () => {
     expect(hard.tiles).toBeGreaterThan(1);
   });
 
-  // The arithmetic behind it: easy banks 60 and waits 180 steps, so two thirds
-  // of everything it grows is poured away, while hard banks all 720 it grew.
-  it("an easy bot ends the same game much weaker than a hard one", () => {
-    expect(hard.pop).toBeGreaterThan(easy.pop * 3);
-  });
+  // Where the ceiling actually bites, stated as the arithmetic rather than as
+  // an outcome. A claim spends min(steps waited, popMax), so a phase that waits
+  // 720 steps hands easy 333 of it and hard the lot — and a fast phase, which
+  // never waits that long, hands both of them the same. That is why the tempo
+  // table is shared: if easy were the one clicking fastest it would dodge its
+  // own ceiling and the difficulty would evaporate.
+  //
+  // The outcome this produces was measured in head-to-head runs rather than
+  // asserted here: over twenty minutes on a small map, easy is ahead of a
+  // steady opponent in 4 games of 16, steady in 8, hard in 12. A duel long
+  // enough to show that is far too slow to be a unit test.
+  it("a slow phase is where the ceiling bites, and a fast one is not", () => {
+    const [slow] = DIFFICULTY.hard.phases!.attack!.rate;
+    expect(Math.min(slow, DIFFICULTY.easy.popMax!)).toBe(333);
+    expect(Math.min(slow, DIFFICULTY.hard.popMax!)).toBe(slow);
 
-  it("and its tiles are thin enough to take back", () => {
-    expect(easy.pop / easy.tiles).toBeLessThan(hard.pop / hard.tiles);
+    const [fast] = DIFFICULTY.hard.phases!.expand!.rate;
+    expect(Math.min(fast, DIFFICULTY.easy.popMax!)).toBe(
+      Math.min(fast, DIFFICULTY.hard.popMax!),
+    );
   });
 
   // A profile that asks to act faster than the rules allow does not get to.
   // An always-on seat must not out-reflex the people it plays against, and that
   // is a floor in the rules rather than an honour system.
-  it("no profile may act faster than the rules allow", () => {
-    const sim = arena([{ control: CONTROL.SIMBOT, members: [{ kind: MEMBER.BOT, bot: { interval: 1 } }] }, humans(1)], 5);
+  it("no phase may act faster than the rules allow", () => {
+    const eager: BotProfile = { popMax: 999, phases: { expand: { steps: 6000, rate: [1, 1] } } };
+    const sim = arena(
+      [{ control: CONTROL.SIMBOT, members: [{ kind: MEMBER.BOT, bot: eager }] }, humans(1)],
+      5,
+    );
     own(sim, 6, 6, 1);
     const floor = sim.state.genesis.rules.botActionInterval;
     for (let i = 0; i < floor * 4; i++) sim.advance([]);
-    // Four intervals at the floor, so at most four claims however eager it is.
     expect(sim.state.empires[0]!.members[0]!.stats[STAT.MOVES]!).toBeLessThanOrEqual(4);
   });
 
   it("the presets stay inside what the game allows", () => {
     for (const profile of Object.values(DIFFICULTY)) {
       expect(profile.popMax!).toBeLessThanOrEqual(999);
-      expect(profile.weights!).toHaveLength(4);
     }
+    expect(DIFFICULTY.easy.popMax).toBe(333);
+    expect(DIFFICULTY.steady.popMax).toBe(666);
+    expect(DIFFICULTY.hard.popMax).toBe(999);
+  });
+});
+
+// The cycle is derived from the step rather than remembered, which is what
+// keeps bots out of the snapshot entirely. These are the properties that has to
+// have: it must land somewhere, it must move on, and it must come back.
+describe("a bot's phase cycle", () => {
+  const profile: BotProfile = {
+    phases: {
+      expand: { steps: 100, rate: [10, 10] },
+      sleep: { steps: 50, rate: [10, 10] },
+    },
+  };
+
+  const modeAt = (step: number): string => {
+    const sim = arena([simbot("steady"), humans(1)]);
+    sim.state.step = step;
+    return turnOf(sim.state, sim.state.empires[0]!, 0, profile).mode;
+  };
+
+  it("only ever sits in a phase it was given", () => {
+    const seen = new Set(Array.from({ length: 300 }, (_, i) => modeAt(i)));
+    expect([...seen].sort()).toEqual(["expand", "sleep"]);
+  });
+
+  it("spends time in each in proportion to its duration", () => {
+    const modes = Array.from({ length: 1500 }, (_, i) => modeAt(i));
+    const sleeping = modes.filter((m) => m === "sleep").length;
+    // 50 of every 150 steps, and the offset only shifts where the cycle starts.
+    expect(sleeping).toBe(500);
+  });
+
+  it("comes back round", () => {
+    expect(modeAt(0)).toBe(modeAt(150));
+    expect(modeAt(37)).toBe(modeAt(37 + 150));
+    expect(modeAt(37)).toBe(modeAt(37 + 150 * 9));
+  });
+
+  // A profile with nothing in it is a legitimate thing to ask for, and better
+  // answered with a bot that does nothing than with one that invents work.
+  it("a bot with no phases sleeps", () => {
+    const sim = arena([simbot("steady"), humans(1)]);
+    expect(turnOf(sim.state, sim.state.empires[0]!, 0, { phases: {} }).mode).toBe("sleep");
   });
 });

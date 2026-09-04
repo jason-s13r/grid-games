@@ -11,7 +11,10 @@
 // an array, which yields NaN.
 //
 // Mode is derived from game time rather than stored, so bots need no fields in
-// the snapshot and can never desync through their own bookkeeping.
+// the snapshot and can never desync through their own bookkeeping. That holds
+// even now that phases have their own durations: a profile's phases add up to a
+// cycle of known length, so `step % cycle` says where in it the bot is, in a
+// walk over at most six entries and no memory at all.
 //
 // The optional `forced` and `focus` arguments exist for the PeerBot alone. A
 // SimBot passes neither, and must not: both are decisions made outside the
@@ -20,24 +23,30 @@
 // in-sim bot is the one it always was.
 
 import { MOVE, ITEM } from "./types.js";
-import type { BotProfile, Empire, Move } from "./types.js";
+import type { BotMode, BotPhase, BotProfile, Empire, Move } from "./types.js";
+import { reachable } from "./upkeep.js";
 import { PASSABLE } from "./constants.js";
 import { ORTHO, idx, xOf, yOf, inBounds, dist2 } from "./geometry.js";
 import type { Rng } from "./rng.js";
 import type { State } from "./state.js";
 
-const MODES = ["expand", "attack", "defend", "home"] as const;
-export type Mode = (typeof MODES)[number];
+export const MODES = ["expand", "attack", "defend", "fortify", "heal", "sleep"] as const;
+export type Mode = BotMode;
 
-const PHASE_STEPS = 240; // ~20s of game time per coherent phase
 /** Appetite for an adjacent coin when a profile does not say. */
 const DEFAULT_COINS = 70;
 
-/** Even, which is what a seat with no profile plays. */
-const EVEN: Weights = [1, 1, 1, 1];
-export type Weights = [number, number, number, number];
+/** What a seat with no profile plays: everything in turn, twenty seconds each,
+ *  a claim every two, and it never sleeps. This is the shape a PeerBot gets
+ *  when nobody has said otherwise. */
+const DEFAULT_PHASES: Partial<Record<Mode, BotPhase>> = {
+  expand: { steps: 240, rate: [24, 24] },
+  attack: { steps: 240, rate: [24, 24] },
+  defend: { steps: 240, rate: [24, 24] },
+  fortify: { steps: 240, rate: [24, 24] },
+};
 
-/** A pure integer mix, so which phase a window is can be a function of state
+/** A pure integer mix, so the tempo of a phase can be a function of state
  *  rather than a draw from the shared stream. */
 function mix(a: number, b: number, c: number): number {
   let h = (0x811c9dc5 ^ (a >>> 0)) >>> 0;
@@ -46,33 +55,54 @@ function mix(a: number, b: number, c: number): number {
   return (h ^ (h >>> 15)) >>> 0;
 }
 
-/** Which mode a weighted roll lands on. */
-function modeAt(weights: Weights, roll: number): Mode {
-  const total = weights.reduce((sum, w) => sum + Math.max(0, w), 0);
-  if (total <= 0) return MODES[roll % MODES.length]!;
-  let left = roll % total;
-  for (let i = 0; i < MODES.length; i++) {
-    left -= Math.max(0, weights[i]!);
-    if (left < 0) return MODES[i]!;
-  }
-  return MODES[MODES.length - 1]!;
+export interface Turn {
+  mode: Mode;
+  /** Steps between claims for this visit to the phase. */
+  interval: number;
+  /** The step this visit began, so a caller can tell whether a claim is due. */
+  since: number;
 }
 
-/** The phase a bot is in, and how strongly it prefers one.
+/** Where in its cycle a bot is, right now.
  *
- *  A phase lasts twenty seconds because a bot that re-chose every action would
- *  have no behaviour at all, only an average. Which phase this window is comes
- *  from hashing the window number rather than from the shared RNG: it is a pure
- *  function of state, identical on every peer, and it consumes no draws — so
- *  weighting a bot's appetites cannot shift the stream that everything else in
- *  the simulation reads from.
+ *  Derived rather than remembered. The phases a profile declares add up to a
+ *  cycle of fixed length, so the position in it is `step % cycle` and finding
+ *  the phase is a walk over at most six entries — no fields in the snapshot,
+ *  nothing to desync through.
  *
- *  The occasional deviation still costs a draw, and still exists so that two
- *  bots in the same window do not move in lockstep. */
-function pickMode(state: State, empire: Empire, weights: Weights, rng: Rng): Mode {
-  const window = Math.floor(state.step / PHASE_STEPS) + empire.id;
-  const base = modeAt(weights, mix(state.genesis.seed, empire.id, window));
-  return rng.int(100) < 25 ? modeAt(weights, rng.int(1 << 20)) : base;
+ *  The tempo is drawn from the phase's span by hashing which pass through the
+ *  cycle this is, not by asking the RNG. That matters more than it sounds: the
+ *  stream is shared with coin spawns and everything else in the world, so a bot
+ *  that drew for its own tempo would move the world around it whenever somebody
+ *  changed its profile. */
+export function turnOf(state: State, empire: Empire, seat: number, profile?: BotProfile): Turn {
+  const phases = profile?.phases ?? DEFAULT_PHASES;
+  const entries = MODES.map((mode) => [mode, phases[mode]] as const).filter(
+    ([, phase]) => phase && phase.steps > 0,
+  ) as Array<readonly [Mode, BotPhase]>;
+
+  // A bot with no phases at all does nothing, which is a legitimate thing to
+  // ask for and better than inventing behaviour it was not given.
+  if (entries.length === 0) return { mode: "sleep", interval: 1, since: state.step };
+
+  const cycle = entries.reduce((sum, [, phase]) => sum + phase.steps, 0);
+  // Offset by seat so two bots on the same profile are not in lockstep.
+  const at = (state.step + empire.id * 97 + seat * 31) % cycle;
+
+  let start = 0;
+  let pass = Math.floor((state.step + empire.id * 97 + seat * 31) / cycle);
+  for (const [mode, phase] of entries) {
+    if (at < start + phase.steps) {
+      const [low, high] = phase.rate;
+      const span = Math.max(1, high - low + 1);
+      const interval = Math.max(1, low + (mix(state.genesis.seed ^ pass, empire.id + seat, start) % span));
+      return { mode, interval, since: state.step - (at - start) };
+    }
+    start += phase.steps;
+  }
+
+  const [mode, phase] = entries[entries.length - 1]!;
+  return { mode, interval: Math.max(1, phase.rate[0]), since: state.step };
 }
 
 interface Scan {
@@ -161,10 +191,10 @@ export function policy(
   const { owned, frontier, coins, threatened } = scan(state, empire);
   if (owned.length === 0) return null;
 
-  const weights = profile?.weights ?? EVEN;
   // A forced mode draws nothing here — a caller that pins the mode has already
   // made the decision this draw would have made.
-  const mode = forced ?? pickMode(state, empire, weights, rng);
+  const mode = forced ?? turnOf(state, empire, memberIndex, profile).mode;
+  if (mode === "sleep") return null;
   let target = -1;
 
   // A coin is worth far more than a plain tile, so take one when adjacent
@@ -178,16 +208,21 @@ export function policy(
   if (!forced && coins.length > 0 && rng.int(100) < (profile?.coins ?? DEFAULT_COINS)) {
     target = coins[rng.int(coins.length)]!;
   } else if (mode === "expand" && frontier.length > 0) {
-    target = weakest(state, frontier, rng);
+    // Around the border rather than at the cheapest tile on it. Always taking
+    // the weakest frontier tile grows a finger towards whatever is softest,
+    // and a finger is all border and no interior — every tile of it exposed on
+    // three sides, none of it earning the surround multiplier. Sweeping the
+    // angle instead means the whole edge comes forward together.
+    target = alongTheBorder(state, empire, frontier, rng);
   } else if (mode === "attack" && frontier.length > 0) {
-    // Whose capital to walk towards. `focus` names one; without it, whoever is
-    // closest — which is the only choice a SimBot ever makes, because a caller
-    // that picks an enemy has decided something no shared stream could agree
-    // on. A named empire that is dead or absent falls back to nearest rather
-    // than to nothing: a bot with orders it cannot follow should still fight.
+    // What to steer at. `focus` names an empire and takes its capital; without
+    // one, the nearest tile anybody else is actually holding — which is where
+    // the fighting is, and much nearer than a capital. A named empire that is
+    // dead or absent falls back rather than doing nothing: a bot with orders
+    // it cannot follow should still fight.
     const chosen = focus === undefined ? -1 : capitalOf(state, empire, focus);
-    const capital = chosen >= 0 ? chosen : nearestEnemyCapital(state, empire);
-    target = capital < 0 ? weakest(state, frontier, rng) : closestTo(state, frontier, capital, rng);
+    const goal = chosen >= 0 ? chosen : nearestHeldTile(state, empire, frontier);
+    target = goal < 0 ? weakest(state, frontier, rng) : closestTo(state, frontier, goal, rng);
   } else if (mode === "defend") {
     // Reinforce where the line actually is. Piling population onto a random
     // interior tile looked like defence and achieved nothing; the thinnest
@@ -195,7 +230,12 @@ export function policy(
     target =
       threatened.length > 0
         ? weakest(state, threatened, rng)
-        : (nearCapital(state, empire, rng) ?? owned[rng.int(owned.length)]!);
+        : weakest(state, owned, rng);
+  } else if (mode === "heal") {
+    // A pocket the capital cannot reach is on a clock: upkeep decays it every
+    // pass and it goes neutral. Reconnecting is worth more than anything else
+    // this bot could spend on, because it saves tiles it has already paid for.
+    target = towardsThePocket(state, empire, frontier, rng);
   } else {
     target = nearCapital(state, empire, rng) ?? owned[rng.int(owned.length)]!;
   }
@@ -217,6 +257,111 @@ export function policy(
     x: xOf(target, state.width),
     y: yOf(target, state.width),
   };
+}
+
+/** Expansion that spirals rather than reaching.
+ *
+ *  The frontier tile nearest a sweep angle that turns with the clock, so
+ *  successive claims walk around the empire's edge and it thickens in every
+ *  direction at once. A tie on angle goes to the cheaper tile, so the sweep
+ *  still prefers soft ground where it has a choice.
+ *
+ *  atan2 would be the obvious way to get an angle and is exactly what a
+ *  deterministic simulation cannot use: it is implementation-defined at the
+ *  last bit and two engines would eventually disagree. This compares
+ *  cross-products of integers instead, which is the same ordering in whole
+ *  numbers. */
+function alongTheBorder(state: State, empire: Empire, frontier: number[], rng: Rng): number {
+  const { width } = state;
+  const cx = xOf(empire.capital, width);
+  const cy = yOf(empire.capital, width);
+
+  // One full turn every ~48 seconds of game time, in eight sectors.
+  const sector = Math.floor(state.step / 72) % 8;
+  const [sx, sy] = SWEEP[sector]!;
+
+  const samples = Math.min(24, frontier.length);
+  const start = rng.int(frontier.length);
+  let best = -1;
+  let bestKey = -Infinity;
+
+  for (let k = 0; k < samples; k++) {
+    const i = frontier[(start + k) % frontier.length]!;
+    const dx = xOf(i, width) - cx;
+    const dy = yOf(i, width) - cy;
+    // Alignment with the sweep direction, scaled to keep it integral. Distance
+    // is divided out only coarsely: a tile twice as far along the sweep is
+    // still on it, and dividing exactly would need a float.
+    const along = dx * sx + dy * sy;
+    const off = Math.abs(dx * sy - dy * sx);
+    const key = along * 4 - off * 3 - Math.min(state.pop[i]!, 60);
+    if (key > bestKey) {
+      bestKey = key;
+      best = i;
+    }
+  }
+  return best;
+}
+
+/** Eight compass directions, as integer vectors. */
+const SWEEP: ReadonlyArray<readonly [number, number]> = [
+  [1, 0], [1, 1], [0, 1], [-1, 1], [-1, 0], [-1, -1], [0, -1], [1, -1],
+];
+
+/** The nearest tile somebody else is holding, measured from the frontier
+ *  rather than from the capital — the fighting is at the edge, and an empire's
+ *  own capital may be a long way behind it. */
+function nearestHeldTile(state: State, empire: Empire, frontier: number[]): number {
+  const { width, owner, pop } = state;
+  let best = -1;
+  let bestD = Infinity;
+
+  // Sampled from the frontier, because scanning the whole map for the nearest
+  // enemy tile on every action is the one thing a bot must not cost.
+  const from = frontier[0]!;
+  const fx = xOf(from, width);
+  const fy = yOf(from, width);
+
+  for (let i = 0; i < owner.length; i++) {
+    const held = owner[i]!;
+    if (held === empire.id || (held === 0 && pop[i] === 0)) continue;
+    const d = dist2(fx, fy, xOf(i, width), yOf(i, width));
+    if (d < bestD) {
+      bestD = d;
+      best = i;
+    }
+  }
+  return best;
+}
+
+/** A step towards a pocket the capital has lost touch with.
+ *
+ *  Claims the passable tile on the main body's frontier that is closest to the
+ *  stranded ground. Reconnecting takes as many claims as the gap is wide, and
+ *  each one is a claim that also expands — so a healing bot that fails to
+ *  reconnect has still not wasted the population. */
+function towardsThePocket(state: State, empire: Empire, frontier: number[], rng: Rng): number {
+  const seen = reachable(state, empire);
+  const { width, owner } = state;
+
+  let pocket = -1;
+  let bestD = Infinity;
+  const cx = xOf(empire.capital, width);
+  const cy = yOf(empire.capital, width);
+
+  for (let i = 0; i < owner.length; i++) {
+    if (owner[i] !== empire.id || seen[i]) continue;
+    const d = dist2(cx, cy, xOf(i, width), yOf(i, width));
+    if (d < bestD) {
+      bestD = d;
+      pocket = i;
+    }
+  }
+
+  // Nothing is cut off, so there is nothing to heal. Thicken the line instead
+  // of standing still — it is the phase nearest in spirit.
+  if (pocket < 0) return weakest(state, frontier, rng);
+  return closestTo(state, frontier, pocket, rng);
 }
 
 /** Cheapest tile to take, sampled rather than fully sorted — one RNG draw,

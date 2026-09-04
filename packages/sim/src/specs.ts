@@ -4,7 +4,7 @@
 // noise at every call site — the replay tool and the test fixtures both did it
 // before this file existed.
 
-import type { BotProfile, EmpireSpec } from "./types.js";
+import type { BotMode, BotPhase, BotProfile, EmpireSpec } from "./types.js";
 import { CONTROL, MEMBER } from "./types.js";
 import { STEPS_PER_SECOND } from "./constants.js";
 
@@ -18,50 +18,102 @@ export const humans = (n: number): EmpireSpec => ({
 
 export type Difficulty = "easy" | "steady" | "hard";
 
-/** Three bots, and the arithmetic that makes them different.
+/** Click-rate bands, in steps. Speed belongs to the phase rather than to the
+ *  bot: the same opponent wants quick cheap claims while it is spreading into
+ *  empty ground and a long bank before it puts something heavy on a tile it
+ *  means to keep. */
+const FAST: [number, number] = [seconds(2), seconds(30)];
+const MEDIUM: [number, number] = [seconds(30), seconds(60)];
+const SLOW: [number, number] = [seconds(60), seconds(90)];
+
+/** How fast a bot clicks in each phase. The same for every difficulty,
+ *  because speed is a property of the work rather than of the opponent: you
+ *  grab empty ground quickly and cheaply, and you bank properly before putting
+ *  something on a tile somebody is holding. A bot is fast to expand and slow to
+ *  attack whether it is easy or hard.
  *
- *  A seat banks one population a step and a claim spends the lot, so a claim is
- *  worth `min(interval, popMax)` — which makes the cap the only real strength
- *  dial there is. Everything an empire spends in a minute is capped by what it
- *  grew in that minute, so a bot cannot be made stronger by clicking more; it
- *  can only be made *weaker* by banking less than it grew and pouring away the
- *  difference. That is what an easy bot does.
+ *  Sharing the table is also what makes popMax mean anything. A claim spends
+ *  `min(steps waited, popMax)`, so a cap only bites when the bot waits longer
+ *  than the cap — and if easy were the one clicking fastest, it would dodge its
+ *  own ceiling and the difficulty would evaporate. */
+const TEMPO: Record<BotMode, [number, number]> = {
+  // Growth wants tiles, not thick ones: cheap claims every few seconds.
+  expand: FAST,
+  // Everything that puts population somewhere it has to survive banks first.
+  attack: SLOW,
+  defend: SLOW,
+  fortify: SLOW,
+  // A pocket is on the upkeep clock, so reconnecting is worth doing before it
+  // is worth doing well.
+  heal: MEDIUM,
+  sleep: FAST,
+};
+
+const phase = (mode: BotMode, seconds_: number): BotPhase => ({
+  steps: seconds(seconds_),
+  rate: TEMPO[mode],
+});
+
+/** Three opponents, and what actually separates them.
  *
- *    easy    banks 15, claims every 5s — a quarter of what it grew, and the
- *            rest evaporates. Sprawls widely in tiles worth 15 apiece, which
- *            anybody can take straight back, and it spends most of its phases
- *            pottering around its own capital.
- *    steady  banks 50, claims every 6s — two thirds of its growth, in tiles
- *            worth taking seriously.
- *    hard    banks everything, claims every 8s — full efficiency in the
- *            heaviest blows of the three. A 96 tile with three friendly
- *            neighbours costs an attacker 384 to take, and it takes nearly
- *            every coin it can reach, which is the one way in the game to gain
- *            ground faster than population accrues.
+ *  Strength is the population ceiling, and nothing else. Everyone accrues one
+ *  population a step — twelve a second, bot and person alike — and a claim
+ *  spends the whole bank, so a claim is worth `min(steps waited, popMax)`. Wait
+ *  the 83 seconds a person needs to reach 999 and easy still lands 333: the
+ *  same patience, a third of the blow, and the two thirds it grew in the
+ *  meantime evaporate. That is legible on the board — you can see what its
+ *  tiles cost to take — where an accrual penalty would have just felt like the
+ *  bot doing less for no visible reason.
  *
- *  Over five minutes on a medium map that comes out around 1900, 4200 and 5000
- *  population held, in tiles averaging 54, 85 and 119 — a scale in what a bot
- *  is worth fighting, not in what it is allowed to do.
+ *  It follows that a cap only bites in the slow phases, which is exactly where
+ *  it should: nobody's ceiling is reached while grabbing empty ground at one
+ *  claim every few seconds, and everybody's is tested before a blow at held
+ *  ground. Easy throws away most of a slow phase. Hard throws away none of it.
  *
- *  Weights are [expand, attack, defend, home]. */
+ *  Duration is the appetite: time in a phase is its share of the cycle, so
+ *  there is no separate weight to keep in step with it. Easy spends a quarter
+ *  of its life asleep and barely attacks; hard never sleeps and spends a third
+ *  of its time walking at somebody.
+ *
+ *  Sleep is a real phase rather than an absence of one. Population accrues
+ *  through it, so a bot coming out of a sleep opens with a full bank — exactly
+ *  what a person returning from an hour away does, and the reason an easy bot
+ *  is occasionally dangerous rather than uniformly harmless. */
 export const DIFFICULTY: Record<Difficulty, BotProfile> = {
   easy: {
-    popMax: 15,
-    interval: seconds(5),
-    weights: [2, 1, 2, 4],
+    popMax: 333,
     coins: 20,
+    phases: {
+      expand: phase("expand", 90),
+      attack: phase("attack", 30),
+      defend: phase("defend", 45),
+      fortify: phase("fortify", 45),
+      heal: phase("heal", 30),
+      sleep: phase("sleep", 90),
+    },
   },
   steady: {
-    popMax: 50,
-    interval: seconds(6),
-    weights: [3, 2, 2, 1],
+    popMax: 666,
     coins: 60,
+    phases: {
+      expand: phase("expand", 90),
+      attack: phase("attack", 75),
+      defend: phase("defend", 45),
+      fortify: phase("fortify", 30),
+      heal: phase("heal", 30),
+      sleep: phase("sleep", 30),
+    },
   },
   hard: {
     popMax: 999,
-    interval: seconds(8),
-    weights: [4, 4, 2, 0],
     coins: 95,
+    phases: {
+      expand: phase("expand", 90),
+      attack: phase("attack", 105),
+      defend: phase("defend", 45),
+      fortify: phase("fortify", 30),
+      heal: phase("heal", 30),
+    },
   },
 };
 
