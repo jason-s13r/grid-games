@@ -35,6 +35,8 @@
 // decides how to play inside them.
 
 import { parseArgs } from "node:util";
+import { DIFFICULTY } from "@tessera/sim";
+import type { Difficulty } from "@tessera/sim";
 import { fingerprint } from "@tessera/protocol";
 import { PeerBot } from "@tessera/net";
 import type { Play, Seat, Target } from "@tessera/net";
@@ -53,11 +55,22 @@ Options:
   --ice <urls>    comma-separated STUN/TURN urls, replacing PeerJS's own
   --quiet         only complain
 
-  --play <how>    defend (default) | expand | attack | home | cycle
+  --level <how>   easy | steady (default) | hard — the cycle it runs under
+                  --play cycle: how long it spends in each phase and how long
+                  it banks in each. What it cannot choose is its population
+                  ceiling: that is hashed state, set by whoever seated it, so a
+                  bot may play weakly and may not play strongly.
+
+  --play <how>    defend (default) | expand | attack | fortify | heal | sleep
+                  | cycle
                   defend reinforces the thinnest contested tile and nothing
-                  else. expand takes neutral ground. attack walks towards a
-                  capital. home banks around its own. cycle rotates through all
-                  four the way an in-sim bot does, coin grabs included.
+                  else. expand takes neutral ground, sweeping around its own
+                  border rather than reaching for the softest tile. attack
+                  steers at the nearest tile somebody else is holding. fortify
+                  banks around its own capital. heal reconnects a pocket the
+                  capital has lost touch with, before upkeep decays it away.
+                  sleep does nothing and banks. cycle moves through the phases
+                  the way an in-sim bot does, coin grabs included.
 
   --target <who>  nearest (default) | random | rotate | <empire number>
                   Who to walk towards while attacking. random and rotate change
@@ -91,6 +104,7 @@ const { values, positionals } = parseArgs({
     as: { type: "string" },
     ice: { type: "string" },
     play: { type: "string", default: "defend" },
+    level: { type: "string", default: "steady" },
     target: { type: "string", default: "nearest" },
     rate: { type: "string", default: "steady" },
     hours: { type: "string" },
@@ -100,7 +114,7 @@ const { values, positionals } = parseArgs({
   },
 });
 
-const PLAYS: readonly Play[] = ["defend", "expand", "attack", "home", "cycle"];
+const PLAYS: readonly Play[] = ["defend", "expand", "attack", "fortify", "heal", "sleep", "cycle"];
 
 /** Seconds between claims, by name. A seat fills its 999 bank in about 83
  *  seconds, so `patient` is the slowest setting that wastes nothing. */
@@ -116,6 +130,12 @@ function fail(message: string): never {
 function play(): Play {
   const chosen = values.play as Play;
   if (!PLAYS.includes(chosen)) fail(`--play must be one of ${PLAYS.join(", ")}`);
+  return chosen;
+}
+
+function level(): Difficulty {
+  const chosen = values.level as Difficulty;
+  if (!(chosen in DIFFICULTY)) fail(`--level must be one of ${Object.keys(DIFFICULTY).join(", ")}`);
   return chosen;
 }
 
@@ -178,7 +198,8 @@ async function run(code: string): Promise<void> {
   say(`key      ${identity.key}`);
   say(`joining  ${code}`);
   say(
-    `playing  ${settings.mode}, target ${String(settings.target)}, ` +
+    `playing  ${settings.mode}${settings.mode === "cycle" ? ` (${values.level})` : ""}, ` +
+      `target ${String(settings.target)}, ` +
       `a claim every ${(settings.interval / STEPS_PER_SECOND).toFixed(0)}s` +
       (settings.awake ? ", on a schedule" : ""),
   );
@@ -202,6 +223,7 @@ async function run(code: string): Promise<void> {
         bot = new PeerBot({
           lockstep: driver,
           mode: settings.mode,
+          profile: settings.profile,
           target: settings.target,
           interval: settings.interval,
           ...(settings.awake ? { awake: settings.awake } : {}),
@@ -260,6 +282,7 @@ if (values.help || !code) {
 // flag should be a refusal at the prompt, not a surprise an hour into a game.
 const settings = {
   mode: play(),
+  profile: DIFFICULTY[level()],
   target: target(),
   interval: interval(),
   awake: awake(),

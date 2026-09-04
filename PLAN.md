@@ -148,22 +148,26 @@ Both share one targeting policy — `policy(state, empire, member, rng) -> move`
 
 ~~**PeerBots cost the empire something**, or night cover is strictly free and therefore overpowered: a `BOT` member accrues at **50% rate**, caps at **499** rather than 999, and **cannot chain cascades**.~~ **Replaced.** A discounted player is not an easier one, it is a worse one, and the two are different things. A bot now accrues at the rate everybody accrues at and its coins chain like anybody's; what it costs the empire is a seat, and the seat cap is what keeps sides comparable.
 
-**Difficulty is a profile in the genesis record**, `BotProfile`, and it applies to both kinds of bot:
+**Difficulty is a profile in the genesis record**, `BotProfile`, and it applies to both kinds of bot.
 
-- `popMax` — the ceiling this seat banks to. A claim spends everything banked, and in `interval` steps a seat banks `interval`, so a claim is worth `min(interval, popMax)`. Everything an empire spends in a minute is capped by what it grew in that minute, so **a bot cannot be made stronger by clicking more** — only weaker, by banking less than it grew and pouring away the difference. That is the whole strength dial.
-- `interval` — steps between claims, floored by `rules.botActionInterval`. Not strength but shape: fast is a sprawl of thin tiles, slow is a small empire of walls.
-- `weights` — appetite for expand / attack / defend / home, chosen per twenty-second phase from a hash of the window rather than from the shared RNG, so weighting a bot costs no draws and moves no stream.
-- `coins` — how eagerly it takes an adjacent coin. The one way in the game to gain ground faster than population accrues, and therefore the one lever that beats the conservation law above.
+**Strength belongs to the bot, speed belongs to the phase.** Everyone accrues one population a step — twelve a second, bot and person alike — and a claim spends the whole bank, so a claim is worth `min(steps waited, popMax)`. `popMax` is therefore the whole of a bot's strength: wait the 83 seconds a person needs for 999 and an easy bot still lands 333, the same patience for a third of the blow, the rest evaporated. It is legible on the board — you can see what its tiles cost to take — where an accrual penalty would have felt like the bot doing less for no visible reason. Presets: **333 / 666 / 999**.
 
-`easy`, `steady` and `hard` are presets in [specs.ts](packages/sim/src/specs.ts). Over five minutes on a medium map they hold about 1900, 4200 and 5000 population in tiles averaging 54, 85 and 119 — a scale in what a bot is worth fighting, not in what it is allowed to do.
+Speed is per phase and shared across difficulties, because it is a property of the work rather than of the opponent: you grab empty ground quickly and cheaply, and you bank properly before putting something on a tile somebody is holding. Fast is 2–30 s, medium 30–60 s, slow 60–90 s, drawn once per visit to a phase. Sharing the table is also what makes `popMax` mean anything — if easy were the one clicking fastest it would dodge its own ceiling.
 
-Genesis picks per empire: `control: HUMAN | SIMBOT`, plus a member list that may include bot keys.
+Six phases, each with a duration; time in a phase is its share of the cycle, so duration *is* the appetite and there is no separate weight to keep in step with it.
 
-> **Revised.** The genesis record no longer composes bot seats inside human empires, and the lobby has no control for it. A host arranging its own team a couple of extra seats — while every other empire got what it turned up with — is not a feature, it is an unfair setup with a UI. Seats in a human empire are the people who are there, and another one joins the way a substitute always has: `ROSTER_AMEND`, endorsed by a quorum of the empire already holding it. A headless bot is seated by exactly that route, which is also how it plays a whole empire of its own if that is what somebody wants.
->
-> What replaces it is **a seat cap, `rules.maxSeats`, defaulting to four**: three people rotating shifts plus a seat to cover the night. An empire is a set of seats sharing territory with a population timer each, so a side that can add seats freely simply out-accrues everyone else — and since a headless bot is an ordinary peer holding an ordinary seat, "add seats" costs nothing but processes. The cap is in the genesis record, uniform across every empire in the game, refused by `inspectGenesis` before a peer agrees to play and again by `validate` on every amendment. No quorum can vote itself a bigger team than the game allows.
->
-> The growth modifier stays as it was, and it is the part that was always doing the useful work: a `BOT` member accrues at half rate, caps at 499, and its coin claims never chain. Cover, priced.
+| phase | what it does | tempo |
+|---|---|---|
+| `expand` | sweeps around its own border, so it grows in every direction rather than growing a finger | fast |
+| `attack` | steers at the nearest tile somebody else is holding | slow |
+| `defend` | thickens its own tiles, thinnest-and-contested first | slow |
+| `fortify` | thickens the capital and its ring | slow |
+| `heal` | reconnects a pocket the capital has lost touch with, before upkeep decays it | medium |
+| `sleep` | nothing. Population still accrues, so it wakes with a full bank — exactly what a person back from an hour away does | — |
+
+The cycle is **derived, not stored**: the durations add up to a fixed length, so `step % cycle` says where in it a bot is, in a walk over six entries and no snapshot fields. The tempo for a visit is hashed from which pass it is rather than drawn from the shared RNG, so retuning a bot cannot move the coin spawns around it.
+
+Measured head-to-head over twenty minutes on a small map, sixteen games each: easy finishes ahead of a steady opponent in 4, steady in 8, hard in 12.
 
 ### A8. Liveness, win conditions, and stats
 

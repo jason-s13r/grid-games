@@ -30,14 +30,14 @@
 // validated rather than derived, so it must NOT touch that stream — a draw made
 // on one peer and nowhere else is a desync.
 
-import { Rng, STEPS_PER_SECOND, policy, seedFrom } from "@tessera/sim";
-import type { Mode, State } from "@tessera/sim";
+import { Rng, STEPS_PER_SECOND, policy, seedFrom, turnOf } from "@tessera/sim";
+import type { BotProfile, Mode, State } from "@tessera/sim";
 import type { Move } from "@tessera/sim";
 import type { Lockstep } from "./lockstep.js";
 
-/** How it plays. The four are the simulation's own modes; "cycle" is the
- *  rotation a SimBot runs — twenty seconds of each in turn, with the occasional
- *  deviation so two bots in the same phase do not move in lockstep. */
+/** How it plays. The six are the simulation's own phases; "cycle" hands it the
+ *  profile's cycle instead, which is what an in-sim bot runs — each phase for
+ *  its own duration, at its own tempo. */
 export type Play = Mode | "cycle";
 
 /** Who it walks towards while attacking. A number names an empire; "nearest" is
@@ -67,6 +67,15 @@ export interface PeerBotOptions {
   /** What it is allowed to do. Defence is the default and the point; anything
    *  else is a deliberate choice by whoever started it. */
   mode?: Play;
+  /** The cycle to run under `mode: "cycle"` — the same shape a SimBot empire
+   *  carries in the genesis record, so the two kinds of bot are configured out
+   *  of one vocabulary.
+   *
+   *  Its phases decide what this bot does and how long it waits; its `popMax`
+   *  does not apply, because a seat's ceiling is hashed state set by whoever
+   *  seated it. A headless bot can choose to play weakly. It cannot choose to
+   *  play strongly. */
+  profile?: BotProfile;
   /** Who to attack, when it is attacking at all. */
   target?: Target;
   /** Whether it is playing right now. Called with wall-clock milliseconds, and
@@ -85,6 +94,7 @@ export class PeerBot {
   private readonly rng: Rng;
   private readonly interval: number;
   private readonly mode: Play;
+  private readonly profile?: BotProfile;
   private readonly target: Target;
   private readonly awake: (now: number) => boolean;
   private readonly now: () => number;
@@ -105,6 +115,7 @@ export class PeerBot {
     const floor = this.lockstep.sim.state.genesis.rules.botActionInterval;
     this.interval = Math.max(options.interval ?? floor, floor);
     this.mode = options.mode ?? "defend";
+    if (options.profile) this.profile = options.profile;
     this.target = options.target ?? "nearest";
     this.awake = options.awake ?? ((): boolean => true);
     this.now = (): number => Date.now();
@@ -138,7 +149,15 @@ export class PeerBot {
     // and passing nothing also re-opens the coin grab, which a pinned bot skips
     // because taking a coin is expansion onto neutral ground.
     const mode = this.mode === "cycle" ? undefined : this.mode;
-    return policy(state, empire, seat.member, this.rng, mode, this.focus(state, seat.empire));
+    return policy(
+      state,
+      empire,
+      seat.member,
+      this.rng,
+      mode,
+      this.focus(state, seat.empire),
+      this.profile,
+    );
   }
 
   /** Which empire to walk towards. Decided here rather than in the simulation
@@ -159,10 +178,25 @@ export class PeerBot {
     return enemies[turn % enemies.length]!.id;
   }
 
+  /** Where this bot is in its cycle, or undefined while it holds no seat. */
+  private turn(): { mode: Mode; interval: number } | undefined {
+    const seat = this.lockstep.seat;
+    if (!seat) return undefined;
+    const state = this.lockstep.sim.state;
+    const empire = state.empires[seat.empire - 1];
+    if (!empire) return undefined;
+    return turnOf(state, empire, seat.member, this.profile);
+  }
+
   private async act(): Promise<void> {
     if (this.acting || this.lockstep.stopped || this.lockstep.sim.ended) return;
     const step = this.lockstep.step;
-    if (step - this.actedAt < this.interval) return;
+    // A cycling bot takes its tempo from the phase it is in, the way an in-sim
+    // one does, so "quick to expand and slow to attack" means the same thing
+    // whichever kind of bot is playing. A pinned one keeps the one interval it
+    // was given.
+    const wait = this.mode === "cycle" ? Math.max(this.turn()?.interval ?? 0, this.interval) : this.interval;
+    if (step - this.actedAt < wait) return;
     // Checked after the interval and before deciding, so a rest costs a turn
     // rather than banking them up to spend the moment it wakes.
     if (!this.awake(this.now())) {

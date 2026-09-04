@@ -100,8 +100,11 @@ anywhere in the protocol, and there should not be: no host composes seats onto
 somebody else's team, and an empire is capped at four seats, so night cover
 costs a seat rather than adding one. It is not handicapped for being a program
 either — it accrues like anybody and its coins chain like anybody's. What makes
-one bot easier than another is a profile in the genesis record: how high it
-banks, how long it waits, and what it spends its phases doing.
+one bot easier than another is a profile in the genesis record: `popMax` is its
+strength, since a claim spends `min(steps waited, popMax)` and an easy bot that
+waits as long as you do still lands a third of the blow; the phases it cycles
+through — expand, attack, defend, fortify, heal, sleep — decide what it does and
+how long it banks before doing it.
 
 How it plays is yours: `--play` picks defending, expanding, attacking, banking
 or cycling through all four, `--target` says whose capital to walk at, and
