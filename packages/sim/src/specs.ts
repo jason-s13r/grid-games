@@ -8,7 +8,9 @@ import type { BotMode, BotPhase, BotProfile, EmpireSpec } from "./types.js";
 import { CONTROL, MEMBER } from "./types.js";
 import { STEPS_PER_SECOND } from "./constants.js";
 
-const seconds = (n: number): number => Math.round(n * STEPS_PER_SECOND);
+/** Seconds in, steps out. Every duration a bot carries is a step count; this
+ *  exists only so the table below reads in the units a person tunes it in. */
+const fromSeconds = (n: number): number => Math.round(n * STEPS_PER_SECOND);
 
 /** One empire of n human seats sharing its territory, each with its own timer. */
 export const humans = (n: number): EmpireSpec => ({
@@ -22,9 +24,9 @@ export type Difficulty = "easy" | "steady" | "hard";
  *  bot: the same opponent wants quick cheap claims while it is spreading into
  *  empty ground and a long bank before it puts something heavy on a tile it
  *  means to keep. */
-const FAST: [number, number] = [seconds(2), seconds(30)];
-const MEDIUM: [number, number] = [seconds(30), seconds(60)];
-const SLOW: [number, number] = [seconds(60), seconds(90)];
+const FAST: [number, number] = [fromSeconds(2), fromSeconds(30)];
+const MEDIUM: [number, number] = [fromSeconds(30), fromSeconds(60)];
+const SLOW: [number, number] = [fromSeconds(60), fromSeconds(90)];
 
 /** How fast a bot clicks in each phase. The same for every difficulty,
  *  because speed is a property of the work rather than of the opponent: you
@@ -49,8 +51,8 @@ const TEMPO: Record<BotMode, [number, number]> = {
   sleep: FAST,
 };
 
-const phase = (mode: BotMode, seconds_: number): BotPhase => ({
-  steps: seconds(seconds_),
+const phase = (mode: BotMode, seconds: number): BotPhase => ({
+  steps: fromSeconds(seconds),
   rate: TEMPO[mode],
 });
 
