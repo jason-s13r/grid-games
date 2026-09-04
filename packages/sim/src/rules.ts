@@ -30,13 +30,29 @@ export function isProtected(state: State, empire: Empire): boolean {
   return empire.tilesOwned < rules.noobTiles && state.step < rules.noobSteps;
 }
 
-/** A protected capital absorbs nothing — not from a direct claim, and not from
- *  a cascade sweeping over it. */
-function isShielded(state: State, i: number, attacker: EmpireId): boolean {
+/** What a capital will not absorb.
+ *
+ *  Two rules, and only the first of them ever lifts. While an empire is still
+ *  protected its capital takes nothing at all, from anybody, by any route.
+ *
+ *  After that it takes nothing that did not come from beside it. A capital
+ *  falls to a claim and to nothing else: not to a march, which lands two tiles
+ *  out and therefore, by construction, from ground the attacker holds no border
+ *  on; and not to a cascade sweeping over it, which is a coin's geometry rather
+ *  than anybody's decision. `direct` is a claim saying it is one.
+ *
+ *  This is what keeps a ranged move from ending a game on its own. A march can
+ *  take the tiles around a capital — that is a siege, and a good one — but the
+ *  last square has to be walked onto from a tile already touching it, in the
+ *  open, where the defender has a neighbour to push back at and a turn in which
+ *  to do it. An empire is annexed by losing its capital, so the alternative was
+ *  the whole game reachable from two tiles away. */
+function isShielded(state: State, i: number, attacker: EmpireId, direct = false): boolean {
   const owner = state.owner[i]!;
   if (owner === 0 || owner === attacker) return false;
   const empire = state.empires[owner - 1]!;
-  return empire.capital === i && isProtected(state, empire);
+  if (empire.capital !== i) return false;
+  return isProtected(state, empire) || !direct;
 }
 
 function addPop(state: State, empireId: EmpireId, delta: number): void {
@@ -54,9 +70,10 @@ export function place(
   empireId: EmpireId,
   amount: number,
   dirty: DirtySet,
+  direct = false,
 ): boolean {
   if (amount <= 0) return false;
-  if (isShielded(state, i, empireId)) return false;
+  if (isShielded(state, i, empireId, direct)) return false;
 
   const prev = state.owner[i]!;
   const before = state.pop[i]!;
@@ -147,8 +164,19 @@ function annex(
 }
 
 /** The tile a march passes through: orthogonally beside the target, passable,
- *  and itself on the empire's border. Lowest flat index wins, so two peers
- *  never pick different halves of the same move. */
+ *  not a capital, and itself on the empire's border. Lowest flat index wins, so
+ *  two peers never pick different halves of the same move.
+ *
+ *  Passable, and therefore not a jump. The chain is owned tile → via → target,
+ *  every link orthogonal and every tile crossable, so a march reaches two tiles
+ *  by walking rather than by hopping: a mountain, a lake, an unbridged river or
+ *  an unladdered wall in the gap leaves no via at all and the move is refused.
+ *  A bridge or a ladder is how that gap gets crossed, and it has to be paid
+ *  for.
+ *
+ *  Whose ground it is does not matter. A march is a ranged attack — arrows,
+ *  not a column — so it lands on a rival's tiles as readily as on empty
+ *  ground. */
 export function marchVia(
   state: State,
   x: number,
@@ -254,7 +282,9 @@ export function validate(state: State, move: Move): boolean {
   if (move.type === MOVE.CLAIM) {
     if (!passable(state, i)) return false;
     if (member.popTimer <= 0) return false;
-    if (isShielded(state, i, empire.id)) return false;
+    // Direct: this is the one move a capital falls to, and adjacency below is
+    // what makes it one made from beside it.
+    if (isShielded(state, i, empire.id, true)) return false;
     if (state.owner[i] === empire.id) return true;
     return adjacentToOwned(state, move.x, move.y, empire.id);
   }
@@ -263,6 +293,8 @@ export function validate(state: State, move: Move): boolean {
     if (!empire.marchUnlocked) return false;
     if (member.popTimer <= 0) return false;
     if (!passable(state, i)) return false;
+    // Rival ground is fair game — a march is a volley, not a column. A capital
+    // is not: it is two tiles away, so nothing is beside it yet.
     if (isShielded(state, i, empire.id)) return false;
     // Strictly a reach extender. A tile already on the border is an ordinary
     // claim, and spending a march on one would be a silent waste.
@@ -360,14 +392,27 @@ export function applyMove(state: State, move: Move, dirty: DirtySet): void {
  *
  *  The population is shared, not doubled: the same base is split between the
  *  tile passed through and the tile landed on, so a march buys reach rather
- *  than force — permanently, which is why it costs twice what a bridge does. The multiplier is read at the intermediate tile because that is
- *  where the empire's border actually is — the target has no owned neighbours
- *  by construction.
+ *  than force — permanently, which is why it costs twice what a bridge does.
+ *  The multiplier is read at the intermediate tile because that is where the
+ *  empire's border actually is — the target has no owned neighbours by
+ *  construction.
  *
- *  Items are left where they lie. A march onto a coin ends with the coin on a
- *  tile the empire now owns, claimable next turn for a full cascade, which is
- *  a better play than a cascade the march would have spent half its population
- *  on. */
+ *  The gap it fills is an ordinary claim and behaves like one. It is a tile the
+ *  empire could have taken by clicking it, so a coin under it fires and a
+ *  diamond under it is collected: marching over ground must not be worth less
+ *  than claiming the same ground, or the reach is a trap on exactly the tiles
+ *  worth reaching past.
+ *
+ *  The tile it lands ON is the exception, and deliberately. An item there is
+ *  left where it lies, so a march onto a coin ends with the coin on a tile the
+ *  empire now owns and can claim next turn for a full-strength cascade — better
+ *  than a cascade fired from the half a march had to spare.
+ *
+ *  Both halves land on rival ground as happily as on empty ground: this is a
+ *  volley rather than a column, and half a bank arriving from two tiles out is
+ *  what it costs to open a front where the defender was not watching. The one
+ *  square neither half can take is a capital, which falls only to a claim made
+ *  from beside it. See isShielded. */
 function march(
   state: State,
   move: Move,
@@ -390,7 +435,9 @@ function march(
 
   const half = Math.floor(base / 2);
   let captured = 0;
-  if (place(state, via, empire.id, half, dirty)) captured++;
+  // Half the raw spend backs the gap's coin, because half the raw spend is what
+  // went into that tile. The multiplier is not charged twice; see land().
+  if (land(state, via, half, Math.floor(spent / 2), empire, member, dirty)) captured++;
   if (place(state, target, empire.id, base - half, dirty)) captured++;
 
   bump(empire, member, STAT.TILES_TAKEN, captured);
@@ -415,35 +462,49 @@ function claim(
   member.popTimer = 0;
   member.popAcc = 0;
 
-  const item = state.item[i]! as Item;
-  if (item !== ITEM.NONE && item !== ITEM.DIAMOND) {
-    // The click lands as an ordinary claim first, and the coin spreads on top.
-    //
-    // It used to be one or the other: a coin consumed the claim and
-    // redistributed it, which meant clicking a coin put *less* on the tile you
-    // clicked than clicking a plain tile would have. A full bank on a bronze
-    // coin placed 203 there instead of 999. On contested ground that made a
-    // coin a downgrade — the opposite of a reward.
-    const took = place(state, i, empire.id, base, dirty);
-    if (took) {
-      bump(empire, member, STAT.TILES_TAKEN);
-      raise(empire, member, STAT.TILES_ONE_MOVE, 1);
-    }
-    // Spent, not base: the surround multiplier is a fact about the tile you
-    // clicked and it has already been paid on the claim above. The coin's own
-    // multiplier is a fact about its shape, applied per tile inside cascade.
-    cascade(state, i, item, spent, empire, member, dirty);
-  } else {
-    if (item === ITEM.DIAMOND) collectDiamond(state, i, empire, member);
-    const captured = place(state, i, empire.id, base, dirty);
-    if (captured) {
-      bump(empire, member, STAT.TILES_TAKEN);
-      raise(empire, member, STAT.TILES_ONE_MOVE, 1);
-    }
+  const captured = land(state, i, base, spent, empire, member, dirty, true);
+  if (captured) {
+    bump(empire, member, STAT.TILES_TAKEN);
+    raise(empire, member, STAT.TILES_ONE_MOVE, 1);
   }
 
   raise(empire, null, STAT.PEAK_TILES, empire.tilesOwned);
   raise(empire, null, STAT.PEAK_POP, empire.popTotal);
+}
+
+/** Put population on a tile and fire whatever the tile was holding.
+ *
+ *  `amount` is what lands, surround multiplier already applied. `trigger` is
+ *  the raw population behind it, before any multiplier — that is what a coin
+ *  spreads from, because the surround multiplier is a fact about the tile that
+ *  was clicked and has already been paid once above, while the coin's own
+ *  multiplier is a fact about its shape and is applied per tile inside cascade.
+ *  Charging both put an enclosed gold at sixteen times the population that set
+ *  it off.
+ *
+ *  The claim lands first and the coin spreads on top. It used to be one or the
+ *  other: a coin consumed the claim and redistributed it, which meant clicking
+ *  a coin put *less* on the tile you clicked than clicking bare ground would
+ *  have. A full bank on a bronze placed 203 there instead of 999, so on
+ *  contested ground a coin was a downgrade — the opposite of a reward. */
+function land(
+  state: State,
+  i: number,
+  amount: number,
+  trigger: number,
+  empire: Empire,
+  member: Member,
+  dirty: DirtySet,
+  direct = false,
+): boolean {
+  const item = state.item[i]! as Item;
+  if (item !== ITEM.NONE && item !== ITEM.DIAMOND) {
+    const took = place(state, i, empire.id, amount, dirty, direct);
+    cascade(state, i, item, trigger, empire, member, dirty);
+    return took;
+  }
+  if (item === ITEM.DIAMOND) collectDiamond(state, i, empire, member);
+  return place(state, i, empire.id, amount, dirty, direct);
 }
 
 /** Coin cascade.

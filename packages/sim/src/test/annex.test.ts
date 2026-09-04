@@ -2,7 +2,8 @@
 
 import { beforeAll, describe, expect, it } from "vitest";
 import { Sim, CLAIM } from "../sim.js";
-import { arena, humans, own, ownerAt, popAt } from "./testkit.js";
+import { at, arena, humans, own, ownerAt, popAt } from "./testkit.js";
+import { ITEM, MOVE } from "../types.js";
 
 describe("taking a capital annexes the empire", () => {
   let sim: Sim;
@@ -57,5 +58,41 @@ describe("taking a capital annexes the empire", () => {
 
   it("and the victim is out", () => {
     expect(sim.state.empires[1]!.alive).toBe(0);
+  });
+});
+
+// A capital falls to a deliberate claim from beside it, and to nothing else.
+// Everything that reaches a tile without anybody choosing that tile — a coin's
+// ball, a march landing two out — stops at the home square.
+describe("and nothing else takes one", () => {
+  /** Empire 2's capital, and the tile to its left. */
+  const board = (): { sim: Sim; hx: number; hy: number } => {
+    const sim = arena([humans(1), humans(1)]);
+    const home = sim.state.empires[1]!.capital;
+    return { sim, hx: home % sim.state.width, hy: Math.floor(home / sim.state.width) };
+  };
+
+  it("a cascade sweeps over it and leaves it standing", () => {
+    const { sim, hx, hy } = board();
+    own(sim, hx - 2, hy + 1, 1);
+    sim.state.item[at(sim, hx - 1, hy + 1)] = ITEM.SILVER;
+    sim.state.itemCount = 1;
+    sim.state.empires[0]!.members[0]!.popTimer = 999;
+    sim.advance([CLAIM(sim.step, 1, 0, 0, hx - 1, hy + 1)]);
+    // The ball reaches it — the tile beside it changed hands — and the capital
+    // did not.
+    expect(ownerAt(sim, hx - 1, hy)).toBe(1);
+    expect(ownerAt(sim, hx, hy)).toBe(2);
+    expect(sim.state.empires[1]!.alive).toBe(1);
+  });
+
+  it("a march is refused outright", () => {
+    const { sim, hx, hy } = board();
+    own(sim, hx - 2, hy, 1);
+    sim.state.empires[0]!.marchUnlocked = 1;
+    sim.state.empires[0]!.members[0]!.popTimer = 999;
+    expect(
+      sim.validate({ step: sim.step, empire: 1, member: 0, seq: 0, type: MOVE.MARCH, x: hx, y: hy }),
+    ).toBe(false);
   });
 });
