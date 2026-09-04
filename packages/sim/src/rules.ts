@@ -97,7 +97,22 @@ export function place(
     } else {
       state.pop[i] = after;
       addPop(state, prev, -amount);
-      if (after === 0) setOwner(state, i, 0);
+      // Any other tile goes neutral the moment it empties. A home does not: it
+      // stays its empire's, at nothing, until somebody spends a second click
+      // walking onto it.
+      //
+      // Because emptying a capital and taking a capital were the same board
+      // state and are not the same event. An empire is eliminated by not owning
+      // its home, so a home reduced to exactly zero killed it — but annexation
+      // only fires on a capture, so nobody inherited. The victim's territory sat
+      // there owned by a dead empire, unreachable and unclaimable, and the
+      // attacker who had just spent a full bank got nothing for it. Landing one
+      // population short took everything; landing exactly level took nothing and
+      // put the ground beyond anyone's reach.
+      //
+      // At zero it is a free square with a flag still on it, so the second click
+      // is the ordinary capture path and pays what a capital is worth.
+      if (after === 0 && state.empires[prev - 1]!.capital !== i) setOwner(state, i, 0);
     }
   }
 

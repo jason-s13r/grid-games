@@ -86,6 +86,52 @@ describe("and nothing else takes one", () => {
     expect(sim.state.empires[1]!.alive).toBe(1);
   });
 
+  // Landing exactly level used to be worse than landing one short: the home
+  // emptied, went neutral, and the empire was eliminated by not owning it —
+  // with nobody inheriting, because annexation fires on a capture.
+  it("emptying one is not taking one", () => {
+    const { sim, hx, hy } = board();
+    own(sim, hx - 1, hy, 1);
+    for (let y = 1; y <= 3; y++) own(sim, hx, hy + y, 2, 10);
+    sim.state.pop[at(sim, hx, hy)] = 40;
+    sim.state.empires[1]!.popTotal = 70;
+    sim.state.empires[0]!.members[0]!.popTimer = 40;
+    sim.advance([CLAIM(sim.step, 1, 0, 0, hx, hy)]);
+
+    expect(popAt(sim, hx, hy)).toBe(0);
+    expect(ownerAt(sim, hx, hy)).toBe(2);
+    expect(sim.state.empires[1]!.alive).toBe(1);
+    expect(ownerAt(sim, hx, hy + 2)).toBe(2);
+  });
+
+  it("and the click that walks onto it does", () => {
+    const { sim, hx, hy } = board();
+    own(sim, hx - 1, hy, 1);
+    for (let y = 1; y <= 3; y++) own(sim, hx, hy + y, 2, 10);
+    sim.state.pop[at(sim, hx, hy)] = 40;
+    sim.state.empires[1]!.popTotal = 70;
+    sim.state.empires[0]!.members[0]!.popTimer = 40;
+    sim.advance([CLAIM(sim.step, 1, 0, 0, hx, hy)]);
+    sim.state.empires[0]!.members[0]!.popTimer = 1;
+    sim.advance([CLAIM(sim.step, 1, 0, 0, hx, hy)]);
+
+    expect(ownerAt(sim, hx, hy)).toBe(1);
+    expect(sim.state.empires[1]!.alive).toBe(0);
+    expect(ownerAt(sim, hx, hy + 2)).toBe(1);
+    expect(sim.state.empires[1]!.tilesOwned).toBe(0);
+  });
+
+  // Everything that is not a home still empties to neutral.
+  it("an ordinary tile emptied goes to nobody", () => {
+    const { sim, hx, hy } = board();
+    own(sim, hx - 1, hy + 2, 1);
+    own(sim, hx, hy + 2, 2, 40);
+    sim.state.empires[0]!.members[0]!.popTimer = 40;
+    sim.advance([CLAIM(sim.step, 1, 0, 0, hx, hy + 2)]);
+    expect(popAt(sim, hx, hy + 2)).toBe(0);
+    expect(ownerAt(sim, hx, hy + 2)).toBe(0);
+  });
+
   it("a march is refused outright", () => {
     const { sim, hx, hy } = board();
     own(sim, hx - 2, hy, 1);
