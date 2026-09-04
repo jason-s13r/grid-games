@@ -5,3 +5,4 @@ _site/
 
 # dispat compute --write leaves one of these beside the file it rewrites.
 *.backup
+apps/observer/archives
