@@ -44,7 +44,13 @@ export type FrameType = (typeof FRAME)[keyof typeof FRAME];
  *  that follows is what settles it. An observer sends no key. */
 export interface HelloFrame {
   t: typeof FRAME.HELLO;
+  /** The version at stake: the game's if there is one, otherwise the one the
+   *  sender would compose. An old build reads only this and reaches the right
+   *  answer from it, which is why it stays a bare number. */
   protocol: number;
+  /** Every version the sender can play. Absent from an older build, and read
+   *  as `[protocol]` when it is. */
+  supported?: number[];
   gameId: string;
   key?: MemberKey;
   nonce: string;
@@ -185,7 +191,10 @@ export function decodeFrame(text: string): Frame | null {
       return typeof parsed.protocol === "number" &&
         isString(parsed.gameId) &&
         isString(parsed.nonce) &&
-        (parsed.key === undefined || isString(parsed.key))
+        (parsed.key === undefined || isString(parsed.key)) &&
+        (parsed.supported === undefined ||
+          (Array.isArray(parsed.supported) &&
+            parsed.supported.every((v) => typeof v === "number")))
         ? (parsed as unknown as HelloFrame)
         : null;
 

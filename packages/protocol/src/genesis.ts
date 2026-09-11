@@ -5,7 +5,7 @@
 // (keys sorted, no whitespace) rather than whatever JSON.stringify felt like
 // given the insertion order of the object it was handed.
 
-import { DEFAULT_RULES, PROTOCOL_VERSION, SEAT_CEILING } from "@tessera/sim";
+import { DEFAULT_RULES, SEAT_CEILING, playsProtocol } from "@tessera/sim";
 import type { Genesis } from "@tessera/sim";
 import { toHex, utf8 } from "./bytes.js";
 import { sha256 } from "./identity.js";
@@ -60,12 +60,15 @@ export type GenesisProblem =
 /** Everything a peer checks before it agrees to play. Returns the problems it
  *  found; empty means the record is one this build can join.
  *
- *  The protocol check is the important one: a peer that joins across a major
- *  boundary does not fail, it desyncs quietly three hours in. */
+ *  The protocol check is the important one: a peer that joins a game whose
+ *  rules it does not have does not fail, it desyncs quietly three hours in.
+ *  The set is what keeps a game alive across the release that supersedes it —
+ *  widened to every version this build plays, not narrowed to the one it
+ *  composes. */
 export async function inspectGenesis(genesis: Genesis): Promise<GenesisProblem[]> {
   const problems: GenesisProblem[] = [];
 
-  if (genesis.protocol !== PROTOCOL_VERSION) problems.push("protocol");
+  if (!playsProtocol(genesis.protocol)) problems.push("protocol");
 
   if (genesis.gameId !== undefined && genesis.gameId !== (await gameIdOf(genesis))) {
     problems.push("gameId");

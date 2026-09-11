@@ -74,8 +74,37 @@ describe("framing", () => {
     ["a non-object", '"move"'],
     ["a hello without a nonce", '{"t":"hello","protocol":1,"gameId":"a"}'],
     ["a negative snapshot step", '{"t":"snapshot?","step":-1}'],
+    [
+      "a hello whose supported set is not an array",
+      '{"t":"hello","protocol":3,"gameId":"a","nonce":"n","supported":3}',
+    ],
+    [
+      "a hello whose supported set holds something else",
+      '{"t":"hello","protocol":3,"gameId":"a","nonce":"n","supported":[3,"4"]}',
+    ],
   ])("%s decodes to nothing", (_label, text) => {
     expect(decodeFrame(text)).toBeNull();
+  });
+
+  it("a hello carries its supported set across", () => {
+    const back = decodeFrame(
+      encodeFrame({
+        t: FRAME.HELLO,
+        protocol: 3,
+        supported: [4, 3],
+        gameId: f.gameId,
+        nonce: "n",
+      }),
+    );
+    expect(back?.t === FRAME.HELLO ? back.supported : null).toEqual([4, 3]);
+  });
+
+  it("a hello from a build that predates the field still decodes", () => {
+    // The old-build case, and the one most likely to rot unnoticed: absent is
+    // not malformed, and canPlay reads it as [protocol].
+    const back = decodeFrame('{"t":"hello","protocol":3,"gameId":"a","nonce":"n"}');
+    expect(back?.t).toBe(FRAME.HELLO);
+    expect(back?.t === FRAME.HELLO ? back.supported : "set").toBeUndefined();
   });
 });
 
