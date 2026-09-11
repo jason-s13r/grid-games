@@ -29,11 +29,16 @@ every step inside `runSimBots` — it is always present.
 |---|---|---|
 | [`Lockstep.live(seat)`](../../packages/net/src/lockstep.ts#L1298) | `livenessWindow` (**2 min**) | should lockstep wait on this seat's input? |
 | [`isLive(state, empire)`](../../packages/sim/src/victory.ts#L13) | `livenessWindow` | (same, used by nothing hashed — a helper) |
-| [`silentFor` / abandonment](../gameplay/victory.md) | `abandonWindow` (**3 h**) | has this empire abandoned the game? |
+| [`silentFor` / abandonment](../gameplay/victory.md) | `abandonWindow` (**3 h floor**) | has this empire abandoned the game? |
 
 The 2-minute window is deliberately several times the 30-second heartbeat
 interval, so one dropped packet or a brief reconnect does not stop the game. The
-3-hour window is deliberately long: **being asleep is not being defeated**, and a
+3-hour figure is a **floor** rather than a fixed window — a
+[duration](../gameplay/durations.md) scales it to a third of the game, capped at
+36 hours, because a 3-hour window in a 10-day game is a losing condition for
+going to bed: three teams sleep, one insomniac is the only empire still
+"present", and the game ends by 03:00 without a tile changing hands. The window
+is deliberately long: **being asleep is not being defeated**, and a
 short window would reward waiting until an opponent's team is offline.
 
 ## blocked()

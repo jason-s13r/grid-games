@@ -17,7 +17,10 @@ tests four end conditions.
 | **Abandonment** | more than 1 alive, but only 1 is *present* | the present one | `LAST_ROSTER` |
 | **Timeout** | `endStep > 0` and `step >= endStep` | the [leader](#the-leader) | `TIMEOUT` |
 
-`endStep` defaults to **0** (no timeout).
+`endStep` defaults to **0** (no timeout), and a host sets it by choosing a
+[duration](durations.md). It is never set alone: `abandonWindow` scales with it,
+because a 3-hour abandonment window in a 10-day game is a losing condition for
+going to bed. See [durations](durations.md) for the trap and the arithmetic.
 
 ## Presence, and why the abandon window is hours
 

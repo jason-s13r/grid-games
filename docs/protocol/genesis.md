@@ -50,6 +50,7 @@ list of `GenesisProblem`s; empty means "this build can join this game".
 | `empires` | fewer than 1, or more than 255 (empire ids are single bytes) |
 | `members` | an empire with fewer than 1 seat |
 | `seats` | an empire with more than `min(maxSeats, SEAT_CEILING)` seats |
+| `rules` | `abandonWindow` below `MIN_ABANDON_WINDOW` (3 h), or a negative `joinWindow`/`endStep`. The abandonment window is the one rule a host could set to win outright — short enough and every opponent is "absent" before anyone moves |
 | `duplicate-key` | one key in two seats (unkeyed SimBot seats are skipped) |
 
 The seat cap is checked **here as well as** on every

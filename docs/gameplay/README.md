@@ -31,7 +31,8 @@ and win by taking capitals.
    everything — tiles, population, unspent stock, learned unlocks.
    [capitals.md](capitals.md), [elimination-and-annex.md](elimination-and-annex.md).
 9. **The game ends** when one empire is left, when only one is still present for
-   hours, or at a timeout if the genesis set one. [victory.md](victory.md).
+   hours, or at the timeout a host chose. [victory.md](victory.md),
+   [durations.md](durations.md).
 
 ## Every page
 
@@ -48,6 +49,7 @@ and win by taking capitals.
 | [elimination-and-annex.md](elimination-and-annex.md) | Emptied ≠ taken; `annex()` |
 | [upkeep.md](upkeep.md) | The connectivity sweep: decay and growth |
 | [victory.md](victory.md) | Win conditions, tie-breaks, liveness |
+| [durations.md](durations.md) | How long a game runs, and the two windows that scale with it |
 | [map-generation.md](map-generation.md) | Seeded terrain, rivers and fords, capital placement |
 | [bots.md](bots.md) | SimBot vs PeerBot; profiles; the targeting policy |
 | [difficulty-and-balance.md](difficulty-and-balance.md) | The full `DEFAULT_RULES` balance sheet, and the stat slots |

@@ -14,6 +14,11 @@
 #   * Only genuinely hash-neutral work is a minor or patch: docs, types,
 #     renderer-facing helpers, performance work that provably preserves the
 #     draw order.
+#   * A PROTOCOL_VERSION bump is BREAKING whether or not the hash moved. The
+#     two rules above are stated purely in terms of the hash, and that is not
+#     enough: a version bump can be perfectly hash-neutral and still break
+#     every peer on the old build, because it refuses the games the new one
+#     composes.
 #
 # packages/sim exports PROTOCOL_VERSION, the version this build stamps, and
 # SUPPORTED_PROTOCOLS, every version it will play. A peer refuses a genesis

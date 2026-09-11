@@ -48,7 +48,7 @@ six offline hours are crossed in under ten seconds.
 | `livenessWindow` | 2 min | a seat is "live" if its last beat is within this |
 | `upkeepInterval` | 20 s | the connectivity sweep runs this often |
 | `noobSteps` | 3 min | new-empire capital protection expires by this (or `noobTiles`) |
-| `abandonWindow` | 3 h | an empire silent this long is treated as gone |
+| `abandonWindow` | 3 h | an empire silent this long is treated as gone — the **floor**, which a [duration](../gameplay/durations.md) scales up |
 | `coinIntervalMin/Max` | 1.5 s / 4 s | span a coin spawn reschedules within |
 
 From [`DEFAULT_RULES`](../../packages/sim/src/constants.ts#L45).
