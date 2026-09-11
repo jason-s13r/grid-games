@@ -3,8 +3,16 @@
 // id for different ones, nothing built on top of it means anything.
 
 import { beforeAll, describe, expect, it } from "vitest";
-import { CONTROL, DEFAULT_RULES, MEMBER, makeGenesis } from "@tessera/sim";
-import type { Genesis } from "@tessera/sim";
+import {
+  CONTROL,
+  DEFAULT_RULES,
+  MEMBER,
+  MIN_ABANDON_WINDOW,
+  durationRules,
+  hours,
+  makeGenesis,
+} from "@tessera/sim";
+import type { Genesis, Rules } from "@tessera/sim";
 import { canonicalJson, gameIdOf, inspectGenesis, sealGenesis } from "../genesis.js";
 import { fixture } from "./fixture.js";
 import type { Fixture } from "./fixture.js";
@@ -53,6 +61,45 @@ describe("genesis", () => {
 
   it("a mismatched protocol is refused", async () => {
     expect(await inspectGenesis({ ...f.base, protocol: 99 } as Genesis)).toContain("protocol");
+  });
+
+  // A host who sets abandonWindow low enough wins before anyone moves: every
+  // opponent is "absent" the first time the composer is the only empire to
+  // have played inside a second. Every peer would verify that record happily,
+  // because nothing else here reads a number out of `rules`.
+  describe("a rule set a host could win with", () => {
+    const withRules = (rules: Partial<Rules>) =>
+      ({
+        ...f.genesis,
+        rules: { ...f.genesis.rules, ...rules },
+      }) as Genesis;
+
+    it("refuses an abandonment window below the floor", async () => {
+      expect(await inspectGenesis(withRules({ abandonWindow: 12 }))).toContain("rules");
+    });
+
+    it("accepts one exactly at the floor", async () => {
+      const problems = await inspectGenesis(
+        withRules({ abandonWindow: MIN_ABANDON_WINDOW }),
+      );
+      expect(problems).not.toContain("rules");
+    });
+
+    it("accepts a scaled window from a real duration", async () => {
+      const problems = await inspectGenesis(withRules(durationRules(hours(240))));
+      expect(problems).not.toContain("rules");
+    });
+
+    it("refuses a negative window", async () => {
+      expect(await inspectGenesis(withRules({ joinWindow: -1 }))).toContain("rules");
+      expect(await inspectGenesis(withRules({ endStep: -1 }))).toContain("rules");
+    });
+
+    it("says nothing about a record that names no windows at all", async () => {
+      // Every genesis written before v4 is one of these. The check is
+      // unconditional on version precisely because it can only ever refuse.
+      expect(await inspectGenesis(f.genesis)).not.toContain("rules");
+    });
   });
 
   // Attribution is by roster seat, so one key in two seats would make a move

@@ -5,7 +5,12 @@
 // (keys sorted, no whitespace) rather than whatever JSON.stringify felt like
 // given the insertion order of the object it was handed.
 
-import { DEFAULT_RULES, SEAT_CEILING, playsProtocol } from "@tessera/sim";
+import {
+  DEFAULT_RULES,
+  MIN_ABANDON_WINDOW,
+  SEAT_CEILING,
+  playsProtocol,
+} from "@tessera/sim";
 import type { Genesis } from "@tessera/sim";
 import { toHex, utf8 } from "./bytes.js";
 import { sha256 } from "./identity.js";
@@ -55,7 +60,8 @@ export type GenesisProblem =
   | "empires"
   | "members"
   | "duplicate-key"
-  | "seats";
+  | "seats"
+  | "rules";
 
 /** Everything a peer checks before it agrees to play. Returns the problems it
  *  found; empty means the record is one this build can join.
@@ -82,11 +88,31 @@ export async function inspectGenesis(genesis: Genesis): Promise<GenesisProblem[]
   // 0 means neutral, so the roster has to fit 1..255.
   if (genesis.empires.length > 255) problems.push("empires");
 
+  // The abandonment window is the one rule a host could set to win outright: a
+  // short enough window makes every opponent "absent" the first time it is the
+  // only empire to have moved inside a second, and victory.ts hands it
+  // WIN.LAST_ROSTER before anyone has played. Every peer would verify that
+  // record and accept it, because nothing else here reads a single number in
+  // `rules`. Checked here because the seat cap taught the lesson — a genesis
+  // record is the one place a rule can be born unfair.
+  //
+  // Unconditional on version, and that is safe: no record that exists violates
+  // it, and the worst a disagreement between two builds can produce is a peer
+  // declining to join. A new check in inspectGenesis is safe across versions;
+  // a new branch in validate() is not.
+  const rules = genesis.rules ?? DEFAULT_RULES;
+  if ((rules.abandonWindow ?? DEFAULT_RULES.abandonWindow) < MIN_ABANDON_WINDOW) {
+    problems.push("rules");
+  }
+  // Negative windows are nonsense rather than unfair, and cheaper to refuse
+  // than to reason about downstream.
+  if ((rules.joinWindow ?? 0) < 0 || (rules.endStep ?? 0) < 0) problems.push("rules");
+
   // The seat cap is checked here as well as on every amendment, because a
   // genesis record is the one place an empire could be born oversized — and a
   // peer that only checked amendments would join the unfair game and then
   // faithfully enforce fairness for the rest of it.
-  const seats = Math.min(genesis.rules?.maxSeats ?? DEFAULT_RULES.maxSeats, SEAT_CEILING);
+  const seats = Math.min(rules.maxSeats ?? DEFAULT_RULES.maxSeats, SEAT_CEILING);
 
   const seen = new Set<string>();
   for (const empire of genesis.empires) {
