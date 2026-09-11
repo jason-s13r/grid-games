@@ -34,6 +34,10 @@ export interface RosterView {
   waiting: Array<{ key: MemberKey; label: string }>;
   /** Proposals our empire has been asked to endorse and has not yet. */
   asks: Array<{ key: MemberKey; label: string; empire: number; endorsed: number; needed: number }>;
+  /** True once the join window has closed. The panel says so instead of
+   *  offering a vote that would be refused — the people are still here and
+   *  still watching, so the list stays; only the button goes. */
+  joinsClosed: boolean;
 }
 
 const escape = (text: string): string =>
@@ -288,7 +292,9 @@ export class LobbyPanel {
       .join("");
 
     // An observer cannot invite anyone: it holds no seat, so it is not part of
-    // any empire's quorum and has nothing to offer.
+    // any empire's quorum and has nothing to offer. Past the join window
+    // nobody can, so the button goes and the list stays: these people are
+    // still here, still watching, and a button that lies is worse than none.
     const waiting = view.watching
       ? ""
       : view.waiting
@@ -296,8 +302,12 @@ export class LobbyPanel {
             (who) => `
         <li class="lobby-seat">
           <span class="lobby-who">${escape(who.label)}</span>
-          <button class="btn btn-small" data-lobby-action="invite"
-            data-key="${escape(who.key)}">Offer a seat</button>
+          ${
+            view.joinsClosed
+              ? `<span class="lobby-tally">the door is closed</span>`
+              : `<button class="btn btn-small" data-lobby-action="invite"
+            data-key="${escape(who.key)}">Offer a seat</button>`
+          }
         </li>`,
           )
           .join("");

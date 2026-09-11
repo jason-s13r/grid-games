@@ -26,7 +26,7 @@ import {
   seedFrom,
   simbot,
 } from "@tessera/sim";
-import type { Difficulty, EmpireSpec, Genesis } from "@tessera/sim";
+import type { Difficulty, DurationRules, EmpireSpec, Genesis } from "@tessera/sim";
 import {
   FRAME,
   Identity,
@@ -80,6 +80,18 @@ export interface HostPlan {
   simbots: readonly Difficulty[];
   width: number;
   height: number;
+  /** How long the game runs, and the two windows that scale with it.
+   *
+   *  Deliberately `DurationRules` and not `Partial<Rules>`. A general
+   *  passthrough is a hole: a modified client could compose a game with
+   *  `abandonWindow: 12` and be handed WIN.LAST_ROSTER the first time it is
+   *  the only empire to have moved inside a second — and the same door lets a
+   *  host set popMax, marchCost or coinIntervalMin to whatever wins. A Pick of
+   *  three fields refuses all of that in the type.
+   *
+   *  A type binds our client and not a hostile one, which is why the floor is
+   *  also checked in `inspectGenesis`, where every peer already looks. */
+  duration?: DurationRules;
 }
 
 /** Whether a peer that said hello can play the version at stake — the game's
@@ -321,6 +333,7 @@ export class Lobby {
       // responsiveness, never agreement.
       startedAt: Date.now(),
       map: { width: plan.width, height: plan.height },
+      ...(plan.duration ? { rules: plan.duration } : {}),
       empires,
     });
 

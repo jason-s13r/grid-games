@@ -966,6 +966,19 @@ export class Lockstep {
       return;
     }
 
+    // Past the door's closing time, and not a bot. The sim would refuse this
+    // at its step anyway — seatArrivals runs the same validate on every peer,
+    // so the gate is already binding end to end — but a carried amendment
+    // holds readiness below its step until it resolves, and a doomed one would
+    // hold the table, arrive, be skipped, and release. Refusing it here means
+    // the table is not stopped waiting for a vote whose outcome is decided.
+    //
+    // Same expression as the sim's, deliberately. If the two ever disagree the
+    // sim wins, because this one only ever declines to *start* a vote.
+    const genesis = this.sim.state.genesis;
+    const window = genesis.protocol >= 4 ? (genesis.rules.joinWindow ?? 0) : 0;
+    if (window > 0 && step >= window && incoming.amendment.kind !== MEMBER.BOT) return;
+
     const proposal = `${empire}:${key}`;
     const slot = `${proposal}@${step}`;
     const held = this.amendments.get(slot);

@@ -266,3 +266,68 @@ describe("a peer that resumes across an amendment", () => {
     );
   });
 });
+
+// The door's opening hours, enforced twice and for different reasons.
+//
+// The sim gate is what binds: seatArrivals runs the same validate on every
+// peer against the same record, so a late human amendment is skipped
+// identically everywhere with no help from this layer. What the net layer owes
+// is not correctness but liveness — a carried amendment holds readiness below
+// its step until it resolves, so a proposal that is already doomed would stop
+// the table, arrive, be skipped, and release. That looks like a hang rather
+// than a refusal, which is why it is worth a test.
+describe("a seat offered after the door closed", () => {
+  let t: Table;
+  let latecomer: Identity;
+
+  beforeAll(async () => {
+    // A window of 24 steps: two seconds of game time, closed well before the
+    // proposal below is made.
+    t = await table({ seats: [2, 1], rules: { joinWindow: 24 } });
+    latecomer = await Identity.generate();
+    await run(t, 48);
+  });
+
+  it("is never gossiped", async () => {
+    await t.peers[0]!.driver.amend(latecomer.key);
+    await settleNetwork(t);
+    await run(t, ROUND);
+    for (const peer of t.peers) {
+      expect(peer.driver.invitation(1, latecomer.key)).toBeUndefined();
+    }
+  });
+
+  it("seats nobody", () => {
+    expect(t.peers[0]!.driver.roster.has(latecomer.key)).toBe(false);
+  });
+
+  it("and did not hold the table waiting for a vote that cannot carry", async () => {
+    const before = t.peers[0]!.driver.step;
+    await run(t, ROUND);
+    expect(t.peers[0]!.driver.step).toBeGreaterThan(before);
+    expect(agreed(t)).toBe(true);
+  });
+
+  it("but a bot may still be seated past it", async () => {
+    // Night cover, or a substitute on day six. The window is about people who
+    // are not there, and a bot is how a team covers for one — so it must carry
+    // all the way to a seat, not merely survive the gate.
+    const cover = await Identity.generate();
+    await t.peers[0]!.driver.amend(cover.key, MEMBER.BOT);
+    await settleNetwork(t);
+    expect(t.peers[1]!.driver.invitation(1, cover.key)).toBeDefined();
+    await t.peers[1]!.driver.endorse(1, cover.key);
+    await run(t, ROUND);
+    expect(t.peers[0]!.driver.roster.has(cover.key)).toBe(true);
+    expect(agreed(t)).toBe(true);
+  });
+
+  it("while the human proposal never even reached the other seat", async () => {
+    // The distinction the gate draws, stated as one assertion: same empire,
+    // same step, same table — and the bot is seated where the human was not.
+    const person = await Identity.generate();
+    await t.peers[0]!.driver.amend(person.key);
+    await settleNetwork(t);
+    expect(t.peers[1]!.driver.invitation(1, person.key)).toBeUndefined();
+  });
+});

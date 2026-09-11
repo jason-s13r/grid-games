@@ -481,8 +481,13 @@ function openChat(seat: { empire: number; member: number }): void {
 function rosterView(driver: Lockstep): RosterView {
   const here = lobby?.players() ?? [];
   const ours = driver.seat?.empire;
+  // The same expression the sim and the lockstep use: read off the record,
+  // never off this build's constant.
+  const genesis = driver.sim.state.genesis;
+  const window = genesis.protocol >= 4 ? (genesis.rules.joinWindow ?? 0) : 0;
   return {
     watching: !driver.seat,
+    joinsClosed: window > 0 && driver.sim.step >= window,
     waiting: here.filter((who) => !who.you && !driver.roster.has(who.key)),
     asks: driver
       .invitations()
