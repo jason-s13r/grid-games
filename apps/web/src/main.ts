@@ -6,6 +6,9 @@
 
 import {
   seedFrom,
+  durationRules,
+  hours,
+  minutes,
   PROTOCOL_VERSION,
   SUPPORTED_PROTOCOLS,
   shelfLife,
@@ -105,6 +108,37 @@ const MAP_SIZES: Record<string, { width: number; height: number }> = {
  *  rather than cached, so changing the dropdown and pressing start agree. */
 const mapSize = () =>
   MAP_SIZES[pick<HTMLSelectElement>('[data-cfg="size"]').value] ?? MAP_SIZES.medium!;
+
+/** Lengths the host card suggests. A list beside the picker rather than a type
+ *  in the sim: the old `type Duration = "3h" | "1d" | ...` is what a host had
+ *  to extend to add 45 minutes, and what lands in the genesis is only ever
+ *  three numbers anyway.
+ *
+ *  No open-ended entry. Every hosted game from v4 on has an end date, which is
+ *  what makes a version's sunset derivable rather than a judgement call — and
+ *  `endStep: 0` stays legal in the sim forever for the solo card and for every
+ *  v3 record. */
+const COMMON_DURATIONS: ReadonlyArray<{ label: string; steps: number }> = [
+  { label: "15 minutes", steps: minutes(15) },
+  { label: "30 minutes", steps: minutes(30) },
+  { label: "1 hour", steps: hours(1) },
+  { label: "3 hours", steps: hours(3) },
+  { label: "6 hours", steps: hours(6) },
+  { label: "1 day", steps: hours(24) },
+  { label: "3 days", steps: hours(72) },
+  { label: "5 days", steps: hours(120) },
+  { label: "10 days", steps: hours(240) },
+];
+
+const lengthEl = pick<HTMLSelectElement>('[data-cfg="length"]');
+lengthEl.innerHTML = COMMON_DURATIONS.map(
+  (d, i) => `<option value="${d.steps}"${i === 4 ? " selected" : ""}>${d.label}</option>`,
+).join("");
+
+/** The duration the setup screen is asking for. Read at the moment a game
+ *  starts rather than cached, the same way the map size is, so changing the
+ *  dropdown and pressing start agree. */
+const duration = () => durationRules(Number(lengthEl.value));
 
 /** The rival empires the solo card is offering, each with its own difficulty.
  *  It renders itself, so nothing here has to know how many there are. */
@@ -453,7 +487,7 @@ const chat = new ChatPanel(chatEl, {
 const panel = new LobbyPanel(lobbyEl, {
   host: () => void begin(),
   join: (code) => void begin(code),
-  start: (plan) => void lobby?.host({ ...plan, ...mapSize() }),
+  start: (plan) => void lobby?.host({ ...plan, ...mapSize(), duration: duration() }),
   leave: () => {
     lobby?.close();
     lobby = undefined;

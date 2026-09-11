@@ -127,6 +127,16 @@
                   <option value="large">large &mdash; 256&times;176</option>
                 </select>
               </div>
+              <!-- Options are filled from COMMON_DURATIONS in main.ts rather
+                   than written here, so adding 45 minutes is one line and not
+                   two. Applies to a hosted game: a solo game against SimBots
+                   is open-ended, and joinWindow and abandonWindow are both
+                   about people who are not there. -->
+              <div class="field">
+                <label for="cfg-length">Length</label>
+                <select id="cfg-length" data-cfg="length"></select>
+              </div>
+              <p class="hint">Length applies to multiplayer games.</p>
               <button class="btn primary" data-action="solo">Start solo game</button>
             </section>
 
