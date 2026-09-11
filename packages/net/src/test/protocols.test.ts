@@ -16,7 +16,9 @@
 import { describe, expect, it } from "vitest";
 import { FRAME } from "@tessera/protocol";
 import type { HelloFrame } from "@tessera/protocol";
-import { canPlay } from "../lobby.js";
+import { PROTOCOL_VERSION, SUPPORTED_PROTOCOLS } from "@tessera/sim";
+import { canPlay, explain } from "../lobby.js";
+import type { Genesis } from "@tessera/sim";
 
 const hello = (protocol: number, supported?: number[]): HelloFrame => ({
   t: FRAME.HELLO,
@@ -52,5 +54,28 @@ describe("canPlay", () => {
 
   it("still drops two builds that share no version", () => {
     expect(canPlay(hello(5, [5]), 3)).toBe(false);
+  });
+});
+
+describe("the refusal a player reads", () => {
+  const at = (protocol: number) => ({ protocol }) as Genesis;
+
+  it("says nothing when the protocol was not the problem", () => {
+    expect(explain(at(PROTOCOL_VERSION), ["seats"])).toBe("");
+  });
+
+  it("names both versions, so neither side is a guess", () => {
+    const said = explain(at(99), ["protocol"]);
+    expect(said).toContain("v99");
+    expect(said).toContain(`v${PROTOCOL_VERSION}`);
+  });
+
+  it("tells a behind client to update", () => {
+    expect(explain(at(PROTOCOL_VERSION + 1), ["protocol"])).toContain("update");
+  });
+
+  it("tells a client whose game has aged out that it has", () => {
+    const oldest = SUPPORTED_PROTOCOLS[SUPPORTED_PROTOCOLS.length - 1]!;
+    expect(explain(at(oldest - 1), ["protocol"])).toContain("no longer plays");
   });
 });

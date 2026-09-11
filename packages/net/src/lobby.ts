@@ -96,6 +96,23 @@ export function canPlay(hello: HelloFrame, stake: number): boolean {
   return (hello.supported ?? [hello.protocol]).includes(stake);
 }
 
+/** A list of problem names tells a player nothing they can act on. Where the
+ *  protocol is one of them, say which side is behind: below the oldest version
+ *  this build plays and their build has moved on without us; above the one it
+ *  composes and ours has not caught up. That is the difference between
+ *  "update your client" and a shrug. */
+export function explain(genesis: Genesis, problems: readonly string[]): string {
+  if (!problems.includes("protocol")) return "";
+  const oldest = SUPPORTED_PROTOCOLS[SUPPORTED_PROTOCOLS.length - 1] ?? PROTOCOL_VERSION;
+  const side =
+    genesis.protocol > PROTOCOL_VERSION
+      ? "that game is newer than this build — update to join it"
+      : genesis.protocol < oldest
+        ? "that game is on a rule set this build no longer plays"
+        : "this build does not play that rule set";
+  return ` — the game is v${genesis.protocol}, this build plays v${SUPPORTED_PROTOCOLS.join(", v")}; ${side}`;
+}
+
 export class Lobby {
   phase: LobbyPhase = "connecting";
   code = "";
@@ -319,7 +336,7 @@ export class Lobby {
   private async adopt(genesis: Genesis): Promise<void> {
     const problems = await inspectGenesis(genesis);
     if (problems.length > 0) {
-      this.fail(`refused the game: ${problems.join(", ")}`);
+      this.fail(`refused the game: ${problems.join(", ")}${explain(genesis, problems)}`);
       return;
     }
 

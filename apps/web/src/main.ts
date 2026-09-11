@@ -4,7 +4,13 @@
 // lockstep driver will drive it: moves in, dirty tiles out, camera and DOM
 // strictly outside the simulation.
 
-import { seedFrom, PROTOCOL_VERSION, Sim } from "@tessera/sim";
+import {
+  seedFrom,
+  PROTOCOL_VERSION,
+  SUPPORTED_PROTOCOLS,
+  shelfLife,
+  Sim,
+} from "@tessera/sim";
 import { Roster } from "@tessera/protocol";
 import { Archive, Lobby, Lockstep } from "@tessera/net";
 import pkg from "../package.json";
@@ -26,6 +32,7 @@ import { Controls } from "./view/Controls";
 import { Shell } from "./view/Shell";
 import { injectThemeCss, empireTheme } from "./view/palette";
 import { MOVE } from "@tessera/sim";
+import type { Genesis } from "@tessera/sim";
 
 const pick = <T extends Element>(selector: string): T => {
   const el = document.querySelector<T>(selector);
@@ -38,10 +45,30 @@ injectThemeCss();
 // Version comes from the manifest, which dispat rewrites on release, so what
 // the UI shows is whatever was actually built. The protocol number is the one
 // that decides whether two peers can play together at all.
-const version = `v${pkg.version} · protocol ${PROTOCOL_VERSION}`;
+// A build that plays more than one version says so: a player looking at
+// "protocol 4" while their game runs on 3 has no way to tell the two apart.
+const also = SUPPORTED_PROTOCOLS.filter((v) => v !== PROTOCOL_VERSION);
+const version =
+  `v${pkg.version} · protocol ${PROTOCOL_VERSION}` +
+  (also.length ? ` (also plays ${also.join(", ")})` : "");
 for (const el of document.querySelectorAll("[data-version], [data-version-menu]")) {
   el.textContent = version;
 }
+
+/** A game on a superseded version has a shelf life, and a player who knows
+ *  about it can finish the game. One who does not simply finds it broken one
+ *  morning, which is the whole failure this notice exists to prevent — a
+ *  running game cannot be upgraded, because its protocol is inside its own
+ *  game id. Null while the game is current, which is every game until the
+ *  first bump. */
+const sayShelfLife = (genesis: Genesis): void => {
+  const life = shelfLife(genesis);
+  for (const el of document.querySelectorAll("[data-shelf-life]")) {
+    el.textContent = life
+      ? `This game uses rule set ${life.version}. Your build plays it until ${life.until}.`
+      : "";
+  }
+};
 
 const viewportEl = pick<HTMLDivElement>("[data-viewport]");
 const tilesEl = pick<HTMLDivElement>("[data-tiles]");
@@ -495,6 +522,7 @@ async function begin(code?: string): Promise<void> {
   lobby = opened;
   panel.attach(lobby);
   lobby.onStart = (genesis, seat, transport) => {
+    sayShelfLife(genesis);
     const driver = new Lockstep({
       genesis,
       sim: new Sim(genesis),
