@@ -11,6 +11,7 @@
 
 import type { Genesis, Move } from "../../types.js";
 import v3 from "./recorded-v3.json";
+import v4 from "./recorded-v4.json";
 
 export interface Recorded {
   note: string;
@@ -20,4 +21,4 @@ export interface Recorded {
   moveLog: Move[];
 }
 
-export const RECORDED = [v3] as unknown as Recorded[];
+export const RECORDED = [v4, v3] as unknown as Recorded[];

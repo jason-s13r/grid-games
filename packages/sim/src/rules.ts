@@ -263,6 +263,24 @@ export function validate(state: State, move: Move): boolean {
   // substitute in, but no quorum can vote itself a bigger team than every other
   // empire is allowed.
   if (move.type === MOVE.ROSTER_AMEND) {
+    // Gated on the record, never on the build. A v4 build playing a v3 game
+    // has to reach the same verdict a v3 build would, and a v3 game has no
+    // such field — so for a v3 record this line does not exist.
+    //
+    // The version test is not belt and braces on top of `?? 0`. Without it the
+    // branch is only *incidentally* inert on v3 records: inert because no v3
+    // record happens to carry the field, which is a property of the records
+    // that exist rather than of the records that are possible. A hand-composed
+    // v3 genesis carrying joinWindow would be accepted by both builds, which
+    // would then disagree about one amendment and diverge from that step on.
+    //
+    // This is the first gated branch in the codebase, and it is the shape
+    // every later one copies: state.genesis.protocol, never PROTOCOL_VERSION.
+    const window = state.genesis.protocol >= 4 ? (rules.joinWindow ?? 0) : 0;
+    // move.x is what the application below already reads to choose BOT vs
+    // HUMAN; validation reads the same field. Bots stay allowed past the
+    // window — night cover, or a substitute on day six.
+    if (window > 0 && move.step >= window && move.x !== MEMBER.BOT) return false;
     return empire.members.length < Math.min(rules.maxSeats, SEAT_CEILING);
   }
   if (move.type === MOVE.BUY_BRIDGE) return empire.diamonds >= rules.bridgeCost;

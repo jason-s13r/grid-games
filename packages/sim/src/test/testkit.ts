@@ -22,21 +22,31 @@ export { humans, simbot } from "../specs.js";
  *  every tile a test placed. Suppressed here the same way spawning is — these
  *  are world processes, and the tests that care about them build their own
  *  board. See upkeep.test.ts. */
-export function arena(empires: EmpireSpec[], seed = 1, rules: Partial<Rules> = {}): Sim {
+export function arena(
+  empires: EmpireSpec[],
+  seed = 1,
+  rules: Partial<Rules> = {},
+  /** Stamp a version other than the one this build composes. The only way to
+   *  put a v3 peer and a v4 peer in one process, which is what a gated branch
+   *  needs to be tested at all — the Sim constructor never checks gameId, so a
+   *  hand-stamped genesis is enough and no re-sealing is involved. */
+  options: { protocol?: number } = {},
+): Sim {
+  const genesis = makeGenesis({
+    seed,
+    empires,
+    map: { width: 24, height: 24, mountains: 0, lakes: 0, rivers: 0, walls: 0 },
+    rules: {
+      coinIntervalMin: 1 << 28,
+      coinIntervalMax: 1 << 28,
+      upkeepInterval: 1 << 28,
+      noobSteps: 0,
+      noobTiles: 0,
+      ...rules,
+    },
+  });
   const sim = new Sim(
-    makeGenesis({
-      seed,
-      empires,
-      map: { width: 24, height: 24, mountains: 0, lakes: 0, rivers: 0, walls: 0 },
-      rules: {
-        coinIntervalMin: 1 << 28,
-        coinIntervalMax: 1 << 28,
-        upkeepInterval: 1 << 28,
-        noobSteps: 0,
-        noobTiles: 0,
-        ...rules,
-      },
-    }),
+    options.protocol === undefined ? genesis : { ...genesis, protocol: options.protocol },
   );
   const s = sim.state;
   s.terrain.fill(TERRAIN.PLAIN);

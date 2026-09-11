@@ -102,6 +102,22 @@ describe("the fixture set", () => {
     }
   });
 
+  it("proves the bump moved nothing", () => {
+    // record() is deterministic in the seed and draws its hand from
+    // Rng(seed ^ 0x5eed); none of that reads the protocol number. So two
+    // fixtures recorded at the same seed under different versions must reach
+    // the same hash, and that is a stronger claim than "crossenv still
+    // passes": crossenv proves each fixture reproduces itself, and this
+    // proves the bump changed nothing about what a game *is*.
+    const hashes = new Set(RECORDED.map((r) => r.hash));
+    expect(hashes.size, [...hashes].join(" != ")).toBe(1);
+  });
+
+  it("records the same game under every version", () => {
+    const shape = RECORDED.map((r) => `${r.steps}/${r.moveLog.length}`);
+    expect(new Set(shape).size).toBe(1);
+  });
+
   it("names each fixture by the version it recorded", () => {
     for (const recorded of RECORDED) {
       expect(recorded.note).toContain(`v${recorded.genesis.protocol}`);

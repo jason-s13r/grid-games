@@ -5,17 +5,29 @@ import type { Genesis, Rules, MapConfig } from "./types.js";
 
 /** Stamped into every genesis this build composes. New games are always
  *  current: nothing anywhere downgrades this. */
-export const PROTOCOL_VERSION = 3;
+export const PROTOCOL_VERSION = 4;
 
 /** Every version this build can play, verify and replay, newest first.
  *  PROTOCOL_VERSION is always its first entry. */
-export const SUPPORTED_PROTOCOLS: readonly number[] = [3];
+export const SUPPORTED_PROTOCOLS: readonly number[] = [4, 3];
 
 /** The day each superseded version stops being played, ISO. Written by hand at
  *  the bump — the release date plus the longest duration preset — and checked
  *  by a test that fails once a date has passed. Retirement is an alarm clock,
  *  not something somebody has to remember. */
-export const PROTOCOL_SUNSET: Readonly<Record<number, string>> = {};
+export const PROTOCOL_SUNSET: Readonly<Record<number, string>> = {
+  // Release day + 90. From v4 on this is arithmetic — a version's longest
+  // possible game is fixed the moment it stops being current, so the date is
+  // its successor's release plus MAX_DURATION plus slack, and raising the cap
+  // later can never invalidate a date already published.
+  //
+  // For 3 it cannot be derived, and the reason is durations themselves: v3
+  // predates them, so every v3 game is open-ended and no arithmetic bounds it.
+  // 90 days is a policy choice — long enough that a marathon started the week
+  // before this release is not cut short, short enough to be a real deadline.
+  // Those games are exactly what the shelf-life notice is for.
+  3: "2026-12-11",
+};
 
 /** Whether this build will play a game stamped with `version`.
  *

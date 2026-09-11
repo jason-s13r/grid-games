@@ -415,6 +415,69 @@ describe("team empires", () => {
       expect(DEFAULT_RULES.maxSeats).toBe(4);
     });
   });
+
+  // The front door's opening hours. It gates being voted onto an existing team
+  // today, and claiming a vacant empire once 0010 lands — one rule, not two.
+  // Bots stay welcome past it: night cover, or a substitute on day six.
+  describe("the door closes on late human seats", () => {
+    const amend = (step: number, kind: number) => ({
+      step,
+      empire: 1,
+      member: 0,
+      seq: 0,
+      type: MOVE.ROSTER_AMEND,
+      x: kind,
+      y: 0,
+    });
+    const table = () => arena([humans(1), humans(1)], 1, { joinWindow: 40, maxSeats: 4 });
+
+    it("admits a human before the window closes", () => {
+      expect(table().validate(amend(39, MEMBER.HUMAN))).toBe(true);
+    });
+
+    it("refuses one at the closing step", () => {
+      // Half-open: the window shuts *at* joinWindow, which is what makes
+      // joinWindow: 1 mean "no late joins" while 0 still means "always open".
+      expect(table().validate(amend(40, MEMBER.HUMAN))).toBe(false);
+    });
+
+    it("refuses one after it", () => {
+      expect(table().validate(amend(80, MEMBER.HUMAN))).toBe(false);
+    });
+
+    it("admits a bot on both sides of the line", () => {
+      expect(table().validate(amend(39, MEMBER.BOT))).toBe(true);
+      expect(table().validate(amend(80, MEMBER.BOT))).toBe(true);
+    });
+
+    it("leaves a game with no window open forever", () => {
+      // Every genesis written before v4 lacks the field, and reading it as 0
+      // is what keeps those games playable rather than retroactively sealed.
+      const open = arena([humans(1), humans(1)], 1, { maxSeats: 4 });
+      expect(open.state.genesis.rules.joinWindow).toBeUndefined();
+      expect(open.validate(amend(9999, MEMBER.HUMAN))).toBe(true);
+    });
+
+    // The plan's load-bearing test, and the one 0001 wanted and could not
+    // write: one process, one build, two versions, and an observable
+    // difference in behaviour. A v4 build playing a v3 game must reach the
+    // verdict a v3 build would — which is what "running it as v3" means in
+    // code, and the only place it is visible.
+    it("does not exist in a v3 game, even in a record that claims it", () => {
+      const rules = { joinWindow: 40, maxSeats: 4 };
+      const v3 = arena([humans(1), humans(1)], 1, rules, { protocol: 3 });
+      const v4 = arena([humans(1), humans(1)], 1, rules, { protocol: 4 });
+
+      expect(v3.state.genesis.rules.joinWindow).toBe(40);
+      expect(v3.validate(amend(80, MEMBER.HUMAN))).toBe(true);
+      expect(v4.validate(amend(80, MEMBER.HUMAN))).toBe(false);
+    });
+
+    it("still caps seats past the window, for bots too", () => {
+      const full = arena([humans(4), humans(1)], 1, { joinWindow: 40, maxSeats: 4 });
+      expect(full.validate(amend(10, MEMBER.BOT))).toBe(false);
+    });
+  });
 });
 
 describe("win conditions", () => {
