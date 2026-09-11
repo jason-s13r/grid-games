@@ -1,11 +1,42 @@
 // Tunables. Enums live in types.ts; this file is the balance sheet.
 
 import { ITEM, ELIMINATION } from "./types.js";
-import type { Rules, MapConfig } from "./types.js";
+import type { Genesis, Rules, MapConfig } from "./types.js";
 
-/** Bumped whenever a change moves the state hash. Genesis records it, and a
- *  peer refuses to join a game whose major differs. */
+/** Stamped into every genesis this build composes. New games are always
+ *  current: nothing anywhere downgrades this. */
 export const PROTOCOL_VERSION = 3;
+
+/** Every version this build can play, verify and replay, newest first.
+ *  PROTOCOL_VERSION is always its first entry. */
+export const SUPPORTED_PROTOCOLS: readonly number[] = [3];
+
+/** The day each superseded version stops being played, ISO. Written by hand at
+ *  the bump — the release date plus the longest duration preset — and checked
+ *  by a test that fails once a date has passed. Retirement is an alarm clock,
+ *  not something somebody has to remember. */
+export const PROTOCOL_SUNSET: Readonly<Record<number, string>> = {};
+
+/** Whether this build will play a game stamped with `version`.
+ *
+ *  The set is a parameter with a default rather than a closed-over constant.
+ *  On the day this ships the constant has one entry, and a predicate that can
+ *  only be asked about that entry is a predicate no test can move. */
+export function playsProtocol(
+  version: number,
+  supported: readonly number[] = SUPPORTED_PROTOCOLS,
+): boolean {
+  return supported.includes(version);
+}
+
+/** What to tell a player whose game is on a superseded version: null while the
+ *  game is current, which is every game until the first bump. */
+export function shelfLife(
+  genesis: Genesis,
+): { version: number; until: string } | null {
+  const until = PROTOCOL_SUNSET[genesis.protocol];
+  return until === undefined ? null : { version: genesis.protocol, until };
+}
 
 /** Indexed by Terrain. Mountains and lakes are permanent; rivers and walls
  *  open once bridged or laddered. */

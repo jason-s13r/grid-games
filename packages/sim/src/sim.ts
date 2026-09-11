@@ -9,7 +9,13 @@
 
 import { MOVE, ITEM, PHASE, CONTROL, MEMBER } from "./types.js";
 import type { Genesis, Move, Item, MapConfig, Rules, EmpireSpec } from "./types.js";
-import { DEFAULT_MAP, DEFAULT_RULES, PROTOCOL_VERSION } from "./constants.js";
+import {
+  DEFAULT_MAP,
+  DEFAULT_RULES,
+  PROTOCOL_VERSION,
+  SUPPORTED_PROTOCOLS,
+  playsProtocol,
+} from "./constants.js";
 import { PASSABLE } from "./constants.js";
 import { EVENT } from "./events.js";
 import { idx, xOf, yOf } from "./geometry.js";
@@ -49,10 +55,12 @@ export class Sim {
   state: State;
 
   constructor(genesis: Genesis) {
-    if (genesis.protocol !== PROTOCOL_VERSION) {
-      // Refuse at the lobby rather than desyncing silently hours later.
+    if (!playsProtocol(genesis.protocol)) {
+      // Refuse at the lobby rather than desyncing silently hours later. The
+      // message names the whole set: a one-number message on a build that
+      // plays two is a lie.
       throw new Error(
-        `sim protocol mismatch: genesis is v${genesis.protocol}, this build is v${PROTOCOL_VERSION}`,
+        `sim protocol mismatch: genesis is v${genesis.protocol}, this build plays v${SUPPORTED_PROTOCOLS.join(", v")}`,
       );
     }
     this.state = generate(createState(genesis));
