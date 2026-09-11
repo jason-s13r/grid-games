@@ -125,9 +125,10 @@ that *this build* reproduces *that version's* hash exactly. This is the honest
 cost of the feature and also its only real proof: a v3 branch that has quietly
 stopped behaving like v3 is caught by the file that has not changed.
 
-`packages/sim/CHANGELOG.md` already records, release by release, whether the
-hash moved and whether the number went with it. That discipline is what makes
-the fixture set maintainable rather than archaeological.
+Each release records, commit by commit, whether the hash moved and whether the
+number went with it — dispat builds the changelog from those bodies. That
+discipline is what makes the fixture set maintainable rather than
+archaeological.
 
 ## Telling the player
 
@@ -450,8 +451,9 @@ all six become wrong on the same day:
 | `docs/simulation/README.md:29` | "throws on a major mismatch" → "throws on an unsupported version" |
 | `dispat.yaml:18-20` | the comment tying the semver rule to `PROTOCOL_VERSION` |
 
-`packages/sim/CHANGELOG.md` gets an entry under the existing discipline: the
-hash does not move, `PROTOCOL_VERSION` stays at 3, and the release adds
+Do not write `packages/sim/CHANGELOG.md` by hand — dispat generates it from the
+commit bodies at release, so the body of commit 1 *is* the release note: the
+hash does not move, `PROTOCOL_VERSION` stays at 3, and the build gains
 `SUPPORTED_PROTOCOLS`. Hash-neutral and additive, so this is a **minor** on
 `@tessera/sim` under `dispat.yaml`'s contract, not a major — the first plan in a
 while where that is true, and worth stating in the commit so nobody "corrects"
