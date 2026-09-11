@@ -22,6 +22,7 @@ import {
 import { makeGenesis, Sim } from "../sim.js";
 import { humans } from "../specs.js";
 import type { Genesis } from "../types.js";
+import { RECORDED } from "./fixtures/index.js";
 
 const genesisAt = (protocol: number): Genesis => ({
   ...makeGenesis({ seed: 1, empires: [humans(1), humans(1)] }),
@@ -79,6 +80,31 @@ describe("retirement", () => {
       expect(day, `v${version} was due to be dropped on ${until}`).toBeGreaterThan(
         Date.now(),
       );
+    }
+  });
+});
+
+describe("the fixture set", () => {
+  it("has a recorded game for every supported version", () => {
+    const recorded = RECORDED.map((r) => r.genesis.protocol).sort((a, b) => b - a);
+    expect(recorded).toEqual([...SUPPORTED_PROTOCOLS].sort((a, b) => b - a));
+  });
+
+  it("records no version this build does not support", () => {
+    // The other direction, and the one that makes retirement honest: drop a
+    // version from SUPPORTED_PROTOCOLS and crossenv fails on exactly that
+    // fixture, while this test says the fix is to delete the file.
+    for (const recorded of RECORDED) {
+      expect(
+        playsProtocol(recorded.genesis.protocol),
+        `recorded-v${recorded.genesis.protocol}.json has no supported version`,
+      ).toBe(true);
+    }
+  });
+
+  it("names each fixture by the version it recorded", () => {
+    for (const recorded of RECORDED) {
+      expect(recorded.note).toContain(`v${recorded.genesis.protocol}`);
     }
   });
 });
