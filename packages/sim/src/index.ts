@@ -1,6 +1,7 @@
 export * from "./types.js";
 export * from "./constants.js";
 export * from "./geometry.js";
+export * from "./duration.js";
 export { Rng, seedFrom } from "./rng.js";
 export { fnv1a, hex } from "./hash.js";
 export { EventQueue, EVENT } from "./events.js";

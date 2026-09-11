@@ -69,9 +69,14 @@ export const STAT_SLOTS = 16;
 
 export const STEPS_PER_SECOND = 12;
 
-const seconds = (n: number) => Math.floor(n * STEPS_PER_SECOND);
-const minutes = (n: number) => seconds(n * 60);
-const hours = (n: number) => minutes(n * 60);
+// Exported so a caller can say `durationRules(hours(6))` rather than doing its
+// own arithmetic on STEPS_PER_SECOND. They stay here rather than moving to
+// duration.ts because DEFAULT_RULES uses them three lines later, and moving
+// them would put a cycle between the two files for no gain.
+export const seconds = (n: number) => Math.floor(n * STEPS_PER_SECOND);
+export const minutes = (n: number) => seconds(n * 60);
+export const hours = (n: number) => minutes(n * 60);
+export const days = (n: number) => hours(n * 24);
 
 export const DEFAULT_RULES: Rules = {
   popMax: 999,

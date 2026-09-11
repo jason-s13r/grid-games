@@ -109,6 +109,14 @@ export interface Rules {
   elimination: Elimination;
   endStep: number;
 
+  /** Steps after which no human seat may be added; absent or 0 = always open.
+   *
+   *  Optional because every genesis written before v4 lacks it, and reading it
+   *  as 0 is what keeps those games playable rather than retroactively sealed.
+   *  Optional also means `DEFAULT_RULES` does not carry it, so a game composed
+   *  with no duration is byte-identical to what a v3 build composed. */
+  joinWindow?: number;
+
   /** Default steps between a bot's claims, and the floor a headless bot is
    *  held to. A profile may ask for longer; nothing may ask for shorter, or an
    *  always-on seat would out-reflex the people it plays against. */
