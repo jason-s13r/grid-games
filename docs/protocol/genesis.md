@@ -5,7 +5,7 @@ The genesis record is the **root of trust**, and its SHA-256 hash is the
 
 ```ts
 interface Genesis {
-  protocol: number;      // PROTOCOL_VERSION at seal time
+  protocol: number;      // PROTOCOL_VERSION at seal time; fixed for the game's life
   gameId?: string;       // the hash, stamped on by sealGenesis
   seed: number;          // drives map generation and the RNG
   startedAt: number;     // epoch ms — the origin for targetStep
@@ -45,7 +45,7 @@ list of `GenesisProblem`s; empty means "this build can join this game".
 
 | Problem | Cause |
 |---|---|
-| `protocol` | `genesis.protocol !== PROTOCOL_VERSION` — **the important one.** A peer that joins across a major boundary does not fail, it desyncs quietly three hours in |
+| `protocol` | `genesis.protocol` is not in `SUPPORTED_PROTOCOLS` — **the important one.** A peer that joins a game whose rules it does not have does not fail, it desyncs quietly three hours in. The check is membership, not equality, so a game survives the release that supersedes it |
 | `gameId` | present but does not match the recomputed hash — tampered |
 | `empires` | fewer than 1, or more than 255 (empire ids are single bytes) |
 | `members` | an empire with fewer than 1 seat |

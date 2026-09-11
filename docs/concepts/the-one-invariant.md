@@ -35,13 +35,27 @@ order and snapshot layout all qualify. A peer on an old build and a peer on a ne
 one would diverge at the first affected step and each accuse the other. The
 semver on `@tessera/sim` obeys the hash, not the API.
 
-### PROTOCOL_VERSION guards the major
+### PROTOCOL_VERSION guards the major, and the supported set keeps games alive
 
-[`PROTOCOL_VERSION = 3`](../../packages/sim/src/constants.ts#L8) is stamped into
-every [genesis](../protocol/genesis.md) record and checked in the `Sim`
-constructor ([`sim.ts:52`](../../packages/sim/src/sim.ts#L52)) and in
-`inspectGenesis`. A mismatched major is refused **at the lobby**, because the
-alternative is a silent desync three hours in.
+Two constants, because they answer different questions.
+[`PROTOCOL_VERSION`](../../packages/sim/src/constants.ts) is stamped into every
+[genesis](../protocol/genesis.md) record this build composes.
+[`SUPPORTED_PROTOCOLS`](../../packages/sim/src/constants.ts) is every version it
+can play, verify and replay — newest first, `PROTOCOL_VERSION` always its head.
+
+The `Sim` constructor and `inspectGenesis` both ask `playsProtocol`, so an
+unsupported version is refused **at the lobby**, because the alternative is a
+silent desync three hours in. What the set buys is the games in flight on the
+day a release ships: a ten-day game started on Monday survives Thursday's
+deploy, and — since `verifyArchive` reaches the same check — every archive ever
+written stays verifiable after the number moves.
+
+A game is stamped at one version and plays at that version for its whole life.
+This is version *selection*, not negotiation: `state.genesis.protocol` decides
+behaviour once a record is adopted, never the build's constant. A running game
+cannot be upgraded, because `gameIdOf` hashes the protocol field and every
+signature in the game binds the game id — an upgraded game is a different game
+by the only definition this codebase has.
 
 ### Nothing outside the simulation may enter it
 

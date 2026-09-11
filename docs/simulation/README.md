@@ -26,7 +26,7 @@ codes against:
 
 | Member | Does |
 |---|---|
-| `new Sim(genesis)` | throws on a `PROTOCOL_VERSION` major mismatch; runs map generation |
+| `new Sim(genesis)` | throws on a version outside `SUPPORTED_PROTOCOLS`; runs map generation |
 | `advance(moves) → DirtySet` | simulate exactly one step; returns changed tile indices |
 | `fastForward(toStep, moves?)` | advance many steps, skipping empty ones |
 | `hash() → uint32` | `fnv1a(snapshot(state))` |

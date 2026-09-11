@@ -26,7 +26,12 @@ long write.
 ## Versioning
 
 There is no separate "protocol version" number in this package. It re-exports
-[`PROTOCOL_VERSION`](../concepts/the-one-invariant.md) (3) from `sim`, which
-`HelloFrame.protocol` and `Genesis.protocol` carry, and which is bumped whenever
-a change moves the [state hash](../concepts/the-one-invariant.md). Record domain
-tags are versioned inline (`tessera/move/1`, `tessera/message/1`, …).
+[`PROTOCOL_VERSION`](../concepts/the-one-invariant.md) from `sim` — the version
+this build stamps, bumped whenever a change moves the
+[state hash](../concepts/the-one-invariant.md) — alongside
+`SUPPORTED_PROTOCOLS`, the set it will play. `Genesis.protocol` carries the
+game's version, and `HelloFrame.protocol` carries the version *at stake* (the
+game's once one exists) with `HelloFrame.supported` listing the sender's whole
+set. An older build sends no set, and is read as playing exactly what it stamps.
+Record domain tags are versioned inline (`tessera/move/1`, `tessera/message/1`,
+…).

@@ -26,10 +26,18 @@ Three consequences run through the rest of the repository:
   signature changed. Rule tweaks, spawn weights, RNG draw order and snapshot
   layout all qualify. [`dispat.yaml`](dispat.yaml) states the rule; the semver
   on `@tessera/sim` obeys it.
-- **`PROTOCOL_VERSION`** ([`constants.ts`](packages/sim/src/constants.ts)) is
-  stamped into every genesis record and checked in the `Sim` constructor and in
-  `inspectGenesis`. A mismatched major is refused at the lobby, because the
-  alternative is a silent desync three hours in.
+- **`PROTOCOL_VERSION` and `SUPPORTED_PROTOCOLS`**
+  ([`constants.ts`](packages/sim/src/constants.ts)) are two ideas that used to
+  share a name. `PROTOCOL_VERSION` is stamped into every genesis this build
+  composes; `SUPPORTED_PROTOCOLS` is every version it can play, verify and
+  replay. The `Sim` constructor and `inspectGenesis` check membership in the
+  set, not equality with the constant — a version nobody supports is refused at
+  the lobby, because the alternative is a silent desync three hours in.
+- **A build supports N and N-1, and no more.** A superseded version is dropped
+  once no game can still be running on it; `PROTOCOL_SUNSET` carries the date
+  and a test fails the day it passes. A running game is never upgraded — its
+  protocol is inside its own game id, so changing it would invalidate every
+  signature already cast.
 - **Nothing outside the simulation may enter it.** Camera, chat, signatures,
   socket state and wall-clock stopwatches are all deliberately outside the
   hash. See [What is hashed](#what-is-hashed-and-what-is-not).

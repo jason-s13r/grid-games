@@ -15,9 +15,10 @@
 #     renderer-facing helpers, performance work that provably preserves the
 #     draw order.
 #
-# packages/sim exports PROTOCOL_VERSION; a peer refuses to join a game whose
-# genesis names a different major. That check is what turns a silent overnight
-# desync into an refusal at the lobby.
+# packages/sim exports PROTOCOL_VERSION, the version this build stamps, and
+# SUPPORTED_PROTOCOLS, every version it will play. A peer refuses a genesis
+# outside that set, which is what turns a silent overnight desync into a
+# refusal at the lobby.
 
 scripts:
   build-lib: pnpm build

@@ -60,4 +60,6 @@ snapshot that hashes to a target, and the only way to get a real snapshot is to
 run the real simulation.
 
 `LAYOUT_VERSION` is bumped whenever the byte layout changes — which moves every
-hash, so it travels with a `PROTOCOL_VERSION` bump too.
+hash, so it travels with a `PROTOCOL_VERSION` bump too — and a build that
+plays more than one version must reproduce each one's hash exactly, which is
+what the per-version recorded fixtures assert.
