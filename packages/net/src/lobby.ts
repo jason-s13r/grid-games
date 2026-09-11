@@ -17,7 +17,15 @@
 // with it, so anything that turns up in that gap is buffered here and replayed
 // into the driver the moment it exists.
 
-import { CONTROL, MEMBER, PROTOCOL_VERSION, makeGenesis, seedFrom, simbot } from "@tessera/sim";
+import {
+  CONTROL,
+  MEMBER,
+  PROTOCOL_VERSION,
+  SUPPORTED_PROTOCOLS,
+  makeGenesis,
+  seedFrom,
+  simbot,
+} from "@tessera/sim";
 import type { Difficulty, EmpireSpec, Genesis } from "@tessera/sim";
 import {
   FRAME,
@@ -28,7 +36,7 @@ import {
   sealGenesis,
   toBase64Url,
 } from "@tessera/protocol";
-import type { Frame, MemberKey } from "@tessera/protocol";
+import type { Frame, HelloFrame, MemberKey } from "@tessera/protocol";
 import { PeerMesh, createMesh } from "./mesh.js";
 import { checkPlan } from "./teams.js";
 import type { Seat } from "./lockstep.js";
@@ -72,6 +80,20 @@ export interface HostPlan {
   simbots: readonly Difficulty[];
   width: number;
   height: number;
+}
+
+/** Whether a peer that said hello can play the version at stake — the game's
+ *  if one has been adopted, otherwise the one this build would compose.
+ *
+ *  This is an early-out and a better error message, not the gate. The gate is
+ *  `adopt` → `inspectGenesis`, which is the first moment either side knows
+ *  what game is being proposed. What this buys is the rejoin: a returning
+ *  player on N+1 dialling a room running N is greeted rather than dropped.
+ *
+ *  A hello with no `supported` came from a build that predates the field, and
+ *  reads as a build that plays exactly what it stamps. */
+export function canPlay(hello: HelloFrame, stake: number): boolean {
+  return (hello.supported ?? [hello.protocol]).includes(stake);
 }
 
 export class Lobby {
@@ -214,7 +236,10 @@ export class Lobby {
   private greet(peer: string): void {
     this.mesh.send(peer, {
       t: FRAME.HELLO,
-      protocol: PROTOCOL_VERSION,
+      // The version at stake, not the version of this build: once a game is
+      // adopted the stake is the game's, for its whole life.
+      protocol: this.sealed?.protocol ?? PROTOCOL_VERSION,
+      supported: [...SUPPORTED_PROTOCOLS],
       gameId: "",
       key: this.identity.key,
       nonce: toBase64Url(randomBytes(16)),
@@ -223,7 +248,10 @@ export class Lobby {
 
   private route(from: string, frame: Frame): void {
     if (frame.t === FRAME.HELLO) {
-      if (frame.protocol !== PROTOCOL_VERSION) return; // a build we cannot play with
+      // Not "were we built the same day" but "can they play this game" — the
+      // one we are in, or the one this build would compose if we are not in
+      // one yet.
+      if (!canPlay(frame, this.sealed?.protocol ?? PROTOCOL_VERSION)) return;
       if (frame.key) {
         this.members.set(from, frame.key);
         void this.label(frame.key);

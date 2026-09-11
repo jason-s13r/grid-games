@@ -12,7 +12,7 @@ export { PeerBot } from "./peerbot.js";
 export type { PeerBotOptions, Play, Target } from "./peerbot.js";
 export { LocalHub } from "./hub.js";
 export { PeerMesh, createMesh } from "./mesh.js";
-export { Lobby } from "./lobby.js";
+export { Lobby, canPlay } from "./lobby.js";
 export type { HostPlan, LobbyMember, LobbyPhase, LobbyPlayer } from "./lobby.js";
 export { MAX_SEATS, checkPlan, composeTeams } from "./teams.js";
 export type { Composition, Seated } from "./teams.js";
