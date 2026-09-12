@@ -68,6 +68,38 @@ describe("six drivers over a room bus", () => {
   });
 });
 
+describe("a relay that silences one seat", () => {
+  it("cannot forge anything, and ends in a quorum-signed drop", async () => {
+    // The honest reading of this test is that it demonstrates the attack as well
+    // as the recovery. A room bus carries everybody, so unlike a TURN relay it
+    // can carry the room while dropping one seat's frames. What it gets for that
+    // is denial of play escalating to ejection — never authority, and never
+    // invisible, because the ejection is a quorum-signed record that appears in
+    // every archive of the game, naming the step and the reason.
+    const t = await table({ seats: [2, 2], transport: "socket", stallTimeout: 400 });
+    await run(t, 24, await clickAround(t, 12));
+
+    const victim = t.peers[0]!;
+    t.bus!.silence.add(victim.name);
+    await run(t, 120, await clickAround(t, 12));
+
+    // Everyone else agreed to drop the seat they stopped hearing from.
+    const witnesses = t.peers.filter((peer) => peer !== victim);
+    for (const peer of witnesses) {
+      const dropped = peer.ejections.find(
+        (ejection) =>
+          ejection.seat.empire === victim.seat!.empire &&
+          ejection.seat.member === victim.seat!.member,
+      );
+      expect(dropped, `${peer.name} should have recorded the drop`).toBeDefined();
+    }
+
+    // And the rest of the game is undisturbed: a relay that can silence a seat
+    // still cannot make anybody simulate anything different.
+    expect(new Set(witnesses.map((peer) => peer.driver.hash())).size).toBe(1);
+  });
+});
+
 describe("a relay that reorders", () => {
   it("still converges, because a move's place is in the move", async () => {
     // A star topology means every frame passes through one process that may

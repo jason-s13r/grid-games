@@ -109,6 +109,11 @@ export class SocketWorld {
   /** While true, nothing crosses in either direction and neither side is told —
    *  a relay that has stopped answering rather than one that closed. */
   cut = false;
+  /** Ids whose outbound frames the relay quietly drops while carrying everyone
+   *  else's. This is the one power a room bus has that a TURN relay does not — a
+   *  TURN relay carries one pair — and it lives in the wire rather than in
+   *  `RoomBus` because it is a hostile relay's behaviour, not the contract's. */
+  readonly silence = new Set<string>();
 
   constructor(options: WorldOptions = {}) {
     this.bus = options.bus ?? new RoomBus();
@@ -141,7 +146,11 @@ export class SocketWorld {
       const up = socket.up.splice(0, socket.up.length);
       for (const text of up) {
         moved++;
-        if (socket.readyState === OPEN) this.bus.deliver(socket.far, text);
+        if (socket.readyState !== OPEN) continue;
+        // Dropped on the floor, with the sender told nothing: it sees a healthy
+        // socket carrying its frames away.
+        if (this.silence.has(socket.assigned)) continue;
+        this.bus.deliver(socket.far, text);
       }
     }
     for (const socket of [...this.sockets]) {
