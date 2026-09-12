@@ -129,3 +129,119 @@ describe("an archive kept by a peer that arrived late", () => {
     expect(verdict.problems.some((one) => one.includes("begins at step 900"))).toBe(true);
   });
 });
+
+describe("a game whose first move is not on step 0", () => {
+  let dir: string;
+
+  beforeAll(async () => {
+    dir = await mkdtemp(join(tmpdir(), "tessera-late-"));
+    const identity = await Identity.generate();
+    const genesis = await sealGenesis(
+      makeGenesis({
+        seed: 3,
+        startedAt: 0,
+        map: { width: 24, height: 24 },
+        empires: [
+          { control: CONTROL.HUMAN, members: [{ kind: MEMBER.HUMAN, key: identity.key }] },
+          { control: CONTROL.SIMBOT, members: [{ kind: MEMBER.BOT }] },
+        ],
+      }),
+    );
+
+    const sim = new Sim(genesis);
+    const file = new FileArchive({ dir, genesis, source: sim });
+    await file.open();
+
+    // Nothing happens for a while, which is an ordinary game: a player looking at
+    // the board is a player who has not clicked.
+    for (let step = 0; step < 20; step++) {
+      if (step === 14) {
+        const move: Move = {
+          step,
+          empire: 1,
+          member: 0,
+          seq: 0,
+          type: MOVE.HEARTBEAT,
+          x: 0,
+          y: 0,
+        };
+        const envelope = await signMove(identity, genesis.gameId!, move);
+        file.archive.applied(step, [envelope.move], [envelope]);
+        sim.advance([envelope.move]);
+        continue;
+      }
+      file.archive.applied(step, [], []);
+      sim.advance([]);
+    }
+    await file.close();
+  });
+
+  afterAll(async () => {
+    await rm(dir, { recursive: true, force: true });
+  });
+
+  it("still begins at the start, and still replays", async () => {
+    // `from` used to be the step of the first *record*, which is a different
+    // thing from the step this peer started watching: a complete log of a quiet
+    // opening claimed to begin at step 14 and was refused as a fragment. Every
+    // archive of a real game was refused that way, and the leaderboard counted
+    // none of them.
+    const game = await readArchive(dir);
+    expect(game.from).toBe(0);
+
+    const verdict = await verifyArchive(game);
+    expect(verdict.problems).toEqual([]);
+    expect(verdict.ok).toBe(true);
+  });
+});
+
+describe("a game this peer jumped into the middle of", () => {
+  let dir: string;
+
+  beforeAll(async () => {
+    dir = await mkdtemp(join(tmpdir(), "tessera-gap-"));
+    const identity = await Identity.generate();
+    const genesis = await sealGenesis(
+      makeGenesis({
+        seed: 5,
+        startedAt: 0,
+        map: { width: 24, height: 24 },
+        empires: [
+          { control: CONTROL.HUMAN, members: [{ kind: MEMBER.HUMAN, key: identity.key }] },
+          { control: CONTROL.SIMBOT, members: [{ kind: MEMBER.BOT }] },
+        ],
+      }),
+    );
+
+    const sim = new Sim(genesis);
+    const file = new FileArchive({ dir, genesis, source: sim });
+    await file.open();
+
+    for (let step = 0; step < 10; step++) {
+      file.archive.applied(step, [], []);
+      sim.advance([]);
+    }
+    // A snapshot was adopted: the simulation moved rather than advancing, and the
+    // inputs in between were never seen by this peer. Asking for a snapshot is the
+    // normal answer to a socket blink now, so this is the routine case for a
+    // process that runs for days.
+    file.archive.gap(40);
+    await file.close();
+  });
+
+  afterAll(async () => {
+    await rm(dir, { recursive: true, force: true });
+  });
+
+  it("says so, and is refused as the fragment it is", async () => {
+    const game = await readArchive(dir);
+    expect(game.from).toBe(40);
+    expect(game.gaps).toEqual([40]);
+
+    // Refused by every reader, including one written before gaps existed: `from`
+    // is what does the refusing, and `gaps` only says where the hole is.
+    const verdict = await verifyArchive(game);
+    expect(verdict.ok).toBe(false);
+    expect(verdict.problems.join(" ")).toMatch(/begins at step 40/);
+  });
+});

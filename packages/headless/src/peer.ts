@@ -89,6 +89,13 @@ export interface HostOptions {
   onDriver?: (driver: Lockstep, genesis: Genesis, seat?: Seat) => void;
   /** The room filled up or the deadline passed and nothing could be composed. */
   onWaiting?: (players: LobbyPlayer[]) => void;
+  /** `checkPlan` refused the composed plan, and said why.
+   *
+   *  Worth a callback rather than a retry: the reasons are all structural — too
+   *  few empires, a seat for somebody who is not here, an empire over the seat cap
+   *  — so a host that quietly composes again will be refused again, forever, while
+   *  printing that it is waiting for players who have already arrived. */
+  onRefused?: (problem: string, players: LobbyPlayer[]) => void;
 }
 
 export interface HostedGame extends JoinedGame {
@@ -131,7 +138,9 @@ export async function hostGame(options: HostOptions): Promise<HostedGame> {
     // would compose a second genesis for the same room.
     sealing = true;
     void lobby.host(plan).then((sealed) => {
-      if (!sealed) sealing = false;
+      if (sealed) return;
+      sealing = false;
+      options.onRefused?.(lobby.problem, lobby.players());
     });
   };
   lobby.onChange();

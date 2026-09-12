@@ -1,0 +1,29 @@
+{
+  "name": "@tessera/host",
+  "version": "0.1.0",
+  "private": true,
+  "description": "A peer that stays: the door, the relay and the paper trail for a game that outlives a tab.",
+  "license": "MIT",
+  "type": "module",
+  "bin": {
+    "tessera-host": "./dist/main.js"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "start": "node dist/main.js",
+    "test": "vitest run --passWithNoTests"
+  },
+  "dependencies": {
+    "@tessera/net": "workspace:*",
+    "@tessera/headless": "workspace:*",
+    "@tessera/protocol": "workspace:*",
+    "@tessera/sim": "workspace:*",
+    "ws": "8.18.0"
+  },
+  "devDependencies": {
+    "@types/node": "22.7.5",
+    "@types/ws": "8.5.13",
+    "typescript": "5.6.3"
+  }
+}

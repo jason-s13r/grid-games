@@ -72,8 +72,15 @@ export interface FileArchiveOptions {
 export class FileArchive {
   readonly archive: Archive;
   private readonly dir: string;
-  /** Set on the first record rather than up front, because a peer does not know
-   *  it arrived late until it sees which step it is being told about. */
+  /** Where this peer started watching.
+   *
+   *  Taken when the archive is built — which is before `driver.start()`, so it is
+   *  0 for a peer that was there from the genesis and the adopted step for one
+   *  that arrives later. It used to be set to the step of the *first record*, and
+   *  that is a different thing entirely: a game where nobody clicks for the first
+   *  few steps has no records for them, which made a complete log claim to begin
+   *  at step 4 and be refused as a fragment. Every archive of a real game was
+   *  refused that way. A jump is recorded separately, by `gap`. */
   private from: number;
   private readonly snapshots?: SnapshotStore;
   private readonly written = new Set<number>();
@@ -97,7 +104,7 @@ export class FileArchive {
   private resumedAt = -1;
   private timer?: ReturnType<typeof setInterval>;
   private closed = false;
-  private first = true;
+
   /** Resolved by open(). Records can start arriving the moment the driver does,
    *  which is before the directory they belong in exists. */
   private ready: Promise<void>;
@@ -105,7 +112,7 @@ export class FileArchive {
 
   constructor(private readonly options: FileArchiveOptions) {
     this.dir = options.dir;
-    this.from = options.from ?? 0;
+    this.from = options.from ?? options.source.step;
     this.ready = new Promise<void>((done) => {
       this.laidOut = done;
     });
@@ -133,14 +140,6 @@ export class FileArchive {
       // the inputs between the last recorded step and this one were never seen.
       this.jumps.push(record.to);
       this.from = record.to;
-      this.first = false;
-    }
-    if (this.first) {
-      this.first = false;
-      // Where the log actually starts. A peer that joined an hour into a game
-      // holds a fragment whatever it was told at construction, and the first
-      // step it is asked to archive is the only honest answer to which.
-      if (this.options.from === undefined) this.from = this.options.source.step;
     }
     this.pending.push(JSON.stringify(record));
     // A record every step would be a syscall every step. Batching to the next

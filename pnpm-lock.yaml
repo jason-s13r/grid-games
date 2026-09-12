@@ -34,6 +34,34 @@ importers:
         specifier: 5.6.3
         version: 5.6.3
 
+  apps/host:
+    dependencies:
+      '@tessera/headless':
+        specifier: workspace:*
+        version: link:../../packages/headless
+      '@tessera/net':
+        specifier: workspace:*
+        version: link:../../packages/net
+      '@tessera/protocol':
+        specifier: workspace:*
+        version: link:../../packages/protocol
+      '@tessera/sim':
+        specifier: workspace:*
+        version: link:../../packages/sim
+      ws:
+        specifier: 8.18.0
+        version: 8.18.0
+    devDependencies:
+      '@types/node':
+        specifier: 22.7.5
+        version: 22.7.5
+      '@types/ws':
+        specifier: 8.5.13
+        version: 8.5.13
+      typescript:
+        specifier: 5.6.3
+        version: 5.6.3
+
   apps/observer:
     dependencies:
       '@tessera/headless':
@@ -1073,6 +1101,9 @@ packages:
   '@types/node@22.7.5':
     resolution: {integrity: sha512-jML7s2NAzMWc//QSJ1a3prpk78cOPchGvXJsC3C6R6PSMoooztvRVQEz89gmBTBY1SPMaqo5teB4uNHPdetShQ==}
 
+  '@types/ws@8.5.13':
+    resolution: {integrity: sha512-osM/gWBTPKgHV8XkTunnegTRIsvF6owmf5w+JtAfOw472dptdm0dlGv4xCt6GwQRcC2XVOvvRE/0bAoQcL2QkA==}
+
   '@vitest/browser@3.2.7':
     resolution: {integrity: sha512-gIzazUkbQfv6T1rJHOLhMMKQnplKAvvQ7QNGaFwI6oCsp4z2aSDZCojGpX3QX3+MYsvJdyy/8BRIYVEbAkMkEA==}
     peerDependencies:
@@ -1683,6 +1714,18 @@ packages:
     resolution: {integrity: sha512-hUrmaWBdVDcxvYqnyh09zunKzROWjbZTiNy8dBEjkS7ehEDQibXJ7XvlmtbwuTclUiIyN+CyXQD4Vmko8fNm8w==}
     engines: {node: '>=8'}
     hasBin: true
+
+  ws@8.18.0:
+    resolution: {integrity: sha512-8VbfWfHLbbwu3+N6OKsOMpBdT4kXPDDB9cJk2bJ6mh9ucxdlnNvH1e+roYkKmN9Nxw2yjz7VzeO9oOz2zJ04Pw==}
+    engines: {node: '>=10.0.0'}
+    peerDependencies:
+      bufferutil: ^4.0.1
+      utf-8-validate: '>=5.0.2'
+    peerDependenciesMeta:
+      bufferutil:
+        optional: true
+      utf-8-validate:
+        optional: true
 
   ws@8.21.3:
     resolution: {integrity: sha512-201TZ/kPWxoPr/OKWjquZR1SWKXcvxdH+e1xrx89b3YbmzLMFCLfnaG1HFIgWzJOEWZ7MvpK++odZufgYR50Rw==}
@@ -2693,6 +2736,10 @@ snapshots:
     dependencies:
       undici-types: 6.19.8
 
+  '@types/ws@8.5.13':
+    dependencies:
+      '@types/node': 22.7.5
+
   '@vitest/browser@3.2.7(playwright@1.62.1)(vite@7.3.6(lightningcss@1.33.0)(sass@1.103.1))(vitest@3.2.7)':
     dependencies:
       '@testing-library/dom': 10.4.1
@@ -3295,5 +3342,7 @@ snapshots:
     dependencies:
       siginfo: 2.0.0
       stackback: 0.0.2
+
+  ws@8.18.0: {}
 
   ws@8.21.3: {}
