@@ -39,19 +39,27 @@ replaced — overwriting it would silently abandon whatever seat that key held.
 [`joinGame(options)`](../../packages/headless/src/peer.ts#L66) is the whole
 "reloading tab" join path under Node:
 
-1. `installWebRTC()`;
-2. `Lobby.open(identity, code, { iceServers?, id? })` — `JOIN_TIMEOUT_MS = 45000`
+1. `parseRef(options.ref)` — a bad room fails here, before anything connects;
+2. `installWebRTC()`, **for an rtc ref only**. This is the only place in the
+   repository that loads a native module, and node-datachannel is the one
+   genuinely unpleasant dependency here — prebuilt binaries per platform, where
+   everything else is portable TypeScript — so a socket-only peer skipping it is
+   the difference between an install that works on a small VPS and one that does
+   not. `shutdownWebRTC()` needs no guard: it returns early when nothing was
+   installed;
+3. `Lobby.open(identity, ref, { iceServers?, id? })` — `JOIN_TIMEOUT_MS = 45000`
    (longer than the client's 15 s; a daemon would rather retry a slow host);
-3. build a [`Lockstep`](../continuity/lockstep.md);
-4. `options.onDriver(driver, genesis, seat)` **before** `driver.start()` — the
+4. build a [`Lockstep`](../continuity/lockstep.md);
+5. `options.onDriver(driver, genesis, seat)` **before** `driver.start()` — the
    only moment an [archive](../trust-and-verification/archive-format.md) can
    attach without missing a step;
-5. `setInterval(() => driver.pump(), 1000 / STEPS_PER_SECOND)`.
+6. `setInterval(() => driver.pump(), 1000 / STEPS_PER_SECOND)`.
 
 The timer is **deliberately not `unref`'d** — it is what keeps the process alive,
 so `stop()` (clearInterval + `driver.stop()` + `lobby.close()` +
-`shutdownWebRTC()`) is the whole of stopping the program. `JoinOptions.id` claims
-a stable peer id so a game whose original host went home is reachable at this one.
+`shutdownWebRTC()`) is the whole of stopping the program. `JoinOptions.ref` is the
+room — a code or a link — and `JoinOptions.id` claims a stable peer id so a game
+whose original host went home is reachable at this one.
 
 ## FileArchive
 

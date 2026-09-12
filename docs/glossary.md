@@ -9,9 +9,15 @@ whether one of its keys is in the roster. See
 [concepts/peers-and-roles.md](concepts/peers-and-roles.md).
 
 ### host
-The peer that created the room. Its PeerJS peer id **is** the room code. It
+The peer that created the room. In a WebRTC room its PeerJS peer id **is** the
+room code — one case of two, now that a room can also be a name on a relay. It
 composes and seals the genesis record, then has no further authority — once the
 game is sealed the host is an ordinary peer. See [mesh/the-lobby.md](mesh/the-lobby.md).
+
+### connection reference
+The string a player joins with, and the whole of how a transport is chosen: a
+peer id is a WebRTC mesh, a `wss://` URL is a room on a relay. An address, never
+an authority. See [mesh/connection-refs.md](mesh/connection-refs.md).
 
 ### observer
 A peer with no key in the roster. It connects, validates, hashes and archives

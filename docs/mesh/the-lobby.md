@@ -18,8 +18,15 @@ seat it holds. Nothing after that needs a host at all.
 
 `LobbyPhase` = `connecting | hosting | waiting | playing | failed`.
 
-- `Lobby.open(identity, join?, { iceServers?, id? })` — static async; PeerJS
-  arrives here on demand.
+- `Lobby.open(identity, ref?, { id?, iceServers?, connect? })` — static async; a
+  transport arrives here on demand, and which one is decided by the
+  [ref](connection-refs.md).
+- **`undefined` means host.** A ref is a string somebody typed and nobody types
+  "host", so absent a ref we are the room. `connect` replaces the opener, which
+  is how the lobby is tested without a broker.
+- `lobby.code` is the short room token — a peer id on WebRTC, a room name on a
+  socket — and is what seeds the map. `lobby.shareable` is what a player sends to
+  somebody else: identical for a WebRTC room, a whole link for a socket one.
 - **Joining** sends a `HELLO` frame with `gameId: ""` — the one moment in the
   protocol where that is true, and why a lobby hello proves nothing beyond "here
   is a key to seat me under". Everything that decides anything is signed against
@@ -59,7 +66,7 @@ later by [`ROSTER_AMEND`](../continuity/roster-amendments.md). `onStart(genesis,
 seat, transport)` fires, and the client / headless peer builds its
 [`Lockstep`](../continuity/lockstep.md).
 
-## The lobby owns the mesh's only listener
+## The lobby owns the connection's only listener
 
 A joiner cannot build its driver until the `GENESIS` frame arrives, and game
 frames share the channel with it — so anything that turns up in that gap is

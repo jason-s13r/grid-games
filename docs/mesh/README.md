@@ -9,6 +9,7 @@ agreed world is large enough that it and the recovery paths around it live in
 | Page | Covers |
 |---|---|
 | [transport-interface.md](transport-interface.md) | The four methods the driver needs; the loopback network the tests use |
+| [connection-refs.md](connection-refs.md) | `ConnectionRef` — the string you join with, and which transport it chooses |
 | [webrtc-mesh.md](webrtc-mesh.md) | `PeerMesh` — the PeerJS broker, the full mesh, chunking, TURN |
 | [local-hub.md](local-hub.md) | `LocalHub` — running several drivers (a seated bot) in one page |
 | [the-lobby.md](the-lobby.md) | `Lobby` — from "two peers connected" to "one agreed genesis" |
@@ -24,6 +25,9 @@ agreed world is large enough that it and the recovery paths around it live in
        │                                   │
    Sim + Roster                       Sim + Roster
 ```
+
+Which transport a peer opens is decided by the [ref](connection-refs.md) it was
+given, in one place, once.
 
 The driver never mentions PeerJS, WebRTC or a socket — it speaks only the
 [`Transport`](transport-interface.md) interface. That is not tidiness: it is what

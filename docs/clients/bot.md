@@ -42,9 +42,9 @@ limit.
 ## Flags
 
 ```
-tessera-bot <room-code> [options]
+tessera-bot <room> [options]
   --key <path>     identity file, default ./bot.jwk — the key IS the seat
-  --as <id>        claim a specific peer id
+  --as <id>        claim a specific peer id (ignored on a socket ref)
   --ice <urls>     STUN/TURN, replacing PeerJS's own
   --quiet
   --level <how>    easy | steady (default) | hard   — the --play cycle's phases/tempos

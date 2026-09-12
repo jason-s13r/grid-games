@@ -26,6 +26,19 @@ The three implementations:
 | [`LocalHub.port()`](local-hub.md) | a page hosting a locally-seated bot |
 | `LoopbackNetwork.connect()` | the test harness |
 
+## Connection
+
+[`Connection`](../../packages/net/src/connect.ts) is `Transport` plus `close()`:
+a transport with a life, something the [lobby](the-lobby.md) opened and must
+therefore be able to shut. It is what [`openConnection`](connection-refs.md)
+returns.
+
+`Transport` deliberately did **not** grow a `close`. Widening the interface that
+every driver, the hub and the whole test harness are written against, for the
+benefit of the two implementations the lobby happens to open, would be the wrong
+way round — a loopback switch and a hub port have nothing to close, and an
+optional `close?()` would put a `?.` at every call site to say so.
+
 ## LoopbackNetwork
 
 [`LoopbackNetwork`](../../packages/net/src/transport.ts#L42) is an in-memory

@@ -73,7 +73,9 @@ pnpm --filter @tessera/bot      start tsr-abc123
 The **observer** holds no seat. It validates every move, hashes every step and
 writes the game down — and with `--as` it claims a stable peer id, which
 matters more than it sounds: a room code *is* a peer id, so a game whose host
-has closed their laptop is reachable at whatever peer is still up. It also
+has closed their laptop is reachable at whatever peer is still up. A room can
+also be a link — `wss://relay.example/tessera/abc123` — and the string you join
+with is the whole of how a transport is chosen. It also
 checks archives, including ones it did not write:
 
 ```sh

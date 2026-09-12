@@ -21,19 +21,29 @@ otherwise have none.
 ## Four subcommands
 
 ```
-tessera-observe <room-code> [options]     follow a game and write it down
+tessera-observe <room> [options]           follow a game and write it down
 tessera-observe export <dir> [file.json]  assemble an archive directory into one JSON file
 tessera-observe verify <dir | file.json>  check an archive end to end (exit 1 on REFUSED)
 tessera-observe rank <dir>                the leaderboard, from every archive under dir
 ```
 
+`<room>` is a [connection reference](../mesh/connection-refs.md) — a room code or
+a room link — so a string that was never a room fails at the prompt rather than
+being dialled for 45 seconds. (`tessera-observe ./archives/abc`, the mistake of
+forgetting `verify`, used to do exactly that.)
+
 Options for `follow`: `--dir` (default `./archives`), `--key` (default
 `<dir>/identity.jwk`), `--as <id>`, `--ice <urls>` (replaces PeerJS's relays),
 `--quiet`.
 
+`--as` warns rather than fails when given an id outside the room charset: such an
+id can be claimed at a broker and then never typed back into a join box, which
+defeats the point of asking for a stable one. It is ignored on a socket ref,
+where the room bus stamps the sender itself.
+
 ## follow
 
-[`watch(code)`](../../apps/observer/src/main.ts#L68):
+[`watch(ref)`](../../apps/observer/src/main.ts#L69):
 [`identityAt`](headless-peers.md) → [`joinGame`](headless-peers.md); in
 `onDriver`, create a [`FileArchive`](../trust-and-verification/archive-format.md)
 at `<dir>/<gameId>/`, `attach` it to the driver, `open()`. Logs `onEjection` and
