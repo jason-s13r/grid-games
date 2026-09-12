@@ -652,8 +652,14 @@ async function begin(input?: string): Promise<void> {
 
   const identity = await myIdentity();
   let opened: Lobby;
+  let driving: Lockstep | undefined;
   try {
-    opened = await Lobby.open(identity, ref);
+    opened = await Lobby.open(identity, ref, {
+      // A socket that came back missed whatever was said while it was away. Our
+      // own writes survived — the transport held them — so this is the other
+      // half, and it is the same repair a desync already asks for.
+      onReconnect: () => driving?.requestSnapshot(),
+    });
   } catch (error) {
     // Reaching the broker can fail outright — offline, blocked, or the service
     // is down. Swallowing it left the panel looking like the click did nothing.
@@ -681,6 +687,7 @@ async function begin(input?: string): Promise<void> {
       seat,
     });
 
+    driving = driver;
     archive = new Archive(genesis, driver);
     archive.attach(driver);
     archiveBtn.hidden = false;

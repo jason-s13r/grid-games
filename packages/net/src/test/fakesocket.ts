@@ -31,6 +31,10 @@ export class FakeSocket implements SocketLike {
   /** Client to server, and server to client. */
   readonly up: string[] = [];
   readonly down: string[] = [];
+  /** The id the bus gave this socket, read off the wire as it passed. The world
+   *  owns the wire, so reading it is honest — and it is the only way a test can
+   *  say "cut *that* peer's connection" rather than "cut the third one". */
+  assigned = "";
   /** The bus's side of this same socket. */
   readonly far: BusSocket;
   /** The server said goodbye and the goodbye is still in flight. A real socket
@@ -144,7 +148,12 @@ export class SocketWorld {
       const down = socket.down.splice(0, socket.down.length);
       for (const text of down) {
         moved++;
-        if (socket.readyState === OPEN) socket.onmessage?.({ data: text });
+        if (socket.readyState !== OPEN) continue;
+        const welcome = JSON.parse(text) as { op: string; id?: string };
+        if (welcome.op === "welcome" && typeof welcome.id === "string") {
+          socket.assigned = welcome.id;
+        }
+        socket.onmessage?.({ data: text });
       }
       if (socket.finish()) moved++;
     }
@@ -159,5 +168,10 @@ export class SocketWorld {
   /** Every socket a transport has opened and not closed. */
   live(): FakeSocket[] {
     return this.sockets.filter((socket) => socket.readyState === OPEN);
+  }
+
+  /** The open socket a given peer is holding, by the id the bus gave it. */
+  socketOf(id: string): FakeSocket | undefined {
+    return this.live().find((socket) => socket.assigned === id);
   }
 }

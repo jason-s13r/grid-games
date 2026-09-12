@@ -11,8 +11,9 @@ import { CONTROL, MEMBER, MOVE, STEPS_PER_SECOND, Sim, makeGenesis, validate } f
 import type { EmpireSpec, Genesis, MemberKind, Move, Rules } from "@tessera/sim";
 import { Identity, Roster, sealGenesis } from "@tessera/protocol";
 import type { Message } from "@tessera/protocol";
-import { LoopbackNetwork, Lockstep, LocalHub, PeerBot } from "../index.js";
+import { LoopbackNetwork, Lockstep, LocalHub, PeerBot, SocketTransport } from "../index.js";
 import type { LoopbackOptions, Seat, Transport } from "../index.js";
+import { SocketWorld } from "./fakesocket.js";
 
 /** Web Crypto resolves on the event loop, and a verified frame is three
  *  promises deep. Yielding a handful of times is what makes the harness
@@ -56,6 +57,9 @@ export interface Peer {
 
 export interface Table {
   net: LoopbackNetwork;
+  /** Set when the table is wired through a relay rather than a switch. The
+   *  drivers cannot tell; `settleNetwork` has to. */
+  bus?: SocketWorld;
   /** Local hubs in play, one per page that holds more than one driver. */
   hubs: LocalHub[];
   clock: Clock;
@@ -98,7 +102,16 @@ export interface TableOptions {
    *  inside a test run is the only way to watch anything downstream of victory,
    *  a ranking included. */
   rules?: Partial<Rules>;
+  /** What the peers are connected by. `"socket"` puts the real `SocketTransport`
+   *  and the real `RoomBus` between every pair, over a wire the test still
+   *  controls — so a scenario written for a mesh runs unchanged against a relay,
+   *  which is worth much more than a separate hand-written socket scenario. */
+  transport?: "loopback" | "socket";
 }
+
+/** Where the harness's relay lives. A room name rather than a peer id, because
+ *  that is the half of a socket ref that identifies the game. */
+const BUS_REF = { kind: "socket" as const, url: "wss://relay.test/tessera", room: "harness" };
 
 export async function table(options: TableOptions): Promise<Table> {
   // Human seats first, then bot seats, so a member index is stable whatever the
@@ -143,29 +156,62 @@ export async function table(options: TableOptions): Promise<Table> {
   const peers: Peer[] = [];
   const hubs: LocalHub[] = [];
 
+  const bus = options.transport === "socket" ? new SocketWorld() : undefined;
+
+  /** Which driver each socket should ask for a snapshot when it comes back.
+   *  The connection is necessarily older than the game it ends up carrying, so
+   *  this is filled in once the driver exists. */
+  const holders = new Map<Transport, { driver?: Lockstep }>();
+
+  /** One peer's link. A socket one has to be opened and named before it can be
+   *  used, which is why everything downstream of here is async. */
+  const link = async (name: string): Promise<Transport> => {
+    if (!bus) return net.connect(name);
+    const holder: { driver?: Lockstep } = {};
+    const transport = new SocketTransport(BUS_REF, {
+      socket: bus.Socket,
+      id: name,
+      // What a real peer does, and the reason the harness does it too: the
+      // outbound buffer means nothing of ours was lost across a gap, but nothing
+      // replays what everyone else said while we were away. The web client and
+      // every headless peer wire exactly this line.
+      onReconnect: () => holder.driver?.requestSnapshot(),
+    });
+    holders.set(transport, holder);
+    bus.settle();
+    await transport.opening;
+    return transport;
+  };
+
   // One hub per empire that hosts its own bots. The empire's first seat takes
   // the hub's main port, so it keeps the connection it would have had anyway.
   const pages = new Map<number, LocalHub>();
   if (options.hosted) {
-    kinds.forEach((empire, e) => {
-      if (!empire.some((kind) => kind === MEMBER.BOT)) return;
-      const hub = new LocalHub(net.connect(`page${e + 1}`));
+    for (const [e, empire] of kinds.entries()) {
+      if (!empire.some((kind) => kind === MEMBER.BOT)) continue;
+      const hub = new LocalHub(await link(`page${e + 1}`));
       hubs.push(hub);
       pages.set(e + 1, hub);
-    });
+    }
   }
 
-  const wire = (name: string, seat?: Seat): Transport => {
+  const wire = async (name: string, seat?: Seat): Promise<Transport> => {
     const hub = seat ? pages.get(seat.empire) : undefined;
-    return hub ? hub.port() : net.connect(name);
+    return hub ? hub.port() : await link(name);
   };
 
-  const build = (name: string, identity?: Identity, seat?: Seat, isBot = false): Peer => {
+  const build = async (
+    name: string,
+    identity?: Identity,
+    seat?: Seat,
+    isBot = false,
+  ): Promise<Peer> => {
+    const transport = await wire(name, seat);
     const driver = new Lockstep({
       genesis,
       sim: new Sim(genesis),
       roster: Roster.fromGenesis(genesis),
-      transport: wire(name, seat),
+      transport,
       identity,
       seat,
       now: clock.now,
@@ -176,6 +222,9 @@ export async function table(options: TableOptions): Promise<Table> {
         : { desyncTolerance: options.desyncTolerance }),
       snapshotInterval: options.snapshotInterval ?? 24,
     });
+    const holder = holders.get(transport);
+    if (holder) holder.driver = driver;
+
     const peer: Peer = {
       name,
       driver,
@@ -201,20 +250,21 @@ export async function table(options: TableOptions): Promise<Table> {
     return peer;
   };
 
-  identities.forEach((members, offset) => {
-    members.forEach((identity, member) => {
-      build(
+  for (const [offset, members] of identities.entries()) {
+    for (const [member, identity] of members.entries()) {
+      await build(
         `e${offset + 1}m${member}`,
         identity,
         { empire: offset + 1, member },
         kinds[offset]![member] === MEMBER.BOT,
       );
-    });
-  });
-  if (options.observer) build("observer");
+    }
+  }
+  if (options.observer) await build("observer");
 
   return {
     net,
+    ...(bus ? { bus } : {}),
     hubs,
     clock,
     genesis,
@@ -263,7 +313,7 @@ export async function settleNetwork(t: Table, ...extra: Array<() => void>): Prom
   for (let pass = 0; pass < MAX_PASSES && idle < IDLE_PASSES; pass++) {
     pumpAll(t, ...extra);
     await settle(2);
-    idle = t.net.flush() === 0 ? idle + 1 : 0;
+    idle = t.net.flush() + (t.bus?.flush() ?? 0) === 0 ? idle + 1 : 0;
     await settle(2);
   }
 }

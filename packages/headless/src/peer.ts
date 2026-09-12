@@ -75,9 +75,17 @@ export async function joinGame(options: JoinOptions): Promise<JoinedGame> {
   // between an install that works on a small VPS and one that does not.
   if (ref.kind === "rtc") await installWebRTC();
 
+  // Set once the driver exists, and read only by callbacks that fire later. A
+  // reconnecting socket has to be able to reach the driver, and the connection
+  // is necessarily older than the game it ends up carrying.
+  let driving: Lockstep | undefined;
+
   let lobby: Lobby;
   try {
     lobby = await Lobby.open(options.identity, ref, {
+      // The outbound buffer means nothing of ours was lost across the gap, but
+      // nothing replays what everyone else said while we were away.
+      onReconnect: () => driving?.requestSnapshot(),
       ...(options.iceServers ? { iceServers: options.iceServers } : {}),
       ...(options.id ? { id: options.id } : {}),
     });
@@ -126,6 +134,21 @@ export async function joinGame(options: JoinOptions): Promise<JoinedGame> {
     identity: options.identity,
     seat,
   });
+  driving = driver;
+
+  /** Repair a disagreement by rebuilding from somebody else's state.
+   *
+   *  `Lockstep` does not do this of its own accord — the web client always has,
+   *  which is why a browser recovers from a desync within a step or two and a
+   *  headless peer never did. A headless *seat* was dropped by quorum on
+   *  schedule, which at least ended visibly. A headless *observer* was worse: it
+   *  holds no seat, so it broadcasts no checkpoints, so no peer can see that it
+   *  disagrees — it simply kept archiving a game that did not happen, and the
+   *  archive is self-consistent, so verifying it returns VERIFIED.
+   *
+   *  Idempotent enough to be safe here: a peer that is not behind gets a
+   *  snapshot it discards, and the request is one small broadcast. */
+  driver.onDesync = (step) => driver.requestSnapshot(step);
 
   // Before start(), so an archive attached here sees the first step rather than
   // whichever one it happened to arrive for.

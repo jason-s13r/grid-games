@@ -21,14 +21,40 @@ describe("joinGame", () => {
     await expect(joinGame({ ref: "./archives/abc", identity })).rejects.toThrow(/is not a room/);
   });
 
-  it("fails a socket ref early, and loads no native module on the way", async () => {
+  it("takes a socket ref, and loads no native module on the way", async () => {
     const identity = await Identity.generate();
-    await expect(joinGame({ ref: "wss://relay.example/tessera/r", identity })).rejects.toThrow(
-      /socket rooms are not built yet/,
-    );
+
+    // A relay that says go away the moment it is dialled, so the failure is the
+    // relay's rather than a twelve-second timeout's. What is being asserted is
+    // the branch above it: a socket peer never reaches installWebRTC.
+    const previous = globals.WebSocket;
+    globals.WebSocket = class {
+      readyState = 1;
+      onopen: ((event?: unknown) => void) | null = null;
+      onmessage: ((event: { data: unknown }) => void) | null = null;
+      onclose: ((event?: unknown) => void) | null = null;
+      onerror: ((event?: unknown) => void) | null = null;
+      constructor() {
+        setTimeout(() => {
+          this.onopen?.();
+          this.onmessage?.({ data: JSON.stringify({ op: "closed", reason: "not today." }) });
+        }, 0);
+      }
+      send(): void {}
+      close(): void {}
+    };
+
+    try {
+      await expect(joinGame({ ref: "wss://relay.example/tessera/r", identity })).rejects.toThrow(
+        /not today/,
+      );
+    } finally {
+      globals.WebSocket = previous;
+    }
+
     // The honest version of this assertion is that the suite runs with
-    // node-datachannel absent and still passes; this is the cheap version,
-    // which at least fails if `installWebRTC` creeps back above the branch.
+    // node-datachannel absent and still passes; this is the cheap version, which
+    // at least fails if `installWebRTC` creeps back above the branch.
     expect(globals.RTCPeerConnection).toBeUndefined();
   });
 });
