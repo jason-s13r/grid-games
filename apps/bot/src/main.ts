@@ -25,7 +25,7 @@
 // bot-shaped mechanism anywhere in the protocol, and there should not be — from
 // the mesh's side this is a player who happens never to sleep.
 //
-//   tessera-bot <room-code> [--play cycle] [--rate patient] [--hours 22-07]
+//   tessera-bot <room> [--play cycle] [--rate patient] [--hours 22-07]
 //
 // What is *not* configurable here is how fast it may act. The floor is a
 // genesis rule, because an always-on seat that out-reflexed the people it plays
@@ -44,7 +44,7 @@ import { identityAt, joinGame } from "@tessera/headless";
 
 const USAGE = `tessera-bot — hold a seat in a Tessera game while its player is away
 
-  tessera-bot <room-code> [options]
+  tessera-bot <room> [options]
 
 It joins as an observer and waits to be voted a seat. Give the key it prints to
 whoever is hosting: they invite it, the empire endorses, and it starts playing.
@@ -52,6 +52,7 @@ whoever is hosting: they invite it, the empire endorses, and it starts playing.
 Options:
   --key <path>    identity file (default ./bot.jwk) — the key IS the seat
   --as <id>       claim this peer id rather than one the broker invents
+                  (wss only: the room bus stamps the sender, so this is ignored)
   --ice <urls>    comma-separated STUN/TURN urls, replacing PeerJS's own
   --quiet         only complain
 
@@ -192,11 +193,11 @@ const say = (line: string): void => {
   if (!values.quiet) console.log(line);
 };
 
-async function run(code: string): Promise<void> {
+async function run(ref: string): Promise<void> {
   const identity = await identityAt(values.key);
   say(`bot      ${await fingerprint(identity.key)}`);
   say(`key      ${identity.key}`);
-  say(`joining  ${code}`);
+  say(`joining  ${ref}`);
   say(
     `playing  ${settings.mode}${settings.mode === "cycle" ? ` (${values.level})` : ""}, ` +
       `target ${String(settings.target)}, ` +
@@ -207,7 +208,7 @@ async function run(code: string): Promise<void> {
   let bot: PeerBot | undefined;
 
   const peer = await joinGame({
-    code,
+    ref,
     identity,
     ...(values.as ? { id: values.as } : {}),
     ...(values.ice
@@ -272,10 +273,10 @@ async function run(code: string): Promise<void> {
   process.on("SIGTERM", () => void done());
 }
 
-const [code] = positionals;
-if (values.help || !code) {
+const [ref] = positionals;
+if (values.help || !ref) {
   console.log(USAGE);
-  process.exit(code ? 0 : 1);
+  process.exit(ref ? 0 : 1);
 }
 
 // Everything the flags decide, decided once and before anything connects: a bad
@@ -288,7 +289,7 @@ const settings = {
   awake: awake(),
 };
 
-await run(code).catch((error: Error) => {
+await run(ref).catch((error: Error) => {
   console.error(error.message);
   process.exit(1);
 });

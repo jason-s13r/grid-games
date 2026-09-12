@@ -16,7 +16,7 @@ import { STEPS_PER_SECOND, Sim } from "@tessera/sim";
 import type { Genesis } from "@tessera/sim";
 import { Roster } from "@tessera/protocol";
 import type { Identity } from "@tessera/protocol";
-import { Lobby, Lockstep } from "@tessera/net";
+import { Lobby, Lockstep, parseRef } from "@tessera/net";
 import type { Seat, Transport } from "@tessera/net";
 import { installWebRTC, shutdownWebRTC } from "./webrtc.js";
 
@@ -31,8 +31,10 @@ const PUMP_MS = 1000 / STEPS_PER_SECOND;
 const JOIN_TIMEOUT_MS = 45_000;
 
 export interface JoinOptions {
-  /** The room code: the host's peer id, as printed by the client. */
-  code: string;
+  /** Where the game is: a room code, or a room link. A string rather than a
+   *  parsed ref because both callers are command lines, and parsing it here
+   *  means one error message for both of them. */
+  ref: string;
   identity: Identity;
   /** Replaces PeerJS's own STUN and TURN servers rather than adding to them —
    *  the same trap the mesh documents. Leave it unset unless you run a relay. */
@@ -64,11 +66,18 @@ export interface JoinedGame {
 
 /** Join a running game and keep simulating it until told to stop. */
 export async function joinGame(options: JoinOptions): Promise<JoinedGame> {
-  await installWebRTC();
+  const ref = parseRef(options.ref);
+  // A socket peer has no use for a native WebRTC stack, and this is the only
+  // place in the repository that loads one. node-datachannel is the single
+  // genuinely unpleasant dependency here — prebuilt binaries per platform,
+  // where everything else is portable TypeScript — so a socket-only deployment
+  // getting to skip it is not a micro-optimisation, it is the difference
+  // between an install that works on a small VPS and one that does not.
+  if (ref.kind === "rtc") await installWebRTC();
 
   let lobby: Lobby;
   try {
-    lobby = await Lobby.open(options.identity, options.code, {
+    lobby = await Lobby.open(options.identity, ref, {
       ...(options.iceServers ? { iceServers: options.iceServers } : {}),
       ...(options.id ? { id: options.id } : {}),
     });
@@ -82,7 +91,7 @@ export async function joinGame(options: JoinOptions): Promise<JoinedGame> {
   const started = new Promise<{ genesis: Genesis; seat?: Seat; transport: Transport }>(
     (resolve, reject) => {
       const deadline = setTimeout(() => {
-        reject(new Error(`no game under ${options.code} after ${JOIN_TIMEOUT_MS / 1000}s`));
+        reject(new Error(`no game under ${options.ref} after ${JOIN_TIMEOUT_MS / 1000}s`));
       }, options.joinTimeoutMs ?? JOIN_TIMEOUT_MS);
 
       lobby.onStart = (genesis, seat, transport) => {

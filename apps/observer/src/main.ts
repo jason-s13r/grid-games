@@ -20,7 +20,7 @@
 //
 // Four things to do with it:
 //
-//   tessera-observe <code>            follow a game and write it down
+//   tessera-observe <room>             follow a game and write it down
 //   tessera-observe export <dir>      assemble the directory into one file
 //   tessera-observe verify <path>     check an archive end to end
 //   tessera-observe rank <dir>        the table, from every archive under it
@@ -30,13 +30,13 @@ import { join } from "node:path";
 import { parseArgs } from "node:util";
 import { MEMBER } from "@tessera/sim";
 import { fingerprint } from "@tessera/protocol";
-import { rankArchives, verifyArchive } from "@tessera/net";
+import { isRoomName, rankArchives, verifyArchive } from "@tessera/net";
 import type { ArchivedGame } from "@tessera/net";
 import { FileArchive, identityAt, joinGame, readArchive } from "@tessera/headless";
 
 const USAGE = `tessera-observe — follow a Tessera game and archive it
 
-  tessera-observe <room-code> [options]
+  tessera-observe <room> [options]
   tessera-observe export <dir> [file.json]
   tessera-observe verify <dir|file.json>
   tessera-observe rank <dir>
@@ -45,6 +45,7 @@ Options:
   --dir <path>    where archives go (default ./archives)
   --key <path>    identity file (default <dir>/identity.jwk)
   --as <id>       claim this peer id, so players can dial the observer itself
+                  (wss only: the room bus stamps the sender, so this is ignored)
   --ice <urls>    comma-separated STUN/TURN urls, replacing PeerJS's own
   --quiet         only complain
 `;
@@ -65,15 +66,23 @@ const say = (line: string): void => {
   if (!values.quiet) console.log(line);
 };
 
-async function watch(code: string): Promise<void> {
+async function watch(ref: string): Promise<void> {
   const identity = await identityAt(values.key ?? join(values.dir, "identity.jwk"));
   say(`observer ${await fingerprint(identity.key)}`);
-  say(`joining  ${code}`);
+  say(`joining  ${ref}`);
+
+  // A warning rather than a refusal. An id outside the room charset can be
+  // claimed at the broker and then never typed back into a join box, which
+  // defeats the whole point of asking for a stable one — but it does work
+  // today, and turning it into an error would break a script that set it.
+  if (values.as && !isRoomName(values.as)) {
+    console.error(`warning: "${values.as}" is not a dialable room name — players cannot type it`);
+  }
 
   let archive: FileArchive | undefined;
 
   const peer = await joinGame({
-    code,
+    ref,
     identity,
     ...(values.as ? { id: values.as } : {}),
     ...(values.ice
