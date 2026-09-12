@@ -67,6 +67,23 @@ be a door.
 | rooms per bus | 1024 | a number an operator can raise knowingly |
 | rate | 64/s sustained, burst 256 | a snapshot answer to three joiners at once must not trip a limit meant for a flood |
 
+## A closed relay, and a client with no socket
+
+Two options exist for a bus that belongs to a [host peer](../clients/host-peer.md)
+rather than to a relay operator.
+
+`serves` decides which rooms may be created on a join. A bus that creates any room
+asked for is an open relay for strangers' traffic, which is a different product
+from a host serving the game it is in — so a host passes the rooms it is a peer in,
+and a joiner asking for anything else is told "no game is running here", which is
+also the answer it actually wants instead of an empty room it was quietly given.
+
+`localPair(bus)` is a client attached with no socket under it: the bus sees a
+`BusSocket`, a [socket transport](socket-transport.md) sees a `SocketLike`, and
+neither learns the other end is in the same process. Delivery is deferred by a
+microtask, which is the one way an in-process pair behaves differently from a real
+one — without it a handler could re-enter the bus from inside a send.
+
 ## What a relay can do
 
 Unchanged, and it is most of what matters: the genesis is content-addressed and

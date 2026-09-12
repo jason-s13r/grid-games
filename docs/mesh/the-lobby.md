@@ -23,7 +23,16 @@ seat it holds. Nothing after that needs a host at all.
   [ref](connection-refs.md).
 - **`undefined` means host.** A ref is a string somebody typed and nobody types
   "host", so absent a ref we are the room. `connect` replaces the opener, which
-  is how the lobby is tested without a broker.
+  is how the lobby is tested without a broker — and how a
+  [host peer](../clients/host-peer.md) attaches to the relay it is running.
+- **`hosting`** says it outright, for the case a ref cannot express: a socket room
+  is hosted by the peer serving it. It means "nobody is going to send me a genesis
+  record" — no watchdog, phase `hosting` — and without it a host waiting for the
+  players it exists to wait for is killed by the joiner's watchdog after fifteen
+  seconds.
+- **A joiner greets the room it arrives into.** A mesh introduces peers as they
+  dial, so every arrival is an event; a room on a relay is a place you arrive into,
+  and its membership arrives with the welcome, before `open` has returned.
 - `lobby.code` is the short room token — a peer id on WebRTC, a room name on a
   socket — and is what seeds the map. `lobby.shareable` is what a player sends to
   somebody else: identical for a WebRTC room, a whole link for a socket one.

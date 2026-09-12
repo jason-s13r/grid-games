@@ -61,6 +61,27 @@ so `stop()` (clearInterval + `driver.stop()` + `lobby.close()` +
 room — a code or a link — and `JoinOptions.id` claims a stable peer id so a game
 whose original host went home is reachable at this one.
 
+## hostGame
+
+[`hostGame(options)`](../../packages/headless/src/peer.ts) is `joinGame`'s sibling
+and most of it is the same function: after the genesis record exists, a host is an
+ordinary peer, so both end in the same driver, the same pump timer and the same
+handle.
+
+What differs is the front:
+
+1. the lobby is opened with `hosting: true`, so nothing waits for a genesis to
+   arrive and the joiner's watchdog is never armed — a socket host joins its own
+   room, where there is nobody else by definition;
+2. `compose(players)` is asked on every change and returns a plan or **null** for
+   "not yet". Its plan must list the host's own key under `watching`, or
+   `checkPlan` refuses it as "somebody here has no seat";
+3. `onRefused` reports a plan `checkPlan` would not take. Composing again would be
+   refused again — the reasons are structural — so a caller should say so and stop
+   rather than loop;
+4. `connect` lets a host that is also the relay attach [in process](../mesh/room-bus.md)
+   rather than dialling itself.
+
 ## FileArchive
 
 [`FileArchive`](../../packages/headless/src/store.ts#L61) wraps `net`'s

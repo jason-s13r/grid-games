@@ -18,6 +18,17 @@ closed their laptop is reachable only at whatever peer is still up. `--as <id>`
 gives the observer a stable id — it becomes the door back into a game that would
 otherwise have none.
 
+## The observer and the host peer are the same peer
+
+[`tessera-host`](host-peer.md) is this program with a door on it: both hold no
+seat, both archive, both are observers by construction. The difference is what else
+they do — a host composes the genesis, relays the room, and serves its archive and
+[resume point](../continuity/resume-points.md) over HTTP.
+
+Run an observer to watch and archive a game somebody else is hosting. Run a host
+peer when the game needs somewhere to *be*: a room that outlives the tab that
+started it, and a URL a dormant game can be re-entered through.
+
 ## Four subcommands
 
 ```

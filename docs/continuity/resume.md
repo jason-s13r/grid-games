@@ -34,10 +34,16 @@ Three reasons to rebuild, and they do not all belong to the same party:
   `requestSnapshot()`. Every peer wires this now, but it is wiring rather than
   machinery, and the distinction stayed invisible for as long as browsers were
   the only peers that ever desynced;
-- **a cold start from a [resume point](resume-points.md)** — a dormant game picked
-  up from whatever somebody kept. `adopt`'s hash check is a content address and not
-  a proof, so a point carries signed checkpoints from a majority of the seats that
-  could still sign, and `resume()` runs both halves: the tally, then the bytes;
+- **a cold start from a [resume point](resume-points.md)** — served from a *file*
+  by a [host peer](../clients/host-peer.md) rather than from a live driver, because
+  a live answer stops existing four minutes after the last player leaves: a point
+  needs both the snapshot bytes and the witnesses, snapshots roll forward on every
+  peer whether or not anybody is playing, and witnesses only arrive with a
+  checkpoint from a seat — a dormant game picked
+  — a dormant game picked up from whatever somebody kept. `adopt`'s hash check is a
+  content address and not a proof, so a point carries signed checkpoints from a
+  majority of the seats that could still sign, and `resume()` runs both halves: the
+  tally, then the bytes;
 - **a reconnected socket**, also the client's call. The
   [socket transport](../mesh/socket-transport.md) holds our own writes across an
   outage, so nothing of ours is lost — but nothing replays what everybody else

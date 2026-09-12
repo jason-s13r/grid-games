@@ -19,6 +19,7 @@ interface ArchivedGame {
   steps: number;                         // the world step reached — NOT the last move's step
   hash: string;
   from?: number;                         // where a partial log starts; 0/absent = watched from genesis
+  gaps?: number[];                       // steps the log jumps at, because a state was adopted
 }
 ```
 
@@ -79,3 +80,23 @@ directory per game named by `genesis.gameId`:
 Team chat is [per-message ECDH fanout](../protocol/team-chat.md) with no group
 key, so there is nothing to publish afterwards — an archived team channel stays
 ciphertext forever. A deliberate trade, not an unbuilt feature.
+
+## from, and gaps
+
+`from` is **where this peer started watching**, not the step of its first record: a
+game where nobody clicks for the first few steps has no records for them, and a
+complete log of a quiet opening is still complete. (It used to be the first
+record's step, which made almost every real archive claim to be a fragment and be
+refused — and the [leaderboard](leaderboard.md) counted almost nothing.)
+
+`gaps` are the steps where the log jumps because the peer **adopted a state** rather
+than simulating into it, which leaves inputs it never saw. `from` moves to the last
+such step, so every reader refuses the archive correctly — including one written
+before `gaps` existed, which is why this needed no format bump. `gaps` only says
+*where* the hole is.
+
+This matters more than it used to: asking for a snapshot is now the ordinary
+response to a [reconnected socket](../mesh/socket-transport.md), and a
+[host peer](../clients/host-peer.md) runs for days across every blink there is. A
+host that has adopted once holds a fragment and says so — which is why running two
+is redundancy for replayability and not only for the door.
