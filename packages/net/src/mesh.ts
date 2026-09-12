@@ -30,6 +30,7 @@
 import type { DataConnection, Peer, PeerOptions } from "peerjs";
 import { decodeFrame, encodeFrame } from "@tessera/protocol";
 import type { Frame } from "@tessera/protocol";
+import { mintName } from "./ref.js";
 import type { FrameHandler, Transport } from "./transport.js";
 
 /** Mesh housekeeping, kept in its own envelope so it can never be confused with
@@ -86,16 +87,6 @@ const MAX_SLICE = 15_000;
  *  dropped to make room. */
 const MAX_PARTIALS_PER_PEER = 4;
 
-const ROOM_ALPHABET = "abcdefghjkmnpqrstuvwxyz23456789"; // no look-alikes
-
-function roomCode(prefix: string): string {
-  const bytes = new Uint8Array(6);
-  globalThis.crypto.getRandomValues(bytes);
-  let code = "";
-  for (const byte of bytes) code += ROOM_ALPHABET[byte % ROOM_ALPHABET.length];
-  return `${prefix}${code}`;
-}
-
 /** Just enough of PeerJS's shape to construct it. The module itself arrives
  *  through createMesh below. */
 export type PeerConstructor = new (id?: string, options?: PeerOptions) => Peer;
@@ -146,7 +137,7 @@ export class PeerMesh implements Transport {
     PeerClass: PeerConstructor,
     private readonly options: PeerMeshOptions = {},
   ) {
-    const id = options.id ?? (options.join ? undefined : roomCode(options.prefix ?? ""));
+    const id = options.id ?? (options.join ? undefined : mintName(options.prefix ?? ""));
 
     // Absent unless asked for: an undefined `config` leaves PeerJS's defaults
     // whole, and any object at all would take their place.

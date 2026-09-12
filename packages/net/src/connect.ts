@@ -6,6 +6,7 @@
 // opened it, and what its errors are called, stop at this boundary.
 
 import { createMesh } from "./mesh.js";
+import { SocketTransport } from "./socket.js";
 import { RTC_PREFIX, formatRef } from "./ref.js";
 import type { ConnectionRef } from "./ref.js";
 import type { Transport } from "./transport.js";
@@ -33,6 +34,13 @@ export interface ConnectOptions {
   onJoin?: (peer: string) => void;
   onLeave?: (peer: string) => void;
   onError?: (error: Error) => void;
+  /** The socket came back, having missed things. Never fired by the rtc branch:
+   *  a data channel does not reconnect, the peer is simply gone.
+   *
+   *  Whoever holds a driver should answer it by asking for a snapshot. The
+   *  outbound buffer means no frame of ours was lost across the gap; nothing
+   *  replays what other peers said while we were away. */
+  onReconnect?: () => void;
 }
 
 /** Injectable so the lobby can be tested without a broker. The only reason the
@@ -46,7 +54,7 @@ export type Opener = (
  *  which only WebRTC can do — over a socket the room bus creates a room on
  *  first join, so hosting is not a separate act. */
 export const openConnection: Opener = async (ref, options = {}) => {
-  if (ref?.kind === "socket") throw new Error("socket rooms are not built yet");
+  if (ref?.kind === "socket") return openSocket(ref, options);
 
   return createMesh({
     ...(ref ? { join: ref.code } : {}),
@@ -58,6 +66,23 @@ export const openConnection: Opener = async (ref, options = {}) => {
     onError: (error) => options.onError?.(translate(error, ref)),
   });
 };
+
+/** Construct, wait to be named, and close on failure so a rejected open does not
+ *  leave a redial loop running for the life of the page — the same shape
+ *  `createMesh` has with the broker, for the same reason. */
+async function openSocket(
+  ref: ConnectionRef & { kind: "socket" },
+  options: ConnectOptions,
+): Promise<Connection> {
+  const transport = new SocketTransport(ref, options);
+  try {
+    await transport.opening;
+  } catch (error) {
+    transport.close();
+    throw error;
+  }
+  return transport;
+}
 
 /** PeerJS tags its errors, and the two that matter to a player are being unable
  *  to reach the broker at all and naming a room that is not there. This lived

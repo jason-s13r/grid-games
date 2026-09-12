@@ -78,9 +78,24 @@ export function formatRef(ref: ConnectionRef): string {
   return ref.kind === "rtc" ? ref.code : `${ref.url}/${ref.room}`;
 }
 
-/** Whether a string is a room name this build would mint or route. Exported for
- *  the CLIs, which warn rather than fail: an id outside the charset can be
- *  claimed at the broker and then never typed back into a join box. */
+/** Whether a string is a room name this build would mint or route. Used by the
+ *  CLIs, which warn rather than fail — an id outside the charset can be claimed
+ *  at a broker and then never typed back into a join box — and by a room bus,
+ *  which refuses one: a relay that accepts `../` or a newline as a room name has
+ *  a path traversal in whatever it eventually logs to. */
 export function isRoomName(text: string): boolean {
   return NAME.test(text);
+}
+
+const ALPHABET = "abcdefghjkmnpqrstuvwxyz23456789"; // no look-alikes
+
+/** Draw a room name. It lives beside the charset that accepts one, because a
+ *  minter and a validator that disagree is the kind of bug that only shows up
+ *  in the name somebody cannot type back in. */
+export function mintName(prefix = ""): string {
+  const bytes = new Uint8Array(6);
+  globalThis.crypto.getRandomValues(bytes);
+  let code = "";
+  for (const byte of bytes) code += ALPHABET[byte % ALPHABET.length];
+  return `${prefix}${code}`;
 }
