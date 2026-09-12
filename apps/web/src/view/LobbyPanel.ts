@@ -1,28 +1,30 @@
-// The multiplayer panel: host a game, join one, see who is in it.
+// The multiplayer part of the setup screen: the room code, who is in the room,
+// and what our empire is being asked to sign once a game is running.
 //
-// Deliberately thin. It renders whatever the lobby says its phase is and turns
-// clicks into lobby calls; it holds no state of its own beyond the text in the
-// join box.
+// Deliberately thin, and thinner than it was. It used to own the whole
+// multiplayer card — the host and join buttons that opened a lobby, its own
+// list of bot empires, the count line and the button that started the game.
+// All of that was a second copy of questions the setup screen was already
+// asking, so the flow moved to `Setup` and the opponents to `Rivals`, and what
+// is left here is the one thing neither of those can know: who is actually
+// connected, and which empire each of them is on.
+//
+// It holds no state of its own beyond the team assignment it is in the middle
+// of collecting.
 
 import type { MemberKey } from "@tessera/protocol";
 import { MAX_SEATS, composeTeams } from "@tessera/net";
-import type { Difficulty } from "@tessera/sim";
 import type { Lobby, LobbyPlayer } from "@tessera/net";
-import { EMPIRE_THEMES, empireTheme } from "./palette";
+import { empireTheme } from "./palette";
 
 export interface LobbyHandlers {
-  host: () => void;
-  join: (code: string) => void;
-  /** Empires as the host has arranged them, each a list of member keys, plus
-   *  however many whole SimBot empires to put in the world. */
-  start: (plan: { empires: MemberKey[][]; simbots: Difficulty[] }) => void;
-  /** Tear the lobby down and go back to the opening choice. Every dead end
-   *  needs one, or the only way out of a failed join is a page reload. */
-  leave: () => void;
   /** Propose seating this key on our own empire. */
   invite: (key: MemberKey) => void;
   /** Add our signature to somebody else's proposal. */
   endorse: (empire: number, key: MemberKey) => void;
+  /** How many human empires the picker has composed, so the bot rows on the
+   *  shared form can be coloured with the empires they will actually hold. */
+  seated?: (empires: number) => void;
 }
 
 /** The living roster of a game in progress: who is here without a seat, and
@@ -40,31 +42,40 @@ export interface RosterView {
   joinsClosed: boolean;
 }
 
+/** What the picker has made of the people in the room, for whoever is drawing
+ *  the button that starts the game. */
+export interface Seating {
+  /** Member keys per empire, in seat order — what goes into the genesis. */
+  empires: MemberKey[][];
+  /** True while some empire holds more seats than every empire is allowed. */
+  crowded: boolean;
+}
+
 const escape = (text: string): string =>
   text.replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]!);
 
-/** SimBot empires the host can add. More than four and a small map has no
- *  room left for the people. */
-const MAX_SIMBOTS = 4;
-
-const LEVELS: Difficulty[] = ["easy", "steady", "hard"];
-
 export class LobbyPanel {
   private lobby?: Lobby;
+  /** The live line from the driver, shown only while a game is running. */
   private status = "";
+  /** Why there is no lobby, when a lobby was wanted. Kept apart from `status`
+   *  on purpose: the driver overwrites that several times a second, and a
+   *  failure that shares a field with a stopwatch is a failure that gets
+   *  quietly wiped or, worse, redrawn as one. */
+  private problem = "";
   private busy = false;
   /** Which empire each player is on, by key. Sparse on purpose: a player with
    *  no entry gets an empire of their own. */
   private readonly teams = new Map<MemberKey, number>();
-  /** One entry per bot empire, in the order they will be seated. Bot empires
-   *  are not interchangeable now that each has its own difficulty, so this is
-   *  a list rather than a count. */
-  private simbots: Difficulty[] = ["steady"];
   private roster: RosterView | null = null;
   /** What the roster looked like when it was last drawn. A game in progress
    *  offers this several times a second; redrawing an unchanged list would
    *  cancel the click the player is in the middle of making. */
   private drawn = "";
+
+  /** Told after every redraw, because the sentence above the start button
+   *  counts the empires this panel has just composed. */
+  onChange: (() => void) | null = null;
 
   constructor(
     private readonly root: HTMLElement,
@@ -74,38 +85,18 @@ export class LobbyPanel {
       const button = (event.target as HTMLElement).closest<HTMLElement>("[data-lobby-action]");
       if (!button) return;
       const action = button.dataset.lobbyAction;
-      if (action === "host") this.handlers.host();
-      if (action === "add-bot" && this.simbots.length < MAX_SIMBOTS) {
-        // New ones arrive matching the last, because somebody adding a third
-        // opponent after setting two to hard meant the third to be hard too.
-        this.simbots.push(this.simbots.at(-1) ?? "steady");
-        this.render();
-      }
-      if (action === "drop-bot") {
-        this.simbots.splice(Number(button.dataset.index), 1);
-        this.render();
-      }
-      if (action === "start") this.handlers.start(this.plan());
-      if (action === "leave") this.handlers.leave();
       if (action === "invite" && button.dataset.key) this.handlers.invite(button.dataset.key);
       if (action === "endorse" && button.dataset.key) {
         this.handlers.endorse(Number(button.dataset.empire), button.dataset.key);
       }
-      if (action === "join") {
-        const input = this.root.querySelector<HTMLInputElement>("[data-lobby-code]");
-        const code = input?.value.trim();
-        if (code) this.handlers.join(code);
-      }
     });
 
     this.root.addEventListener("change", (event) => {
-      const select = event.target as HTMLSelectElement;
+      const select = event.target;
       if (!(select instanceof HTMLSelectElement)) return;
       const key = select.dataset.lobbyTeam;
-      const bot = select.dataset.lobbyLevel;
-      if (key !== undefined) this.teams.set(key, Number(select.value));
-      else if (bot !== undefined) this.simbots[Number(bot)] = select.value as Difficulty;
-      else return;
+      if (key === undefined) return;
+      this.teams.set(key, Number(select.value));
       // The list of empires to choose from grows and shrinks with the
       // assignment, so the whole picker is rebuilt rather than patched.
       this.render();
@@ -116,6 +107,7 @@ export class LobbyPanel {
   attach(lobby: Lobby): void {
     this.lobby = lobby;
     this.busy = false;
+    this.problem = "";
     lobby.onChange = () => this.render();
     this.render();
   }
@@ -124,14 +116,35 @@ export class LobbyPanel {
    *  this the panel looks like the click did nothing. */
   connecting(): void {
     this.busy = true;
+    this.problem = "";
     this.render();
   }
 
   detach(problem = ""): void {
     this.lobby = undefined;
     this.busy = false;
-    this.status = problem;
+    this.problem = problem;
     this.render();
+  }
+
+  /** True once the broker has given us a room, which is the first moment a
+   *  game could actually be sealed and broadcast. */
+  get hosting(): boolean {
+    return this.lobby?.phase === "hosting";
+  }
+
+  /** True while a lobby was wanted and there is none — a failed join, or a
+   *  broker that could not be reached. */
+  get failed(): boolean {
+    return this.problem !== "" && !this.lobby;
+  }
+
+  /** The empires the host has arranged, and whether any of them is over the
+   *  seat cap. Composed on demand rather than remembered, because people
+   *  arrive and leave underneath it. */
+  get seating(): Seating {
+    const { empires } = this.compose();
+    return { empires, crowded: empires.some((keys) => keys.length > MAX_SEATS) };
   }
 
   /** The live line from the driver — peer count, or who we are waiting for. */
@@ -155,31 +168,22 @@ export class LobbyPanel {
     this.root.innerHTML = this.body();
     const el = this.root.querySelector("[data-lobby-status]");
     if (el) el.textContent = this.status;
+    this.onChange?.();
   }
 
   private body(): string {
     const lobby = this.lobby;
     if (!lobby) {
+      // No lobby, no human empires but ours — so the bot rows on the shared
+      // form are a solo game's again, whatever a lobby we have since left had
+      // them showing.
+      this.handlers.seated?.(1);
       if (this.busy) return `<p class="hint">Connecting…</p>`;
-      return `
-        ${this.status ? `<p class="hint lobby-problem">${escape(this.status)}</p>` : ""}
-        <p class="hint">Host a game and share the code, or join one someone sent
-        you.</p>
-        <div class="lobby-actions">
-          <button class="btn" data-lobby-action="host">Host a game</button>
-        </div>
-        <div class="lobby-actions">
-          <input class="lobby-code" data-lobby-code placeholder="room code" spellcheck="false" />
-          <button class="btn" data-lobby-action="join">Join</button>
-        </div>`;
+      return this.problem ? `<p class="hint lobby-problem">${escape(this.problem)}</p>` : "";
     }
 
     if (lobby.phase === "failed") {
-      return `
-        <p class="hint lobby-problem">Could not play: ${escape(lobby.problem)}</p>
-        <div class="lobby-actions">
-          <button class="btn" data-lobby-action="leave">Back</button>
-        </div>`;
+      return `<p class="hint lobby-problem">Could not play: ${escape(lobby.problem)}</p>`;
     }
     if (lobby.phase === "connecting") {
       return `<p class="hint">Connecting…</p>`;
@@ -192,21 +196,13 @@ export class LobbyPanel {
     }
     if (lobby.phase === "waiting") {
       return `
-        <p class="hint">Joined <code>${escape(lobby.code)}</code>. Waiting for the
-        host to start.</p>
-        <div class="lobby-actions">
-          <button class="btn" data-lobby-action="leave">Leave</button>
-        </div>`;
+        <p class="hint">Joined <code>${escape(lobby.code)}</code>. The host sets
+        the map, the length and the opponents; the game starts when they do.</p>`;
     }
 
     const { players, teamOf, empires } = this.compose();
-    const count = empires.length + this.simbots.length;
     const alone = players.length === 1;
     const crowded = empires.some((keys) => keys.length > MAX_SEATS);
-    // Room for one more bot empire only while the palette can still tell it
-    // apart from everything else on the board.
-    const room = Math.min(MAX_SIMBOTS, Math.max(0, EMPIRE_THEMES.length - empires.length));
-    const ready = count >= 2 && !crowded;
 
     return `
       <p class="hint">Share this room code:</p>
@@ -231,28 +227,7 @@ export class LobbyPanel {
              seats. Every empire gets the same number, so no side can field more
              people than another.</p>`
           : ""
-      }
-      <p class="hint">Bot empires, each played by the simulation itself. Set them
-      separately: one hard opponent and two easy ones is a different game from
-      three of anything, and a better one.</p>
-      <ul class="lobby-teams lobby-rivals">
-        ${this.simbots.map((level, i) => this.rivalRow(level, empires.length + i + 1, i)).join("")}
-      </ul>
-      <div class="lobby-actions">
-        <button class="btn" data-lobby-action="add-bot"${
-          this.simbots.length >= room ? " disabled" : ""
-        }>Add a bot empire</button>
-      </div>
-      ${
-        count < 2
-          ? `<p class="hint lobby-problem">A game needs at least two empires —
-             put someone on their own, or add a bot empire.</p>`
-          : `<p class="hint">${count} empires will be playing.</p>`
-      }
-      <div class="lobby-actions">
-        <button class="btn" data-lobby-action="start"${ready ? "" : " disabled"}>Start the game</button>
-        <button class="btn" data-lobby-action="leave">Cancel</button>
-      </div>`;
+      }`;
   }
 
   private seatRow(player: LobbyPlayer, team: number, used: number): string {
@@ -330,26 +305,10 @@ export class LobbyPanel {
     const players = this.lobby?.players() ?? [];
     const { teamOf, empires } = composeTeams(players, this.teams);
     players.forEach((player, i) => this.teams.set(player.key, teamOf[i]!));
+    // Whoever draws the bot rows needs to know how many colours the people
+    // have taken, or a bot row promises a colour somebody else is wearing.
+    this.handlers.seated?.(empires.length);
     return { players, teamOf, empires };
-  }
-
-  private plan(): { empires: MemberKey[][]; simbots: Difficulty[] } {
-    return { empires: this.compose().empires, simbots: [...this.simbots] };
-  }
-
-  /** One bot empire: the colour it will play, how hard, and a way to change
-   *  its mind about being here. */
-  private rivalRow(level: Difficulty, empire: number, index: number): string {
-    const theme = empireTheme(empire);
-    return `
-      <li class="lobby-seat">
-        <span class="lobby-who" style="color:${theme.c1}">${escape(theme.name)}</span>
-        <select class="lobby-team" data-lobby-level="${index}">
-          ${LEVELS.map((one) => option(one, one, one === level)).join("")}
-        </select>
-        <button class="btn lobby-drop" data-lobby-action="drop-bot" data-index="${index}"
-                title="Remove this empire">&times;</button>
-      </li>`;
   }
 }
 

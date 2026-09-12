@@ -99,7 +99,7 @@
         </details>
       </aside>
 
-      <!-- The setup screen. Lobby, teams and solo configuration live here and
+      <!-- The setup screen. Lobby, teams and game configuration live here and
            nowhere else, so nothing about starting a game competes with playing
            one. -->
       <section class="screen" data-menu>
@@ -111,14 +111,23 @@
             </p>
           </header>
 
-          <div class="screen-cols">
-            <section class="card">
-              <h2>Solo</h2>
-              <p class="card-tag">One empire against bots. Starts immediately.</p>
-              <div class="field field-stacked">
-                <label>Rival empires</label>
-                <div class="rivals" data-cfg="rivals"></div>
-              </div>
+          <!-- One card, one flow. You say what kind of game you are starting,
+               and the same form appears for a solo game and a hosted one alike
+               — they are the same world with different seats in it, so asking
+               twice, once per card side by side, was asking twice. What a
+               hosted game adds is the people, and they belong above the
+               settings rather than in a card of their own. See view/Setup.ts. -->
+          <section class="card setup" data-setup>
+            <div data-setup-head></div>
+
+            <!-- The room code and who is in it while a game is being arranged,
+                 and the living roster once one is running. Hidden for a solo
+                 game, which has nobody to list. -->
+            <div class="setup-lobby" data-lobby hidden></div>
+
+            <!-- Map, length and opponents: one block of markup, read by
+                 whichever kind of game you started it from. -->
+            <div class="setup-form" data-setup-form hidden>
               <div class="field">
                 <label for="cfg-size">Map</label>
                 <select id="cfg-size" data-cfg="size">
@@ -129,22 +138,26 @@
               </div>
               <!-- Options are filled from COMMON_DURATIONS in main.ts rather
                    than written here, so adding 45 minutes is one line and not
-                   two. Applies to a hosted game: a solo game against SimBots
-                   is open-ended, and joinWindow and abandonWindow are both
-                   about people who are not there. -->
+                   two. -->
               <div class="field">
                 <label for="cfg-length">Length</label>
                 <select id="cfg-length" data-cfg="length"></select>
               </div>
-              <p class="hint">Length applies to multiplayer games.</p>
-              <button class="btn primary" data-action="solo">Start solo game</button>
-            </section>
+              <p class="hint">
+                At the end, whoever holds the most ground wins. A longer game
+                also opens the door for late joiners longer and waits longer
+                before it calls a silent empire abandoned &mdash; one number sets
+                all three, because a three-hour patience in a ten-day game is a
+                losing condition for going to bed.
+              </p>
+              <div class="field field-stacked">
+                <label>Bot empires</label>
+                <div class="rivals" data-cfg="rivals"></div>
+              </div>
+            </div>
 
-            <section class="card">
-              <h2>Multiplayer</h2>
-              <div data-lobby></div>
-            </section>
-          </div>
+            <div class="setup-foot" data-setup-foot></div>
+          </section>
 
           <footer class="screen-foot">
             <button class="btn" data-action="resume" hidden>Back to the game</button>

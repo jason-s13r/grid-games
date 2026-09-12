@@ -6,7 +6,7 @@
 // moves come from, not how the game runs.
 
 import { Sim, makeGenesis, simbot, CLAIM, MOVE, MEMBER, CONTROL, STEPS_PER_SECOND } from "@tessera/sim";
-import type { Difficulty, Move, EmpireSpec } from "@tessera/sim";
+import type { BotChoice, DurationRules, Move, EmpireSpec } from "@tessera/sim";
 import type { Driver } from "./Driver";
 
 /** Never simulate more than this in one frame: a backgrounded tab must catch up
@@ -15,14 +15,23 @@ const MAX_STEPS_PER_FRAME = 240;
 
 export interface LocalOptions {
   seed: number;
-  /** One whole SimBot empire per entry, naming how hard that one plays. There
-   *  is no such thing as a bot on your own side: an empire's seats are people,
-   *  and the one way another seat joins one is a vote by the seats already in
-   *  it. Each level goes into the genesis record like every other rule, so a
-   *  replay of this game plays the same opponents. */
-  bots: readonly Difficulty[];
+  /** One whole SimBot empire per entry, naming how hard that one plays — a
+   *  preset, or a profile tuned by hand. There is no such thing as a bot on
+   *  your own side: an empire's seats are people, and the one way another seat
+   *  joins one is a vote by the seats already in it. Each goes into the genesis
+   *  record like every other rule, so a replay of this game plays the same
+   *  opponents. */
+  bots: readonly BotChoice[];
   width: number;
   height: number;
+  /** When the game ends, and the two windows that scale with it. The same three
+   *  numbers a hosted game gets, from the same picker, because "how long does
+   *  this run for" is a question about a game rather than about a mesh.
+   *
+   *  Optional, and absent is open-ended — `endStep: 0` is what every solo game
+   *  was before the setup screen offered a length, and what `durationRules(0)`
+   *  still produces. */
+  duration?: DurationRules;
 }
 
 export class LocalGame implements Driver {
@@ -48,6 +57,7 @@ export class LocalGame implements Driver {
         seed: options.seed,
         empires,
         map: { width: options.width, height: options.height },
+        ...(options.duration ? { rules: options.duration } : {}),
       }),
     );
     this.resetClock();

@@ -598,13 +598,6 @@ body {
 
 .screen-tag { margin: 4px 0 0; color: var(--muted); }
 
-.screen-cols {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 16px;
-  align-items: start;
-}
-
 .card {
   padding: 14px;
   background: var(--panel);
@@ -621,6 +614,68 @@ body {
 }
 
 .card-tag { margin: 0 0 10px; font-size: 12px; color: var(--muted); }
+
+// --- the setup flow ----------------------------------------------------------
+//
+// One card, read top to bottom: what kind of game, then who is in it, then what
+// the world is, then the button that starts it. The parts appear and disappear
+// with the mode rather than sitting side by side greyed out — see view/Setup.ts
+// for why the flow is a flow.
+
+// The title and the way back out of the mode, on one line: leaving is a small
+// reversible thing beside the heading, not an action competing with Start.
+.setup-title {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+
+  h2 { margin-bottom: 8px; }
+}
+
+// The two ways to start something of your own. Side by side and equal, because
+// neither is the default — and they wrap to a stack on their own, without a
+// breakpoint, once two of them no longer fit.
+.setup-choose {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  gap: 8px;
+  margin: 12px 0;
+}
+
+// Sized like a decision without being painted like one: black is reserved for
+// Start, which is the only button on this screen that commits to anything. Two
+// black slabs offering to show you a form said the opposite.
+.btn.setup-pick {
+  padding: 12px;
+  font-weight: 600;
+  background: #f3eeda;
+  border-color: #c8c0aa;
+  &:hover:not(:disabled) { background: #fffdf2; border-color: #8a7a4a; }
+}
+
+.setup-or { margin: 14px 0 0; }
+
+.setup-form { margin-top: 12px; }
+
+// Fenced off from the room code above it, so "who is playing" and "what they
+// are playing" read as two answers rather than one long list. A solo game has
+// nothing above the form to be separated from, so it gets no rule.
+.setup-lobby:not([hidden]) + .setup-form {
+  padding-top: 12px;
+  border-top: 1px solid var(--edge);
+}
+
+.setup-lobby:empty { display: none; }
+
+.setup-foot:empty { display: none; }
+.setup-foot {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--edge);
+
+  .hint { margin: 0; }
+}
 
 .field {
   display: flex;
@@ -778,6 +833,15 @@ a.btn {
 // grows cannot sit on one line with a caption.
 .field-stacked {
   display: block;
+  margin-top: 12px;
+
+  // A caption for the list under it rather than half of a labelled row, so it
+  // reads as a heading and is not mistaken for the paragraph above it.
+  > label {
+    display: block;
+    margin-bottom: 2px;
+    font-weight: 600;
+  }
 }
 .rivals .lobby-teams {
   margin: 6px 0;
@@ -810,6 +874,60 @@ a.btn {
   gap: 8px;
   margin-top: 8px;
   font-size: 12px;
+}
+
+// --- the bot tuner -----------------------------------------------------------
+//
+// Opened under the row it belongs to, indented and on its own ground, so a list
+// of four bots with one of them open still reads as a list of four bots. It is
+// a disclosure rather than a dialog: the game is configurable without it, and
+// nobody has to shut it before pressing start.
+.tuner {
+  margin: 2px 0 8px 10px;
+  padding: 8px 10px;
+  border-left: 2px solid #d9d2bd;
+  background: #f6f2e4;
+  border-radius: 0 4px 4px 0;
+
+  .hint { margin: 0 0 8px; }
+}
+
+// Label, slider, number. The number is tabular so it does not shuffle the
+// slider sideways while it is being dragged.
+.tuner-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 120px 52px;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  padding: 1px 0;
+
+  input[type="range"] {
+    width: 100%;
+    min-width: 0;
+    accent-color: #8a7a4a;
+  }
+}
+.tuner-value {
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  color: var(--muted);
+}
+.tuner-hint {
+  display: block;
+  font-size: 10px;
+  color: var(--muted);
+}
+// The six phases are one cycle rather than six settings, so they are fenced off
+// from the two above them that are not.
+.tuner-phases {
+  margin-top: 8px;
+  padding-top: 6px;
+  border-top: 1px solid #e4ddc8;
+}
+.tuner-note {
+  margin: 6px 0 0;
+  font-variant-numeric: tabular-nums;
 }
 
 // --- chat --------------------------------------------------------------------
@@ -1050,7 +1168,13 @@ a.btn {
 
   .screen { padding: 20px 14px 32px; }
   .screen-brand { font-size: 24px; }
-  .screen-cols { grid-template-columns: 1fr; }
+
+  // Three columns of slider have nowhere to go at this width, so the label
+  // takes its own line and the slider keeps its number beside it.
+  .tuner-row {
+    grid-template-columns: minmax(0, 1fr) 52px;
+    label { grid-column: 1 / -1; }
+  }
 }
 
 // Phone. Four tiles across is too tight to read, so wrap to two rows of two.

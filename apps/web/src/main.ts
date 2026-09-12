@@ -15,7 +15,7 @@ import {
   Sim,
 } from "@tessera/sim";
 import { Roster } from "@tessera/protocol";
-import { Archive, Lobby, Lockstep } from "@tessera/net";
+import { Archive, Lobby, Lockstep, MAX_SEATS } from "@tessera/net";
 import pkg from "../package.json";
 import { LocalGame } from "./game/Local";
 import { boardClick } from "./game/input";
@@ -23,8 +23,10 @@ import { OnlineGame } from "./game/Online";
 import type { Driver } from "./game/Driver";
 import { myIdentity } from "./net/identity";
 import { LobbyPanel } from "./view/LobbyPanel";
+import { Setup } from "./view/Setup";
 import { Rivals } from "./view/Rivals";
 import type { RosterView } from "./view/LobbyPanel";
+import type { SetupSummary } from "./view/Setup";
 import { ChatPanel } from "./view/Chat";
 import { Camera, MIN_ZOOM, MAX_ZOOM, DOM_MIN_ZOOM } from "./view/Camera";
 import { MapImage } from "./view/MapImage";
@@ -97,7 +99,12 @@ openPanelsForWidth();
 
 /** Map sizes offered on the setup screen. A mesh game uses whatever its genesis
  *  says, so these are a starting point rather than an assumption the view makes
- *  anywhere else. */
+ *  anywhere else.
+ *
+ *  Read for a solo game and a hosted one alike. They are the same world with
+ *  different seats in it, so the form asks once and whichever start button you
+ *  pressed takes the answer — which is also the only way the two can be
+ *  guaranteed not to disagree. */
 const MAP_SIZES: Record<string, { width: number; height: number }> = {
   small: { width: 96, height: 72 },
   medium: { width: 160, height: 112 },
@@ -109,15 +116,20 @@ const MAP_SIZES: Record<string, { width: number; height: number }> = {
 const mapSize = () =>
   MAP_SIZES[pick<HTMLSelectElement>('[data-cfg="size"]').value] ?? MAP_SIZES.medium!;
 
-/** Lengths the host card suggests. A list beside the picker rather than a type
- *  in the sim: the old `type Duration = "3h" | "1d" | ...` is what a host had
- *  to extend to add 45 minutes, and what lands in the genesis is only ever
+/** Lengths the setup screen suggests. A list beside the picker rather than a
+ *  type in the sim: the old `type Duration = "3h" | "1d" | ...` is what a host
+ *  had to extend to add 45 minutes, and what lands in the genesis is only ever
  *  three numbers anyway.
  *
- *  No open-ended entry. Every hosted game from v4 on has an end date, which is
- *  what makes a version's sunset derivable rather than a judgement call — and
- *  `endStep: 0` stays legal in the sim forever for the solo card and for every
- *  v3 record. */
+ *  No open-ended entry, and that is the one thing the two kinds of game could
+ *  not be given identically. Every hosted game from v4 on has an end date, because
+ *  that is what makes a version's sunset derivable rather than a judgement
+ *  call — a running game cannot be upgraded, so a game with no end is a game
+ *  nobody can promise to still play. A solo game could have been left
+ *  open-ended, but a list with an entry that quietly means "multiplayer only"
+ *  is the sort of thing the combined form exists to get rid of. `endStep: 0`
+ *  stays legal in the sim forever, for every v3 record and for anybody
+ *  composing a genesis by hand. */
 const COMMON_DURATIONS: ReadonlyArray<{ label: string; steps: number }> = [
   { label: "15 minutes", steps: minutes(15) },
   { label: "30 minutes", steps: minutes(30) },
@@ -140,11 +152,12 @@ lengthEl.innerHTML = COMMON_DURATIONS.map(
  *  dropdown and pressing start agree. */
 const duration = () => durationRules(Number(lengthEl.value));
 
-/** The rival empires the solo card is offering, each with its own difficulty.
- *  It renders itself, so nothing here has to know how many there are. */
+/** The bot empires in the world, each with its own difficulty or its own tuned
+ *  profile. It renders itself, so nothing here has to know how many there are —
+ *  and there is one of it, read by a solo game and a hosted one alike. */
 const rivals = new Rivals(pick<HTMLElement>('[data-cfg="rivals"]'));
 
-const soloSetup = () => ({ bots: rivals.list, ...mapSize() });
+const soloSetup = () => ({ bots: rivals.list, duration: duration(), ...mapSize() });
 
 let MAP = { ...MAP_SIZES.medium! };
 
@@ -180,6 +193,75 @@ shell.onScreen = () => resize();
 function start(seed: number): void {
   mount(new LocalGame({ seed, ...soloSetup() }));
 }
+
+/** A fresh solo game from whatever the form currently says. Put down a mesh
+ *  session first if there is one: the peers still playing would otherwise wait
+ *  on a seat that had wandered off. */
+function startSolo(): void {
+  leaveMesh();
+  start(seedFrom(String(Date.now())));
+  shell.show("game");
+}
+
+/** Seal the game the form describes and broadcast it. Everything but the
+ *  people comes off the shared form; the people are the panel's. */
+function startHosted(): void {
+  void lobby?.host({
+    empires: panel.seating.empires,
+    simbots: rivals.list,
+    ...mapSize(),
+    duration: duration(),
+  });
+}
+
+/** What the game as configured comes to, and why it cannot be started yet.
+ *
+ *  One sentence for both kinds of game, because it is one question: how many
+ *  empires will be in the world, and are there enough of them to play. A solo
+ *  game holds exactly one of them and a hosted one holds however many the
+ *  picker has composed, and that is the whole difference. */
+function summarise(mode: "solo" | "host"): SetupSummary {
+  const bots = rivals.count;
+
+  if (mode === "host") {
+    if (panel.failed) return { note: "", problem: false, ready: false };
+    if (!panel.hosting) {
+      return { note: "Waiting for a room…", problem: false, ready: false };
+    }
+  }
+
+  const { empires, crowded } = mode === "solo" ? SOLO_SEATING : panel.seating;
+  const people = empires.length;
+  const total = people + bots;
+
+  if (crowded) {
+    return {
+      note: `An empire may hold up to ${MAX_SEATS} seats.`,
+      problem: true,
+      ready: false,
+    };
+  }
+  if (total < 2) {
+    return {
+      note:
+        mode === "solo"
+          ? "A solo game needs somebody to play against — add a bot empire."
+          : "A game needs at least two empires — put someone on their own, or add a bot empire.",
+      problem: true,
+      ready: false,
+    };
+  }
+
+  const who =
+    mode === "solo"
+      ? `you and ${bots} bot ${bots === 1 ? "empire" : "empires"}`
+      : `${people} of people, ${bots} of bots`;
+  return { note: `${total} empires will be playing: ${who}.`, problem: false, ready: true };
+}
+
+/** A solo game is one empire of people, always. Written out so `summarise` can
+ *  ask the same question of both modes rather than branching twice. */
+const SOLO_SEATING = { empires: [[]], crowded: false };
 
 /** Everything downstream of here is the same for a solo game and a mesh game —
  *  the driver interface is the whole of the difference. */
@@ -414,17 +496,15 @@ archiveBtn.addEventListener("click", () => {
   setTimeout(() => URL.revokeObjectURL(url), 0);
 });
 
-pick<HTMLButtonElement>('[data-action="solo"]').addEventListener("click", () => {
-  leaveMesh();
-  start(seedFrom(String(Date.now())));
-  shell.show("game");
-});
-
 // "Menu" said nothing about what pressing it did. This is the way out of a
 // game: it puts down the mesh session, if there is one, and goes back to the
 // lobby — so it says so, and it actually leaves rather than pretending to.
 pick<HTMLButtonElement>('[data-action="leave"]').addEventListener("click", () => {
   leaveMesh();
+  // Back to the first question. Leaving in the middle of a hosted game and
+  // finding its start button still on screen is how you start a second one by
+  // accident.
+  setup.reset();
   shell.left();
 });
 
@@ -485,19 +565,35 @@ const chat = new ChatPanel(chatEl, {
 });
 
 const panel = new LobbyPanel(lobbyEl, {
-  host: () => void begin(),
-  join: (code) => void begin(code),
-  start: (plan) => void lobby?.host({ ...plan, ...mapSize(), duration: duration() }),
-  leave: () => {
-    lobby?.close();
-    lobby = undefined;
-    mesh = undefined;
-    chat.close();
-    panel.detach();
-  },
+  seated: (empires) => rivals.seat(empires + 1),
   invite: (key) => void mesh?.amend(key),
   endorse: (empire, key) => void mesh?.endorse(empire, key),
 });
+
+/** The flow: which kind of game, then the one form that configures it, then
+ *  one button. It owns no settings of its own — it shows and hides the form,
+ *  and asks here what the form currently adds up to. */
+const setup = new Setup(
+  {
+    root: pick<HTMLElement>("[data-setup]"),
+    head: pick<HTMLElement>("[data-setup-head]"),
+    form: pick<HTMLElement>("[data-setup-form]"),
+    lobby: lobbyEl,
+    foot: pick<HTMLElement>("[data-setup-foot]"),
+  },
+  {
+    start: (mode) => (mode === "solo" ? startSolo() : startHosted()),
+    host: () => void begin(),
+    join: (code) => void begin(code),
+    back: () => leaveMesh(),
+    summary: (mode) => summarise(mode),
+  },
+);
+
+// Two things move the sentence above the start button and the button's own
+// state: the bot list, and the people in the room. Both say so.
+rivals.onChange = () => setup.refresh();
+panel.onChange = () => setup.refresh();
 
 /** Chat needs a seat: which empire the team channel is sealed to, and whether
  *  there is anyone on it to seal to. */
@@ -590,6 +686,10 @@ async function begin(code?: string): Promise<void> {
     if (seat) openChat(seat);
 
     mount(new OnlineGame(driver, lobby!.mesh));
+    // The record is sealed and every peer has checked it, so there is nothing
+    // left on the setup screen to configure — only who is in the game, which
+    // the panel keeps showing.
+    setup.live();
     shell.show("game");
   };
 }
