@@ -10,7 +10,7 @@ import { MOVE, MEMBER, CONTROL, TERRAIN, ITEM, WIN } from "../types.js";
 import { idx } from "../geometry.js";
 import { DEFAULT_RULES, STAT, STEPS_PER_SECOND } from "../constants.js";
 import { arena, at, claimNow, held, humans, own, ownerAt, popAt } from "./testkit.js";
-import { DIFFICULTY, simbot } from "../specs.js";
+import { DIFFICULTY, TUNING, simbot, tuneBot } from "../specs.js";
 import { turnOf } from "../policy.js";
 import type { Difficulty } from "../specs.js";
 import type { BotProfile } from "../types.js";
@@ -646,6 +646,67 @@ describe("bot difficulty is a scale", () => {
     expect(DIFFICULTY.easy.popMax).toBe(333);
     expect(DIFFICULTY.steady.popMax).toBe(666);
     expect(DIFFICULTY.hard.popMax).toBe(999);
+  });
+});
+
+// The preset table read the other way round. `BotTuning` is what a person
+// turns and `BotProfile` is what the simulation reads; the three presets are
+// defined as the first passed through `tuneBot`, so a hand-tuned bot is the
+// same kind of thing as a preset rather than a second kind beside it. These
+// are the properties that arrangement has to have.
+describe("a bot tuned by hand", () => {
+  it("reproduces the presets it is built from", () => {
+    for (const level of ["easy", "steady", "hard"] as Difficulty[]) {
+      expect(tuneBot(TUNING[level])).toEqual(DIFFICULTY[level]);
+    }
+  });
+
+  // "Never sleeps" and "sleeps for no time" are the same bot and must be the
+  // same record: a genesis is content-addressed, so two spellings of one game
+  // would be two game ids.
+  it("writes a phase of no seconds as no phase at all", () => {
+    expect(TUNING.hard.phases.sleep).toBe(0);
+    expect(DIFFICULTY.hard.phases!.sleep).toBeUndefined();
+  });
+
+  // Tempo is deliberately not among the numbers a tuning carries. A bot that
+  // could be told to click faster would dodge its own ceiling, and the ceiling
+  // is the whole of what difficulty means here.
+  it("takes its click rate from the phase, never from the tuning", () => {
+    const strong = tuneBot({ ...TUNING.easy, popMax: 999 });
+    expect(strong.phases!.attack!.rate).toEqual(DIFFICULTY.hard.phases!.attack!.rate);
+    expect(strong.phases!.expand!.rate).toEqual(DIFFICULTY.easy.phases!.expand!.rate);
+  });
+
+  it("clamps whatever it is handed", () => {
+    const wild = tuneBot({
+      popMax: -5,
+      coins: 400,
+      phases: { expand: 10, attack: 0, defend: 0, fortify: 0, heal: 0, sleep: 0 },
+    });
+    expect(wild.popMax).toBe(1);
+    expect(wild.coins).toBe(100);
+    expect(Object.keys(wild.phases!)).toEqual(["expand"]);
+  });
+
+  // The path the setup screen takes: a tuning becomes a whole SimBot empire
+  // exactly as a preset name does.
+  it("seats as a SimBot empire the way a preset does", () => {
+    expect(simbot(tuneBot(TUNING.steady))).toEqual(simbot("steady"));
+  });
+
+  // A bot dialled all the way down is still a bot. It holds a capital, so the
+  // game is not over on the first step, and it never acts.
+  it("may be tuned into doing nothing at all", () => {
+    const idle = tuneBot({
+      popMax: 999,
+      coins: 0,
+      phases: { expand: 0, attack: 0, defend: 0, fortify: 0, heal: 0, sleep: 0 },
+    });
+    const sim = arena([simbot(idle), humans(1)], 5);
+    own(sim, 6, 6, 1);
+    for (let i = 0; i < STEPS_PER_SECOND * 60; i++) sim.advance([]);
+    expect(sim.state.empires[0]!.members[0]!.stats[STAT.MOVES]!).toBe(0);
   });
 });
 

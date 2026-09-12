@@ -6,6 +6,7 @@
 
 import type { BotMode, BotPhase, BotProfile, EmpireSpec } from "./types.js";
 import { CONTROL, MEMBER } from "./types.js";
+import { MODES } from "./policy.js";
 import { STEPS_PER_SECOND } from "./constants.js";
 
 /** Seconds in, steps out. Every duration a bot carries is a step count; this
@@ -37,7 +38,11 @@ const SLOW: [number, number] = [fromSeconds(60), fromSeconds(90)];
  *  Sharing the table is also what makes popMax mean anything. A claim spends
  *  `min(steps waited, popMax)`, so a cap only bites when the bot waits longer
  *  than the cap — and if easy were the one clicking fastest, it would dodge its
- *  own ceiling and the difficulty would evaporate. */
+ *  own ceiling and the difficulty would evaporate.
+ *
+ *  This is also the one thing a hand-tuned bot cannot move, and for the same
+ *  reason: `BotTuning` names every number a player may turn, and a tempo knob
+ *  beside a strength knob would let the second undo the first. */
 const TEMPO: Record<BotMode, [number, number]> = {
   // Growth wants tiles, not thick ones: cheap claims every few seconds.
   expand: FAST,
@@ -55,6 +60,68 @@ const phase = (mode: BotMode, seconds: number): BotPhase => ({
   steps: fromSeconds(seconds),
   rate: TEMPO[mode],
 });
+
+/** A bot written in the units a person thinks in: a population ceiling, an
+ *  appetite for coins, and seconds spent in each phase.
+ *
+ *  `BotProfile` is what the simulation reads and `BotTuning` is what a person
+ *  sets, and they are deliberately not the same shape. A profile carries a
+ *  click-rate band per phase, which is shared across every difficulty and must
+ *  stay that way; a tuning carries no rate at all, so nothing that comes out of
+ *  this file can dodge its own ceiling by clicking faster. */
+export interface BotTuning {
+  /** Population this bot banks to. The sim clamps it to `rules.popMax`, so
+   *  asking for more than the game allows holds the seat back rather than
+   *  lifting it. */
+  popMax: number;
+  /** Percent chance of taking an adjacent coin instead of following the
+   *  phase — the appetite for spidering outward. */
+  coins: number;
+  /** Seconds spent in each phase. `0` means the bot never enters it, which is
+   *  how a bot that never sleeps is written; all six at zero is a bot that
+   *  does nothing at all, and that is a legitimate thing to ask for. */
+  phases: Record<BotMode, number>;
+}
+
+/** The three presets, in the units they were tuned in. Exported because a
+ *  "customise" control has to start somewhere, and the honest place to start
+ *  is whichever preset the player was already looking at. */
+export const TUNING: Record<Difficulty, BotTuning> = {
+  easy: {
+    popMax: 333,
+    coins: 20,
+    phases: { expand: 90, attack: 30, defend: 45, fortify: 45, heal: 30, sleep: 90 },
+  },
+  steady: {
+    popMax: 666,
+    coins: 60,
+    phases: { expand: 90, attack: 75, defend: 45, fortify: 30, heal: 30, sleep: 30 },
+  },
+  hard: {
+    popMax: 999,
+    coins: 95,
+    phases: { expand: 90, attack: 105, defend: 45, fortify: 30, heal: 30, sleep: 0 },
+  },
+};
+
+/** A tuning as the simulation reads it.
+ *
+ *  Phases at zero are dropped rather than written as `steps: 0`, because
+ *  "never sleeps" and "sleeps for no time" are the same bot and should be the
+ *  same record — a genesis is content-addressed, so two spellings of one game
+ *  would be two game ids. */
+export function tuneBot(tuning: BotTuning): BotProfile {
+  const phases: Partial<Record<BotMode, BotPhase>> = {};
+  for (const mode of MODES) {
+    const seconds = tuning.phases[mode] ?? 0;
+    if (seconds > 0) phases[mode] = phase(mode, seconds);
+  }
+  return {
+    popMax: Math.max(1, Math.round(tuning.popMax)),
+    coins: Math.min(100, Math.max(0, Math.round(tuning.coins))),
+    phases,
+  };
+}
 
 /** Three opponents, and what actually separates them.
  *
@@ -82,42 +149,23 @@ const phase = (mode: BotMode, seconds: number): BotPhase => ({
  *  what a person returning from an hour away does, and the reason an easy bot
  *  is occasionally dangerous rather than uniformly harmless. */
 export const DIFFICULTY: Record<Difficulty, BotProfile> = {
-  easy: {
-    popMax: 333,
-    coins: 20,
-    phases: {
-      expand: phase("expand", 90),
-      attack: phase("attack", 30),
-      defend: phase("defend", 45),
-      fortify: phase("fortify", 45),
-      heal: phase("heal", 30),
-      sleep: phase("sleep", 90),
-    },
-  },
-  steady: {
-    popMax: 666,
-    coins: 60,
-    phases: {
-      expand: phase("expand", 90),
-      attack: phase("attack", 75),
-      defend: phase("defend", 45),
-      fortify: phase("fortify", 30),
-      heal: phase("heal", 30),
-      sleep: phase("sleep", 30),
-    },
-  },
-  hard: {
-    popMax: 999,
-    coins: 95,
-    phases: {
-      expand: phase("expand", 90),
-      attack: phase("attack", 105),
-      defend: phase("defend", 45),
-      fortify: phase("fortify", 30),
-      heal: phase("heal", 30),
-    },
-  },
+  easy: tuneBot(TUNING.easy),
+  steady: tuneBot(TUNING.steady),
+  hard: tuneBot(TUNING.hard),
 };
+
+/** How hard a bot empire plays: one of the three presets, or a profile somebody
+ *  dialled in themselves.
+ *
+ *  Widening this widens no trust. A bot profile has never been checked by
+ *  `inspectGenesis` and could never usefully be: every number in one is already
+ *  bounded where it is read — `popMax` is clamped to `rules.popMax` when the
+ *  seat is created, a phase's rate is floored at `rules.botActionInterval` on
+ *  every action, and `coins` is a percentage. The strongest profile anybody can
+ *  write is therefore an opponent rather than an exploit, it is in the genesis
+ *  record for every peer to read before agreeing to play, and a host who makes
+ *  the bots brutal has made them brutal to themselves as well. */
+export type BotChoice = Difficulty | BotProfile;
 
 /** An empire played by the simulation itself, from the shared seed. It costs no
  *  bandwidth and cannot drop, which is what makes it the filler for an empty
@@ -126,7 +174,7 @@ export const DIFFICULTY: Record<Difficulty, BotProfile> = {
  *  Its difficulty is in the genesis record like everything else about it, so
  *  "the bots were on hard" is a fact of the game rather than a thing somebody
  *  remembers afterwards. */
-export const simbot = (level: Difficulty = "steady"): EmpireSpec => ({
+export const simbot = (level: BotChoice = "steady"): EmpireSpec => ({
   control: CONTROL.SIMBOT,
-  members: [{ kind: MEMBER.BOT, bot: DIFFICULTY[level] }],
+  members: [{ kind: MEMBER.BOT, bot: typeof level === "string" ? DIFFICULTY[level] : level }],
 });

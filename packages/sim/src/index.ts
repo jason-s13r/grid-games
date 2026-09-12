@@ -36,6 +36,6 @@ export type { Mode, Turn } from "./policy.js";
 export { summarise } from "./stats.js";
 export type { EmpireSummary } from "./stats.js";
 export { Sim, makeGenesis, CLAIM, HEARTBEAT } from "./sim.js";
-export { DIFFICULTY, humans, simbot } from "./specs.js";
-export type { Difficulty } from "./specs.js";
+export { DIFFICULTY, TUNING, humans, simbot, tuneBot } from "./specs.js";
+export type { BotChoice, BotTuning, Difficulty } from "./specs.js";
 export type { GenesisInit } from "./sim.js";

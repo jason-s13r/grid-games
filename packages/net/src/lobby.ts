@@ -26,7 +26,7 @@ import {
   seedFrom,
   simbot,
 } from "@tessera/sim";
-import type { Difficulty, DurationRules, EmpireSpec, Genesis } from "@tessera/sim";
+import type { BotChoice, DurationRules, EmpireSpec, Genesis } from "@tessera/sim";
 import {
   FRAME,
   Identity,
@@ -74,10 +74,20 @@ export interface LobbyPlayer {
  *  should be in the world. */
 export interface HostPlan {
   empires: MemberKey[][];
-  /** One entry per SimBot empire, naming how hard that one plays. Each goes
-   *  into the genesis record with everything else, so a game's opponents are a
-   *  fact of it rather than a claim about it. */
-  simbots: readonly Difficulty[];
+  /** One entry per SimBot empire, naming how hard that one plays: a preset, or
+   *  a profile the host tuned by hand. Each goes into the genesis record with
+   *  everything else, so a game's opponents are a fact of it rather than a
+   *  claim about it — a hand-tuned bot is as checkable before the first move as
+   *  a named difficulty is.
+   *
+   *  A profile is safe to pass straight through where `duration` was not, and
+   *  the difference is worth stating. Every number in a `BotProfile` is bounded
+   *  where the simulation reads it: `popMax` is clamped to `rules.popMax` when
+   *  the seat is created, a phase's rate is floored at `rules.botActionInterval`
+   *  on every action, and `coins` is a percentage. There is no setting here
+   *  that decides a game the way `abandonWindow` could — and a host who makes
+   *  the bots brutal has made them brutal to their own empire too. */
+  simbots: readonly BotChoice[];
   width: number;
   height: number;
   /** How long the game runs, and the two windows that scale with it.
