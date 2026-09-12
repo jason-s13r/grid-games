@@ -1,6 +1,6 @@
 # 0006 — The host peer: doorman, relay, archiver
 
-Status: draft
+Status: built
 Depends on: 0004 (socket transport), 0005 (resume points it serves)
 Branch: `host-peer`
 

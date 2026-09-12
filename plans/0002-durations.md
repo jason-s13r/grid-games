@@ -1,6 +1,6 @@
 # 0002 — Games that end: durations, the join window, abandon scaling
 
-Status: draft
+Status: built
 Depends on: 0001 (it is this plan's bump that makes a supported set urgent)
 Branch: `durations`
 

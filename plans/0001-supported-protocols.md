@@ -1,6 +1,6 @@
 # 0001 — Games that outlive their release
 
-Status: draft
+Status: built
 Depends on: nothing (but 0002 needs it, and 0002 is what makes it urgent)
 Branch: `supported-protocols`
 

@@ -1,18 +1,18 @@
 # Plan index
 
-Status of the series: draft. Built in the order below; each plan leaves the
-tree green and is useful on its own. No plan adds authority anywhere — the
+Status of the series: 0001–0006 built; 0007–0014 draft. Built in the order
+below; each plan leaves the tree green and is useful on its own. No plan adds authority anywhere — the
 sim, the hash contract, quorum signatures and archive verification are
 untouched, and everything stored anywhere is checked by whoever reads it.
 
 | # | Plan | Depends on | Size |
 |---|------|------------|------|
-| 0001 | Games that outlive their release — the supported protocol set | — | 1 session |
-| 0002 | Games that end — durations, the join window, abandon scaling | 0001 | 1 session |
-| 0003 | The connection reference — a transport chosen by the string you join with | — | 1 session |
-| 0004 | The WSS transport — client, room-bus contract, tests | 0003 | 1–2 sessions |
-| 0005 | Resume points a stranger can check | — | 1 session, hardest |
-| 0006 | The host peer — doorman, relay, archiver | 0004, 0005 | 1–2 sessions |
+| 0001 ✅ | Games that outlive their release — the supported protocol set | — | 1 session |
+| 0002 ✅ | Games that end — durations, the join window, abandon scaling | 0001 | 1 session |
+| 0003 ✅ | The connection reference — a transport chosen by the string you join with | — | 1 session |
+| 0004 ✅ | The WSS transport — client, room-bus contract, tests | 0003 | 1–2 sessions |
+| 0005 ✅ | Resume points a stranger can check | — | 1 session, hardest |
+| 0006 ✅ | The host peer — doorman, relay, archiver | 0004, 0005 | 1–2 sessions |
 | 0007 | The address book — listings and the rejoin flow | 0003, 0006 | 1 session |
 | 0008 | The web client — join, create, watch | 0002, 0003, 0007 | 1–2 sessions |
 | 0009 | Composing a game together — the co-signed proposal | 0002, 0006 | 1–2 sessions |

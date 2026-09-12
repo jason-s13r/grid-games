@@ -1,6 +1,6 @@
 # 0003 — The connection reference: a transport chosen by the string you join with
 
-Status: draft
+Status: built
 Depends on: nothing
 Branch: `transport-ref`
 

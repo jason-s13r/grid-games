@@ -1,6 +1,6 @@
 # 0004 — The WSS transport: client, room-bus contract, tests
 
-Status: draft
+Status: built
 Depends on: 0003 (the `socket` branch of `ConnectionRef`)
 Branch: `wss-transport`
 

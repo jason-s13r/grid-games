@@ -1,6 +1,6 @@
 # 0005 — Resume points a stranger can check
 
-Status: draft
+Status: built
 Depends on: nothing (pays off with 0006, which serves them)
 Branch: `resume-points`
 
