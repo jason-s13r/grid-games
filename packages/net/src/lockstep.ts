@@ -228,6 +228,11 @@ export class Lockstep {
    *  needs — the ROSTER_AMEND move in the log carries no signature of its own,
    *  and this record is the authority behind it. */
   onAmended?: (amendment: SignedAmendment) => void;
+  /** The simulation was moved to a state rather than advanced into it, so
+   *  anything writing the inputs down has a hole between the step it last saw and
+   *  this one. Nothing in the driver needs to know; an archive does, and an
+   *  archive that does not say so claims to be replayable and is not. */
+  onAdopted?: (step: number) => void;
 
   private readonly options: LockstepOptions;
   private readonly transport: Transport;
@@ -1374,6 +1379,9 @@ export class Lockstep {
     this.lastBeat = -Infinity;
     this.checkpoint(this.sim.step);
     this.announceReady();
+    // Last, so that a listener writing the hole down is describing a simulation
+    // that has finished moving.
+    this.onAdopted?.(this.sim.step);
     return true;
   }
 

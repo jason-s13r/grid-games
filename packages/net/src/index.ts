@@ -17,7 +17,7 @@ export { PeerMesh, createMesh } from "./mesh.js";
 export { parseRef, formatRef, isRoomName, mintName, RTC_PREFIX } from "./ref.js";
 export type { ConnectionRef } from "./ref.js";
 export { openConnection } from "./connect.js";
-export { RoomBus, BUS_VERSION } from "./roombus.js";
+export { RoomBus, BUS_VERSION, localPair } from "./roombus.js";
 export type { BusSocket, BusLimits, BusOptions, Down, Up } from "./roombus.js";
 export { SocketTransport } from "./socket.js";
 export type { SocketLike, SocketConstructor, SocketOptions } from "./socket.js";

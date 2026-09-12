@@ -62,6 +62,16 @@ const OPEN_TIMEOUT_MS = 12_000;
 export interface SocketOptions extends ConnectOptions {
   /** Injectable for the same reason PeerConstructor is. */
   socket?: SocketConstructor;
+  /** Mint a socket that is already attached to something, rather than dialling a
+   *  URL. A host peer running the bus in its own process passes `localPair` here:
+   *  the bus sees a `BusSocket`, this sees a `SocketLike`, and neither learns the
+   *  other end is in the same process.
+   *
+   *  Called per dial, not once, so the redial path stays meaningful — though an
+   *  in-process pair never exercises it, which is a cost worth knowing: a bug in
+   *  the held buffer or the backoff shows up in every player and not in the
+   *  host. */
+  attach?: () => SocketLike;
   now?: () => number;
   openTimeoutMs?: number;
 }
@@ -185,14 +195,16 @@ export class SocketTransport implements Connection {
   private dial(): void {
     if (this.shut) return;
     const Socket = this.options.socket ?? (globalThis.WebSocket as unknown as SocketConstructor);
-    if (!Socket) {
+    if (!Socket && !this.options.attach) {
       this.giveUp("this build has no WebSocket to open.");
       return;
     }
 
     let socket: SocketLike;
     try {
-      socket = new Socket(`${this.ref.url}/${this.ref.room}`);
+      socket = this.options.attach
+        ? this.options.attach()
+        : new Socket(`${this.ref.url}/${this.ref.room}`);
     } catch (error) {
       this.redial();
       this.options.onError?.(error as Error);

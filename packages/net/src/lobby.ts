@@ -94,6 +94,11 @@ export interface HostPlan {
   simbots: readonly BotChoice[];
   width: number;
   height: number;
+  /** Keys that are here and deliberately not playing — a host peer composing a
+   *  game it will only watch. Passed through to `checkPlan`, which otherwise
+   *  refuses every plan a headless host can compose: the composer's own key is
+   *  always among the members present, and a host peer never seats itself. */
+  watching?: readonly MemberKey[];
   /** How long the game runs, and the two windows that scale with it.
    *
    *  Deliberately `DurationRules` and not `Partial<Rules>`. A general
@@ -169,8 +174,9 @@ export class Lobby {
      *  open, which is why it is a constructor argument and not a parse
      *  result. */
     readonly ref: ConnectionRef,
-    /** Whether we arrived at somebody else's room. Not `!!ref` — a host has a
-     *  ref too, the one it was just given. */
+    /** Whether we arrived at somebody else's room, and therefore whether
+     *  somebody is going to send us a genesis record. Not `!!ref`: a host has a
+     *  ref too — the one the broker just gave it, or the room it is serving. */
     private readonly joined: boolean,
   ) {
     this.phase = joined ? "waiting" : "hosting";
@@ -205,16 +211,20 @@ export class Lobby {
    *  resolves once the connection has an id, because until then there is no
    *  room to put on screen.
    *
-   *  **`undefined` means host.** A ref is a string somebody typed, and nobody
-   *  types "host", so there is no variant for "start a room here"; absent a ref
-   *  we are the room. That is WebRTC's shape, where a peer id *is* a room code.
-   *  Over a socket the room bus creates a room on first join, so hosting is not
-   *  a separate act and the question of who composes the genesis there belongs
-   *  to the host peer. */
+   *  **`undefined` means host**, because a ref is a string somebody typed and
+   *  nobody types "host": absent a ref we are the room. That is WebRTC's shape,
+   *  where a peer id *is* a room code.
+   *
+   *  A socket room is hosted by the peer serving it, which is a thing a ref
+   *  cannot express — so `hosting` says it instead. It means "nobody is going to
+   *  send me a genesis record": no watchdog, phase `hosting`, and the ref kept as
+   *  given so `code` and `shareable` stay right. Without it a host peer running
+   *  its own bus would be killed by the joiner's watchdog fifteen seconds into
+   *  waiting for the players it exists to wait for. */
   static async open(
     identity: Identity,
     ref?: ConnectionRef,
-    options: ConnectOptions & { connect?: Opener } = {},
+    options: ConnectOptions & { connect?: Opener; hosting?: boolean } = {},
   ): Promise<Lobby> {
     let lobby: Lobby | undefined;
     const connection = await (options.connect ?? openConnection)(ref, {
@@ -230,7 +240,19 @@ export class Lobby {
       onError: (error) => lobby?.fail(error.message),
     });
     const here: ConnectionRef = ref ?? { kind: "rtc", code: connection.id };
-    lobby = new Lobby(identity, connection, here, !!ref);
+    const hosting = options.hosting ?? ref === undefined;
+    lobby = new Lobby(identity, connection, here, !hosting);
+
+    // Anybody already in the room, greeted now rather than waited for.
+    //
+    // A mesh introduces peers as they dial, so every arrival is an event and
+    // `onJoin` is the whole story. A room on a relay is a place you arrive *into*:
+    // its membership is state, and the roster that carries it arrives with the
+    // welcome — which is to say, while this function is still awaiting the
+    // connection and before there is a lobby for `onJoin` to reach. Without this,
+    // a joiner silently never greets the peers that were already there, so the
+    // host never learns its key and can never seat it.
+    for (const peer of connection.peers()) lobby.welcome(peer);
     return lobby;
   }
 

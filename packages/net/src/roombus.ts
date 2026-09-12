@@ -21,6 +21,7 @@
 // the ejection is a quorum-signed record in every archive of that game.
 
 import { isRoomName } from "./ref.js";
+import type { SocketLike } from "./socket.js";
 
 /** The room-bus envelope version. Bumped when a server and a client can no
  *  longer understand each other, which is a different question from whether two
@@ -90,6 +91,15 @@ export interface BusOptions {
   limits?: BusLimits;
   /** Injectable so a test is not at the mercy of a clock it does not own. */
   now?: () => number;
+  /** Which rooms this bus will create on a join. A bus that creates any room
+   *  asked for is an open relay for strangers' traffic, which is a different
+   *  product from a host peer serving the game it is in — so a host passes the
+   *  rooms it is a peer in, and everything else is refused with the answer a
+   *  joiner actually wants: there is no game here.
+   *
+   *  Absent, any room is created on first join, which is what a stand-alone
+   *  relay is for. */
+  serves?: (room: string) => boolean;
 }
 
 export class RoomBus {
@@ -97,10 +107,12 @@ export class RoomBus {
   private readonly byRoom = new Map<string, Set<BusSocket>>();
   private readonly limits: Required<BusLimits>;
   private readonly now: () => number;
+  private readonly serves?: (room: string) => boolean;
 
   constructor(options: BusOptions = {}) {
     this.limits = { ...LIMITS, ...options.limits };
     this.now = options.now ?? Date.now;
+    this.serves = options.serves;
   }
 
   /** One inbound message from a socket that has not been dropped. */
@@ -184,6 +196,10 @@ export class RoomBus {
 
     let room = this.byRoom.get(message.room);
     if (!room) {
+      if (this.serves && !this.serves(message.room)) {
+        this.refuse(socket, "no game is running here.");
+        return;
+      }
       if (this.byRoom.size >= this.limits.rooms) {
         this.refuse(socket, "this relay is full.");
         return;
@@ -301,6 +317,63 @@ export class RoomBus {
     socket.close();
   }
 }
+
+/** A client attached to a bus with no socket under it.
+ *
+ *  The bus sees a `BusSocket`; a `SocketTransport` sees a `SocketLike`; neither
+ *  learns that the other end is in the same process. It is the fake wire from the
+ *  socket tests minus the deliberate queueing, which is worth saying because the
+ *  shape was proved by those tests before this existed.
+ *
+ *  A host peer uses it rather than dialling `ws://127.0.0.1` because the
+ *  alternative subjects the one peer whose entire job is not to go away to its own
+ *  rate limit, its own room cap and its own version check — and makes its liveness
+ *  inside its own game depend on a TCP connection to itself.
+ *
+ *  Delivery is deferred by a microtask, which is the one way an in-process pair
+ *  behaves differently from a real one: without it a handler could re-enter the
+ *  bus from inside a send. */
+export function localPair(bus: RoomBus): SocketLike {
+  let near: SocketLike;
+  const far: BusSocket = {
+    send(text: string): void {
+      queueMicrotask(() => {
+        if (near.readyState === SOCKET_OPEN) near.onmessage?.({ data: text });
+      });
+    },
+    close(): void {
+      queueMicrotask(() => shut());
+    },
+  };
+
+  const shut = (): void => {
+    if (near.readyState === SOCKET_CLOSED) return;
+    (near as { readyState: number }).readyState = SOCKET_CLOSED;
+    bus.gone(far);
+    near.onclose?.();
+  };
+
+  near = {
+    readyState: SOCKET_OPEN,
+    send(text: string): void {
+      if (near.readyState !== SOCKET_OPEN) return;
+      queueMicrotask(() => bus.deliver(far, text));
+    },
+    close: shut,
+    onopen: null,
+    onmessage: null,
+    onclose: null,
+    onerror: null,
+  };
+
+  // The transport dials and then waits to be opened; there is nothing to dial, so
+  // the open is announced as soon as anyone is listening for it.
+  queueMicrotask(() => near.onopen?.());
+  return near;
+}
+
+const SOCKET_OPEN = 1;
+const SOCKET_CLOSED = 3;
 
 /** Ids the bus hands out. Not `mintName`'s room alphabet: a room name is read
  *  aloud and typed back in, and a peer id inside a room is neither. */

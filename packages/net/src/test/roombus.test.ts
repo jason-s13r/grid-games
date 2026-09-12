@@ -7,7 +7,7 @@
 // be correct would be a relay with authority.
 
 import { describe, expect, it } from "vitest";
-import { BUS_VERSION, RoomBus } from "../roombus.js";
+import { BUS_VERSION, RoomBus, localPair } from "../roombus.js";
 import type { BusSocket, Down } from "../roombus.js";
 
 class Recorder implements BusSocket {
@@ -202,6 +202,64 @@ describe("a room bus", () => {
     expect(bus.rooms().get("abc234")).toEqual(["alice"]);
 
     bus.gone(a);
+    expect(bus.rooms().has("abc234")).toBe(false);
+  });
+});
+
+describe("a bus that only serves its own games", () => {
+  it("refuses a room it is not in, with the answer a joiner wants", () => {
+    // A bus that creates any room asked for is an open relay for strangers'
+    // traffic, which is a different product from a host peer serving the game it
+    // is in. And "no game is running here" is what a joiner needs to hear, rather
+    // than sitting in an empty room they were quietly given.
+    const bus = new RoomBus({ serves: (room) => room === "abc234" });
+    const mine = new Recorder();
+    const theirs = new Recorder();
+
+    join(bus, mine, "abc234", "alice");
+    expect(mine.last("welcome")).toBeDefined();
+
+    join(bus, theirs, "somewhere-else", "mallory");
+    expect(theirs.last("closed")?.reason).toMatch(/no game is running here/);
+  });
+
+  it("still lets a second peer into a room that exists", () => {
+    const bus = new RoomBus({ serves: (room) => room === "abc234" });
+    const [a, b] = [new Recorder(), new Recorder()];
+    join(bus, a, "abc234", "alice");
+    join(bus, b, "abc234", "bob");
+    expect(b.last("welcome")?.peers.sort()).toEqual(["alice", "bob"]);
+  });
+});
+
+describe("localPair", () => {
+  it("puts a peer in the room with no socket under it", async () => {
+    const bus = new RoomBus();
+    const near = localPair(bus);
+    const heard: string[] = [];
+    near.onmessage = (event) => heard.push(String(event.data));
+
+    await Promise.resolve();
+    near.send(JSON.stringify({ op: "join", v: BUS_VERSION, room: "abc234", id: "host" }));
+    // Two turns: the send is deferred, and so is the answer. That deferral is the
+    // one way an in-process pair differs from a real one, and it is deliberate —
+    // without it a handler could re-enter the bus from inside a send.
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(bus.rooms().get("abc234")).toEqual(["host"]);
+    expect(heard.some((text) => text.includes('"welcome"'))).toBe(true);
+  });
+
+  it("leaves the room when it is closed", async () => {
+    const bus = new RoomBus();
+    const near = localPair(bus);
+    await Promise.resolve();
+    near.send(JSON.stringify({ op: "join", v: BUS_VERSION, room: "abc234", id: "host" }));
+    await Promise.resolve();
+    await Promise.resolve();
+
+    near.close();
     expect(bus.rooms().has("abc234")).toBe(false);
   });
 });

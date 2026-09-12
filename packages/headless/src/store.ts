@@ -15,7 +15,14 @@
 import { appendFile, mkdir, readFile, readdir, rename, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { Archive, encodeSnapshot, decodeSnapshot } from "@tessera/net";
-import type { ArchivedGame, ArchiveRecord, ArchiveSource, Checkpointed, SnapshotStore } from "@tessera/net";
+import type {
+  ArchivedGame,
+  ArchiveRecord,
+  ArchiveSource,
+  Checkpointed,
+  ResumePoint,
+  SnapshotStore,
+} from "@tessera/net";
 import type { Genesis } from "@tessera/sim";
 import { hex } from "@tessera/sim";
 
@@ -29,12 +36,16 @@ export interface ArchiveHead {
    *  so is the difference between an honest partial archive and a mysterious
    *  hash mismatch. */
   from: number;
+  /** Steps the log jumps at, because this peer adopted a state rather than
+   *  simulating into it. `from` already makes a reader refuse; this says where. */
+  gaps?: number[];
   steps: number;
   hash: string;
   updatedAt: number;
 }
 
 const HEAD = "head.json";
+const RESUME = "resume.json";
 const LOG = "log.jsonl";
 const GENESIS = "genesis.json";
 const SNAPSHOTS = "snapshots";
@@ -71,6 +82,19 @@ export class FileArchive {
    *  together is a log nothing will parse. */
   private queue: Promise<void> = Promise.resolve();
   private pending: string[] = [];
+  /** The head figures, taken at the instant the log is cut.
+   *
+   *  `flush` used to read `steps` and `hash` off the live source *after* awaiting
+   *  a write per new snapshot, and every await in between is a chance for `pump`
+   *  to advance the world — so head could describe a step whose moves were still
+   *  pending, and a reader replaying the log to `steps` got a hash mismatch on an
+   *  archive that was not wrong. An observer met that on a crash; a served
+   *  endpoint meets it whenever a fetch lands during a flush. */
+  private mark: { steps: number; hash: string } = { steps: 0, hash: hex(0) };
+  private jumps: number[] = [];
+  /** The newest resume point written, so a poll that finds the same one is
+   *  free. */
+  private resumedAt = -1;
   private timer?: ReturnType<typeof setInterval>;
   private closed = false;
   private first = true;
@@ -90,6 +114,7 @@ export class FileArchive {
     // be paying twice for one copy.
     this.archive = new Archive(options.genesis, options.source, { retain: false });
     this.archive.onRecord = (record) => this.append(record);
+    this.mark = { steps: this.archive.steps, hash: hex(options.source.hash()) };
   }
 
   /** Lay the directory out and write the record everything else refers to. */
@@ -103,6 +128,13 @@ export class FileArchive {
   }
 
   private append(record: ArchiveRecord): void {
+    if (record.k === "gap") {
+      // From here the log is a fragment whatever it was told at construction:
+      // the inputs between the last recorded step and this one were never seen.
+      this.jumps.push(record.to);
+      this.from = record.to;
+      this.first = false;
+    }
     if (this.first) {
       this.first = false;
       // Where the log actually starts. A peer that joined an hour into a game
@@ -117,6 +149,13 @@ export class FileArchive {
   }
 
   private drain(): Promise<void> {
+    // Before the splice and with no await in between: whatever goes to disk on
+    // this pass covers every step below `steps`, and `hash` is that state.
+    //
+    // `onApplied` fires before `sim.advance`, so a mark taken here may sit one
+    // step behind a record already in the log. That is the safe direction — a
+    // replay simply does not reach the extra move, and the next flush covers it.
+    this.mark = { steps: this.archive.steps, hash: hex(this.options.source.hash()) };
     if (this.pending.length === 0) return this.queue;
     const lines = this.pending.splice(0, this.pending.length);
     this.queue = this.queue.then(() => this.ready).then(() =>
@@ -146,8 +185,9 @@ export class FileArchive {
       format: 1,
       gameId: this.options.genesis.gameId ?? "",
       from: this.from,
-      steps: this.archive.steps,
-      hash: hex(this.options.source.hash()),
+      ...(this.jumps.length > 0 ? { gaps: [...this.jumps] } : {}),
+      steps: this.mark.steps,
+      hash: this.mark.hash,
       updatedAt: Date.now(),
     };
     // Through a temp file: head.json is the one thing a reader trusts to be
@@ -155,6 +195,28 @@ export class FileArchive {
     // parses as nothing at all.
     const path = join(this.dir, HEAD);
     await writeFile(`${path}.tmp`, `${JSON.stringify(head, null, 2)}\n`);
+    await rename(`${path}.tmp`, path);
+  }
+
+  /** Keep the newest resume point this peer has ever held.
+   *
+   *  Written rather than derived on demand, and the reason is a four-minute
+   *  clock. `resumePoint()` returns the newest witnessed step it still holds the
+   *  *bytes* for, and `SnapshotStore` keeps eight — but `checkpoint()` puts a
+   *  snapshot every interval on every peer whether or not anybody is playing,
+   *  while witnesses only arrive with a CHECKPOINT from a seat. Eight intervals
+   *  after the last player leaves the two maps are disjoint, and the endpoint a
+   *  dormant game is re-entered through goes quiet forever.
+   *
+   *  On disk it also survives a restart, and it is exactly the artifact a
+   *  replacement host fetches. */
+  async resume(point: ResumePoint): Promise<void> {
+    if (point.step <= this.resumedAt) return;
+    this.resumedAt = point.step;
+    const path = join(this.dir, RESUME);
+    // head.json's discipline, for head.json's reason: a crash halfway through
+    // writing it would leave a file that parses as nothing at all.
+    await writeFile(`${path}.tmp`, `${JSON.stringify(point)}\n`);
     await rename(`${path}.tmp`, path);
   }
 
@@ -176,6 +238,19 @@ export class FileArchive {
  *  Nothing here trusts the files: a truncated last line is dropped, an
  *  unparseable one is skipped, and what comes out goes to `verifyArchive` like
  *  any other archive — which is where being wrong is caught. */
+/** The resume point a host kept, or null if it never held one. Its counterpart
+ *  is `FileArchive.resume`, and what reads it is the host's `/resume` endpoint
+ *  and a replacement host taking over a dormant game. */
+export async function readResumePoint(dir: string): Promise<ResumePoint | null> {
+  const text = await readFile(join(dir, RESUME), "utf8").catch(() => null);
+  if (!text) return null;
+  try {
+    return JSON.parse(text) as ResumePoint;
+  } catch {
+    return null;
+  }
+}
+
 export async function readArchive(dir: string): Promise<ArchivedGame & { from: number }> {
   const genesis = JSON.parse(await readFile(join(dir, GENESIS), "utf8")) as Genesis;
   const head = JSON.parse(await readFile(join(dir, HEAD), "utf8")) as ArchiveHead;
@@ -188,6 +263,7 @@ export async function readArchive(dir: string): Promise<ArchivedGame & { from: n
     amendments: [],
     messages: [],
     from: head.from ?? 0,
+    ...(head.gaps?.length ? { gaps: head.gaps } : {}),
     steps: head.steps ?? 0,
     hash: head.hash ?? "",
   };

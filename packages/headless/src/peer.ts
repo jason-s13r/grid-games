@@ -17,7 +17,7 @@ import type { Genesis } from "@tessera/sim";
 import { Roster } from "@tessera/protocol";
 import type { Identity } from "@tessera/protocol";
 import { Lobby, Lockstep, parseRef } from "@tessera/net";
-import type { Seat, Transport } from "@tessera/net";
+import type { ConnectionRef, HostPlan, LobbyPlayer, Opener, Seat, Transport } from "@tessera/net";
 import { installWebRTC, shutdownWebRTC } from "./webrtc.js";
 
 /** How often to pump. One step's worth: the driver simulates up to the step the
@@ -62,6 +62,82 @@ export interface JoinedGame {
   /** The step the simulation has reached, for a caller printing progress. */
   readonly step: number;
   stop(): Promise<void>;
+}
+
+export interface HostOptions {
+  identity: Identity;
+  /** Where the room is. A host serving its own bus passes the ref it is serving;
+   *  one hosting a WebRTC room passes nothing and is handed a code. */
+  ref?: ConnectionRef;
+  /** Open the connection. A host serving its own relay attaches in process, so
+   *  this is how it hands the lobby a transport over `localPair` rather than a
+   *  socket to itself. */
+  connect?: Opener;
+  /** The peer id to claim. On WebRTC this is also the room code. */
+  id?: string;
+  iceServers?: RTCIceServer[];
+  /** Decide the game, when the room is ready. Returning null means "not yet":
+   *  the host keeps waiting and is asked again as people arrive.
+   *
+   *  The composer's own key is always among the members present and a host peer
+   *  never seats itself, so every plan it composes must list that key under
+   *  `watching` — otherwise `checkPlan` refuses it as "somebody here has no
+   *  seat", which is the guard that stops a browser host sealing a game with
+   *  somebody's name missing from it. */
+  compose: (players: LobbyPlayer[]) => HostPlan | null;
+  interval?: number;
+  onDriver?: (driver: Lockstep, genesis: Genesis, seat?: Seat) => void;
+  /** The room filled up or the deadline passed and nothing could be composed. */
+  onWaiting?: (players: LobbyPlayer[]) => void;
+}
+
+export interface HostedGame extends JoinedGame {
+  /** What to give somebody who wants in: a room code, or a whole link. */
+  shareable: string;
+}
+
+/** Open a room, compose a game in it, and keep simulating it until told to stop.
+ *
+ *  The host is a client with a job and never a server of truth. It seals the
+ *  genesis — which is all a host has ever done — and then holds no seat, signs no
+ *  checkpoints, casts no vote, and counts for nothing in the abandonment rule,
+ *  which counts empires by their silence and a peer with no empire is not in the
+ *  sum. Its presence changes no hash. */
+export async function hostGame(options: HostOptions): Promise<HostedGame> {
+  if (options.ref?.kind !== "socket") await installWebRTC();
+
+  let driving: Lockstep | undefined;
+  const lobby = await Lobby.open(options.identity, options.ref, {
+    hosting: true,
+    ...(options.connect ? { connect: options.connect } : {}),
+    ...(options.id ? { id: options.id } : {}),
+    ...(options.iceServers ? { iceServers: options.iceServers } : {}),
+    onReconnect: () => driving?.requestSnapshot(),
+  });
+
+  const started = new Promise<{ genesis: Genesis; seat?: Seat; transport: Transport }>((resolve) => {
+    lobby.onStart = (genesis, seat, transport) => resolve({ genesis, seat, transport });
+  });
+
+  let sealing = false;
+  lobby.onChange = () => {
+    if (sealing || lobby.phase === "playing") return;
+    const plan = options.compose(lobby.players());
+    if (!plan) {
+      options.onWaiting?.(lobby.players());
+      return;
+    }
+    // One at a time: `host` is async, and a second arrival landing inside it
+    // would compose a second genesis for the same room.
+    sealing = true;
+    void lobby.host(plan).then((sealed) => {
+      if (!sealed) sealing = false;
+    });
+  };
+  lobby.onChange();
+
+  const joined = await started;
+  return { ...run(options, lobby, joined, (driver) => (driving = driver)), shareable: lobby.shareable };
 }
 
 /** Join a running game and keep simulating it until told to stop. */
@@ -125,6 +201,18 @@ export async function joinGame(options: JoinOptions): Promise<JoinedGame> {
     throw error;
   }
 
+  return run(options, lobby, joined, (driver) => (driving = driver));
+}
+
+/** Build the driver, pump it, and hand back the handle. Shared by joining and
+ *  hosting, because the only difference between those two is how the genesis
+ *  record arrived: after it, a host is an ordinary peer. */
+function run(
+  options: { identity: Identity; interval?: number; onDriver?: JoinOptions["onDriver"] },
+  lobby: Lobby,
+  joined: { genesis: Genesis; seat?: Seat; transport: Transport },
+  hold: (driver: Lockstep) => void,
+): JoinedGame {
   const { genesis, seat, transport } = joined;
   const driver = new Lockstep({
     genesis,
@@ -134,7 +222,7 @@ export async function joinGame(options: JoinOptions): Promise<JoinedGame> {
     identity: options.identity,
     seat,
   });
-  driving = driver;
+  hold(driver);
 
   /** Repair a disagreement by rebuilding from somebody else's state.
    *

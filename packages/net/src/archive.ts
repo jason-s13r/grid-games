@@ -52,6 +52,11 @@ export interface ArchivedGame {
    *  so is the difference between an honest partial archive and a hash mismatch
    *  nobody can account for. */
   from?: number;
+  /** Steps where the log jumps because this peer adopted a state rather than
+   *  simulating into it. `from` already makes every reader refuse — including one
+   *  built before this field existed — and this says *where*, so a reader that
+   *  cares can name the hole rather than only report that the log begins late. */
+  gaps?: number[];
 }
 
 /** Where the archive reads the step and hash it is claiming. A `Sim` is one and
@@ -66,7 +71,12 @@ export interface ArchiveSource {
 export type ArchiveRecord =
   | { k: "move"; entry: SignedMove | Move }
   | { k: "amend"; amendment: SignedAmendment }
-  | { k: "chat"; message: SignedMessage };
+  | { k: "chat"; message: SignedMessage }
+  /** The simulation jumped to an adopted state, so the inputs between the last
+   *  recorded step and this one were never seen by this peer. Written down
+   *  because an unrecorded jump is the one thing that turns an archive into a
+   *  file that claims to replay and does not. */
+  | { k: "gap"; to: number };
 
 export interface ArchiveOptions {
   /** Keep every record in memory as well as emitting it. True is right for a
@@ -83,12 +93,14 @@ interface Archivable extends ArchiveSource {
   onApplied?: (step: number, moves: readonly Move[], signed: readonly SignedMove[]) => void;
   onMessage?: (message: Message, text: string | null, signed?: SignedMessage) => void;
   onAmended?: (amendment: SignedAmendment) => void;
+  onAdopted?: (step: number) => void;
 }
 
 export class Archive {
   private readonly entries: Array<SignedMove | Move> = [];
   private readonly amended: SignedAmendment[] = [];
   private readonly said: SignedMessage[] = [];
+  private readonly jumped: number[] = [];
   private readonly retain: boolean;
   private reached = 0;
   private counted = 0;
@@ -123,6 +135,7 @@ export class Archive {
     const applied = driver.onApplied;
     const message = driver.onMessage;
     const amended = driver.onAmended;
+    const adopted = driver.onAdopted;
 
     driver.onApplied = (step, moves, signed) => {
       applied?.(step, moves, signed);
@@ -136,11 +149,16 @@ export class Archive {
       amended?.(amendment);
       this.amend(amendment);
     };
+    driver.onAdopted = (step) => {
+      adopted?.(step);
+      this.gap(step);
+    };
 
     return () => {
       driver.onApplied = applied;
       driver.onMessage = message;
       driver.onAmended = amended;
+      driver.onAdopted = adopted;
     };
   }
 
@@ -162,12 +180,32 @@ export class Archive {
     this.record({ k: "chat", message });
   }
 
+  /** The simulation jumped rather than advanced. From here the log is a fragment
+   *  and says so — `from` is what makes every reader refuse it, including one
+   *  written before gaps existed. */
+  gap(step: number): void {
+    this.jumped.push(step);
+    this.record({ k: "gap", to: step });
+  }
+
+  /** Where this archive's log becomes replayable-from-the-start, or 0 if it
+   *  always was. A peer that adopted a state has a hole behind it whatever it saw
+   *  first. */
+  get begins(): number {
+    return this.jumped.length > 0 ? this.jumped[this.jumped.length - 1]! : 0;
+  }
+
+  /** Every step this archive jumped at, oldest first. */
+  get gaps(): readonly number[] {
+    return this.jumped;
+  }
+
   private record(record: ArchiveRecord): void {
     if (record.k === "move") this.counted++;
     if (this.retain) {
       if (record.k === "move") this.entries.push(record.entry);
       else if (record.k === "amend") this.amended.push(record.amendment);
-      else this.said.push(record.message);
+      else if (record.k === "chat") this.said.push(record.message);
     }
     this.onRecord?.(record);
   }
@@ -183,6 +221,7 @@ export class Archive {
       messages: [...this.said],
       steps: this.steps,
       hash: hex(this.source.hash()),
+      ...(this.jumped.length > 0 ? { from: this.begins, gaps: [...this.jumped] } : {}),
     };
   }
 }

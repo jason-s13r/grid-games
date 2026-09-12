@@ -60,6 +60,13 @@ export interface Plan {
    *  two easy ones is a different game from three of anything, and it is the
    *  more interesting one. */
   simbots: readonly BotChoice[];
+  /** Keys that are present and deliberately unseated.
+   *
+   *  A host peer's own key is the whole of this list today: it composes the game
+   *  and then watches it. Named rather than inferred, because "the composer is
+   *  unseated" and "the composer forgot to seat themselves" are the same tree and
+   *  only one of them is on purpose. */
+  watching?: readonly MemberKey[];
 }
 
 /** Seats one empire may hold, which is the genesis rule every peer will check
@@ -80,6 +87,11 @@ export function checkPlan(plan: Plan, expected: Iterable<MemberKey>): string {
 
   const waiting = new Set(expected);
   for (const key of seated) if (!waiting.delete(key)) return "a stranger is seated";
+  // Deliberately unseated, and therefore not the thing this check is looking
+  // for. It is looking for somebody the composer forgot.
+  for (const key of plan.watching ?? []) {
+    if (!waiting.delete(key)) return "somebody is both seated and watching";
+  }
   if (waiting.size > 0) return "somebody here has no seat";
 
   // The cap that keeps sides comparable. Every empire in the game gets the same
