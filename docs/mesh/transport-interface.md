@@ -21,7 +21,8 @@ The three implementations:
 
 | Implementation | Used by |
 |---|---|
-| [`PeerMesh`](webrtc-mesh.md) | real games |
+| [`PeerMesh`](webrtc-mesh.md) | real games, peer to peer |
+| [`SocketTransport`](socket-transport.md) | real games, through a [room bus](room-bus.md) |
 | a thin wrapper the [`Lobby`](the-lobby.md) returns | real games, so early frames are not lost |
 | [`LocalHub.port()`](local-hub.md) | a page hosting a locally-seated bot |
 | `LoopbackNetwork.connect()` | the test harness |

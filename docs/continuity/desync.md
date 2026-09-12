@@ -32,6 +32,16 @@ weAreTheMajority = agreeing * 2 > claims.size + 1
   "State disagreement… rebuilding from a checkpoint" and calls
   [`requestSnapshot`](resume.md).
 
+**Which peer rebuilds is the peer's own business.** `Lockstep` does not call
+`requestSnapshot` on a desync of its own accord; whoever holds the driver wires
+`onDesync` to it. Every peer now does — the web client always did, and
+[headless peers](../clients/headless-peers.md) do since the socket transport
+landed. Before that a headless seat never repaired and was dropped on schedule,
+and a headless *observer* never repaired **and was never dropped**: it holds no
+seat, so it broadcasts no checkpoints, so nothing could see that it disagreed. It
+kept archiving a game that did not happen, and because the archive is
+self-consistent, verifying it returned VERIFIED.
+
 ## The majority's clock
 
 A majority peer records each disagreeing step in `disagreements[seat]`, cleared

@@ -18,7 +18,7 @@ formatRef(ref: ConnectionRef): string    // the exact inverse
 
 | Input | Reads as |
 |---|---|
-| `ws://…` or `wss://…` | `socket`. The last path segment is the room, everything before it is the server. |
+| `ws://…` or `wss://…` | `socket` — a room on a [room bus](room-bus.md), opened by the [socket transport](socket-transport.md). The last path segment is the room, everything before it is the server. |
 | anything else in the room charset | `rtc`, verbatim — a [PeerJS](webrtc-mesh.md) peer id. |
 | anything else | an error that names both forms. |
 

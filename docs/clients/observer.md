@@ -36,6 +36,10 @@ Options for `follow`: `--dir` (default `./archives`), `--key` (default
 `<dir>/identity.jwk`), `--as <id>`, `--ice <urls>` (replaces PeerJS's relays),
 `--quiet`.
 
+A socket ref needs no `--ice` — there is no ICE to configure — and loads no
+native WebRTC at all, which is the difference between an install that works on a
+small VPS and one that does not.
+
 `--as` warns rather than fails when given an id outside the room charset: such an
 id can be claimed at a broker and then never typed back into a join box, which
 defeats the point of asking for a stable one. It is ignored on a socket ref,

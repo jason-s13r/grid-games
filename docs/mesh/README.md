@@ -11,6 +11,8 @@ agreed world is large enough that it and the recovery paths around it live in
 | [transport-interface.md](transport-interface.md) | The four methods the driver needs; the loopback network the tests use |
 | [connection-refs.md](connection-refs.md) | `ConnectionRef` — the string you join with, and which transport it chooses |
 | [webrtc-mesh.md](webrtc-mesh.md) | `PeerMesh` — the PeerJS broker, the full mesh, chunking, TURN |
+| [socket-transport.md](socket-transport.md) | `SocketTransport` — a room on a relay, the outbound buffer, the reconnect |
+| [room-bus.md](room-bus.md) | The relay's wire contract: the envelope, the rules, the limits |
 | [local-hub.md](local-hub.md) | `LocalHub` — running several drivers (a seated bot) in one page |
 | [the-lobby.md](the-lobby.md) | `Lobby` — from "two peers connected" to "one agreed genesis" |
 
@@ -24,7 +26,15 @@ agreed world is large enough that it and the recovery paths around it live in
    Lobby → Lockstep                   Lobby → Lockstep
        │                                   │
    Sim + Roster                       Sim + Roster
+
+   …or the same game through a relay, which is fanout and nothing else:
+
+   browser ──┐                        ┌── browser
+             ├── room bus (room → sockets, stamps `from`, parses no frame)
+   headless ─┘                        └── host peer
 ```
+
+Both shapes carry the same frames, and neither carries any authority.
 
 Which transport a peer opens is decided by the [ref](connection-refs.md) it was
 given, in one place, once.

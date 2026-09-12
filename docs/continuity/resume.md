@@ -26,8 +26,19 @@ So it sets `holdingForResume`, and [`pump`](lockstep.md) does nothing but wait:
 
 ## Rebuilding
 
-[`eject`](ejection.md) with `late = true`, and persistent majority
-[desync](desync.md), both call `requestSnapshot()`.
+Three reasons to rebuild, and they do not all belong to the same party:
+
+- [`eject`](ejection.md) with `late = true` — **the driver's own call**;
+- persistent minority [desync](desync.md) — **the client's call**. `Lockstep`
+  fires `onDesync`; whoever holds the driver answers it with
+  `requestSnapshot()`. Every peer wires this now, but it is wiring rather than
+  machinery, and the distinction stayed invisible for as long as browsers were
+  the only peers that ever desynced;
+- **a reconnected socket**, also the client's call. The
+  [socket transport](../mesh/socket-transport.md) holds our own writes across an
+  outage, so nothing of ours is lost — but nothing replays what everybody else
+  said while we were away, so `onReconnect` asks for a snapshot. A data channel
+  never fires it: it does not reconnect, the peer is simply gone.
 
 ## requestSnapshot / onSnapshotRequest
 

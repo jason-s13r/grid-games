@@ -2,7 +2,8 @@
 
 Tessera is a serverless, peer-to-peer recreation of the grid-territory game
 *Empire Attack*. Browsers (and headless Node processes) form a WebRTC mesh with
-**no authoritative server**. Peers exchange **moves, never board state**: every
+**no authoritative server** — or meet in a room on a relay that forwards bytes
+and holds no more authority than the mesh's broker does. Peers exchange **moves, never board state**: every
 peer runs a bit-identical deterministic simulation from a shared seed, and a
 periodically broadcast hash of that state is the entire consensus and
 compatibility contract.
