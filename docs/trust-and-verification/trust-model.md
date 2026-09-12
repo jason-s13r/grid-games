@@ -13,7 +13,8 @@ is no mechanism to configure and nothing to switch off.
 | Replay a move into another game, or as another record type | the [domain tag and game id](../protocol/signed-records.md) are in the signed bytes |
 | Submit an illegal move | every peer runs [`validate`](../moves/validation.md) — a pure function of state |
 | Lie about the outcome | [stats are hashed](../continuity/what-is-hashed.md); archives are [replayed](verifying-an-archive.md) |
-| Hand out a poisoned snapshot | it is [content-addressed](../continuity/resume.md) — the receiver re-hashes it and reverts if the number is wrong |
+| Hand out a poisoned snapshot **into a live game** | the receiver re-hashes it and reverts if the number is wrong — and, because the hash is only a 32-bit content address and bytes with a chosen hash are cheap to produce, the property that actually defeats it is that every seat's **signed** checkpoint contradicts the forgery within one interval, and the receiver [rebuilds](../continuity/desync.md) |
+| Hand out a poisoned snapshot **into a dormant game** | narrowed rather than closed. With nobody left to contradict it, a forger is stopped only by a [resume point](../continuity/resume-points.md)'s witnesses, which force the lie onto a step the game really reached with a hash its seats really signed |
 | Vote themselves a bigger team | the [seat cap](../gameplay/empires-and-seats.md) is in the genesis **and** re-checked on every amendment |
 | Assert readiness on another seat's behalf | [`Ready`](../protocol/signed-records.md) is signed; doing so and then submitting a move is provable equivocation |
 | Exhaust another peer's memory | moves beyond `moveHorizon` are discarded; snapshot partials are bounded ([chunking](../mesh/webrtc-mesh.md)) |

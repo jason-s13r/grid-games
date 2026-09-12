@@ -14,6 +14,7 @@ in the repository. Everything in this folder is that file or a path through it.
 | [joining.md](joining.md) | The handshake, getting the genesis, taking a seat |
 | [leaving-and-drops.md](leaving-and-drops.md) | A silent seat, the stall timeout, the quorum `Drop` |
 | [resume.md](resume.md) | Arriving late or rebuilding: the snapshot request and `adopt` |
+| [resume-points.md](resume-points.md) | A snapshot a stranger can check: witnesses, the electorate, the tally |
 | [desync.md](desync.md) | Checkpoint comparison; symmetric detection, asymmetric escalation |
 | [equivocation.md](equivocation.md) | Two signatures, one slot; the self-contained proof |
 | [roster-amendments.md](roster-amendments.md) | Seating a substitute or a bot mid-game |

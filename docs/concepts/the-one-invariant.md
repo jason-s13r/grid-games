@@ -21,10 +21,20 @@ it. Consequences:
   bit-identical by construction rather than by careful hand-copying.
 
 The hash is FNV-1a over the snapshot bytes — a 32-bit value, small enough to
-compare by eye or in a CI log. It is not a security hash; it does not need to be,
-because a peer that wanted to fake agreement would still have to produce a real
-snapshot that hashes to the claimed value, and the only way to do that is to run
-the real simulation.
+compare by eye or in a CI log. It is **not** a security hash, and it is worth being
+exact about what that costs. A peer that wants to fake agreement must produce bytes
+that hash to the claimed value, and that is arithmetic rather than simulation:
+FNV-1a is a multiply-and-xor chain over 32 bits, multiplication by the prime is
+invertible mod 2^32, and `restore()` reads every field after the magic number and
+layout version raw. Meet in the middle over five free bytes in any stat slot and
+any target hash falls out in milliseconds.
+
+So the hash is a content **address** and not a proof. What defeats a forged
+snapshot is that every seat broadcasts a *signed* checkpoint every five seconds: a
+peer that adopted one disagrees with everybody within one interval and
+[rebuilds](../continuity/desync.md). For a game with nobody left to disagree — the
+cold start — the signatures have to travel with the bytes, which is what
+[resume points](../continuity/resume-points.md) are.
 
 ## Three things that run through the whole repository
 

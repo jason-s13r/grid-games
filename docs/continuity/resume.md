@@ -34,6 +34,10 @@ Three reasons to rebuild, and they do not all belong to the same party:
   `requestSnapshot()`. Every peer wires this now, but it is wiring rather than
   machinery, and the distinction stayed invisible for as long as browsers were
   the only peers that ever desynced;
+- **a cold start from a [resume point](resume-points.md)** — a dormant game picked
+  up from whatever somebody kept. `adopt`'s hash check is a content address and not
+  a proof, so a point carries signed checkpoints from a majority of the seats that
+  could still sign, and `resume()` runs both halves: the tally, then the bytes;
 - **a reconnected socket**, also the client's call. The
   [socket transport](../mesh/socket-transport.md) holds our own writes across an
   outage, so nothing of ours is lost — but nothing replays what everybody else
