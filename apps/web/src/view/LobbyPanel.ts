@@ -196,7 +196,7 @@ export class LobbyPanel {
     }
     if (lobby.phase === "waiting") {
       return `
-        <p class="hint">Joined <code>${escape(lobby.code)}</code>. The host sets
+        <p class="hint">Joined <code>${escape(lobby.shareable)}</code>. The host sets
         the map, the length and the opponents; the game starts when they do.</p>`;
     }
 
@@ -205,8 +205,8 @@ export class LobbyPanel {
     const crowded = empires.some((keys) => keys.length > MAX_SEATS);
 
     return `
-      <p class="hint">Share this room code:</p>
-      <p class="lobby-room"><code>${escape(lobby.code)}</code></p>
+      <p class="hint">Share this room:</p>
+      <p class="lobby-room"><code>${escape(lobby.shareable)}</code></p>
       <p class="hint">${players.length} player${players.length === 1 ? "" : "s"} here${
         alone ? " — waiting for someone to join" : ""
       }.</p>

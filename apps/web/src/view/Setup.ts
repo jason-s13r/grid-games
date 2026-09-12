@@ -175,9 +175,10 @@ export class Setup {
           <button class="btn setup-pick" type="button" data-setup-action="solo">Solo</button>
           <button class="btn setup-pick" type="button" data-setup-action="host">Host multiplayer</button>
         </div>
-        <p class="hint setup-or">…or join a game somebody has sent you the code for:</p>
+        <p class="hint setup-or">…or join a game somebody has sent you the code or
+        link for:</p>
         <div class="lobby-actions">
-          <input class="lobby-code" data-setup-code placeholder="room code" spellcheck="false" />
+          <input class="lobby-code" data-setup-code placeholder="room code or link" spellcheck="false" />
           <button class="btn" type="button" data-setup-action="join">Join</button>
         </div>`;
     }
