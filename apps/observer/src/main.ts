@@ -94,7 +94,7 @@ async function watch(code: string): Promise<void> {
     },
   });
 
-  say(`playing  ${peer.genesis.gameId} as ${peer.lobby.mesh.id}`);
+  say(`playing  ${peer.genesis.gameId} as ${peer.lobby.connection.id}`);
   if (values.as) say(`dial     ${values.as} to rejoin this game`);
 
   const progress = setInterval(() => {

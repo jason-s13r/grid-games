@@ -12,7 +12,7 @@
 // its own key in the roster and knows which seat it holds. Nothing after that
 // point needs a host at all.
 //
-// The lobby also owns the mesh's only listener. A joiner cannot build its
+// The lobby also owns the connection's only listener. A joiner cannot build its
 // driver until the genesis record arrives, and game frames share the channel
 // with it, so anything that turns up in that gap is buffered here and replayed
 // into the driver the moment it exists.
@@ -37,7 +37,10 @@ import {
   toBase64Url,
 } from "@tessera/protocol";
 import type { Frame, HelloFrame, MemberKey } from "@tessera/protocol";
-import { PeerMesh, createMesh } from "./mesh.js";
+import { openConnection } from "./connect.js";
+import type { Connection, ConnectOptions, Opener } from "./connect.js";
+import { formatRef } from "./ref.js";
+import type { ConnectionRef } from "./ref.js";
 import { checkPlan } from "./teams.js";
 import type { Seat } from "./lockstep.js";
 import type { FrameHandler, Transport } from "./transport.js";
@@ -60,7 +63,8 @@ export interface LobbyMember {
 
 /** A player as the host's team picker sees them. */
 export interface LobbyPlayer {
-  /** The mesh peer id. Empty for us: we have no connection to ourselves. */
+  /** Their peer id on this connection. Empty for us: we have no connection to
+   *  ourselves. */
   peer: string;
   key: MemberKey;
   /** Eight hex characters of the key's digest — short enough to read aloud,
@@ -137,7 +141,6 @@ export function explain(genesis: Genesis, problems: readonly string[]): string {
 
 export class Lobby {
   phase: LobbyPhase = "connecting";
-  code = "";
   problem = "";
   readonly members = new Map<string, MemberKey>();
 
@@ -160,56 +163,74 @@ export class Lobby {
 
   private constructor(
     readonly identity: Identity,
-    readonly mesh: PeerMesh,
-    readonly join?: string,
+    readonly connection: Connection,
+    /** Where we are, resolved: what the joiner typed, or — for a host — the
+     *  room the broker has just handed us. Known only after the connection is
+     *  open, which is why it is a constructor argument and not a parse
+     *  result. */
+    readonly ref: ConnectionRef,
+    /** Whether we arrived at somebody else's room. Not `!!ref` — a host has a
+     *  ref too, the one it was just given. */
+    private readonly joined: boolean,
   ) {
-    this.code = join ?? mesh.id;
-    this.phase = join ? "waiting" : "hosting";
-    this.mesh.listen((from, frame) => this.route(from, frame));
+    this.phase = joined ? "waiting" : "hosting";
+    this.connection.listen((from, frame) => this.route(from, frame));
     void this.label(identity.key);
 
-    if (join) {
+    if (joined) {
       this.watchdog = setTimeout(() => {
-        if (this.phase !== "waiting" || this.mesh.peers().length > 0) return;
+        if (this.phase !== "waiting" || this.connection.peers().length > 0) return;
         this.fail(
-          `no answer from ${join}. Either the code is wrong, the host has closed the ` +
-            `game, or your networks cannot reach each other directly.`,
+          `no answer from ${this.shareable}. Either the code is wrong, the host has closed ` +
+            `the game, or your networks cannot reach each other directly.`,
         );
       }, JOIN_TIMEOUT_MS);
     }
   }
 
-  /** PeerJS arrives here, on demand: a solo game never downloads it. Resolves
-   *  once the broker has assigned an id, because until then there is no room
-   *  code to put on screen. */
+  /** The room token: a peer id on WebRTC, a room name on a socket. Shown where
+   *  a short thing is wanted, and fed to the map seed. */
+  get code(): string {
+    return this.ref.kind === "rtc" ? this.ref.code : this.ref.room;
+  }
+
+  /** What a player actually sends to somebody else. Identical to `code` for a
+   *  WebRTC room, and a whole link for a socket one. */
+  get shareable(): string {
+    return formatRef(this.ref);
+  }
+
+  /** Open a lobby on the connection a ref names. A transport arrives here on
+   *  demand — a solo game downloads neither PeerJS nor anything else — and this
+   *  resolves once the connection has an id, because until then there is no
+   *  room to put on screen.
+   *
+   *  **`undefined` means host.** A ref is a string somebody typed, and nobody
+   *  types "host", so there is no variant for "start a room here"; absent a ref
+   *  we are the room. That is WebRTC's shape, where a peer id *is* a room code.
+   *  Over a socket the room bus creates a room on first join, so hosting is not
+   *  a separate act and the question of who composes the genesis there belongs
+   *  to the host peer. */
   static async open(
     identity: Identity,
-    join?: string,
-    options: { iceServers?: RTCIceServer[]; id?: string } = {},
+    ref?: ConnectionRef,
+    options: ConnectOptions & { connect?: Opener } = {},
   ): Promise<Lobby> {
     let lobby: Lobby | undefined;
-    const mesh = await createMesh({
-      join,
-      prefix: "tsr-",
-      ...(options.iceServers ? { iceServers: options.iceServers } : {}),
-      ...(options.id ? { id: options.id } : {}),
+    const connection = await (options.connect ?? openConnection)(ref, {
+      ...options,
       onJoin: (peer) => lobby?.welcome(peer),
       onLeave: (peer) => {
         lobby?.members.delete(peer);
         lobby?.changed();
       },
-      onError: (error) => {
-        if (!lobby) return;
-        // PeerJS tags its errors; the two that matter to a player are being
-        // unable to reach the broker at all and naming a room that is not there.
-        const type = (error as Error & { type?: string }).type;
-        if (type === "peer-unavailable") lobby.fail(`no game is running under ${join}.`);
-        else if (type === "network" || type === "server-error") {
-          lobby.fail("lost contact with the matchmaking broker.");
-        } else lobby.fail(error.message);
-      },
+      // One line, because the transport already turned its own vocabulary into
+      // a sentence. A transport that cannot is a transport with no error
+      // messages, which is the pressure this boundary is meant to apply.
+      onError: (error) => lobby?.fail(error.message),
     });
-    lobby = new Lobby(identity, mesh, join);
+    const here: ConnectionRef = ref ?? { kind: "rtc", code: connection.id };
+    lobby = new Lobby(identity, connection, here, !!ref);
     return lobby;
   }
 
@@ -219,7 +240,7 @@ export class Lobby {
     // Mid-game arrival: someone reloaded, or opened the room again from another
     // device. They cannot ask for the genesis, because until they have it they
     // do not know the game id every other frame is signed against.
-    if (this.sealed) this.mesh.send(peer, { t: FRAME.GENESIS, genesis: this.sealed });
+    if (this.sealed) this.connection.send(peer, { t: FRAME.GENESIS, genesis: this.sealed });
     this.changed();
   }
 
@@ -273,7 +294,7 @@ export class Lobby {
    *  a lobby hello proves nothing beyond "here is a key to seat me under".
    *  Everything that decides anything is signed against a real game id. */
   private greet(peer: string): void {
-    this.mesh.send(peer, {
+    this.connection.send(peer, {
       t: FRAME.HELLO,
       // The version at stake, not the version of this build: once a game is
       // adopted the stake is the game's, for its whole life.
@@ -348,7 +369,7 @@ export class Lobby {
     });
 
     const sealed = await sealGenesis(genesis);
-    this.mesh.broadcast({ t: FRAME.GENESIS, genesis: sealed });
+    this.connection.broadcast({ t: FRAME.GENESIS, genesis: sealed });
     await this.adopt(sealed);
     return true;
   }
@@ -383,15 +404,15 @@ export class Lobby {
     this.onStart?.(genesis, seat, this.baseTransport());
   }
 
-  /** The page's one view of the mesh. Its listener is routed through the lobby
+  /** The page's one view of the connection. Its listener is routed through the lobby
    *  so frames that arrived early are not lost. */
   private baseTransport(): Transport {
-    const mesh = this.mesh;
+    const connection = this.connection;
     return {
-      id: mesh.id,
-      peers: () => mesh.peers(),
-      broadcast: (frame) => mesh.broadcast(frame),
-      send: (to, frame) => mesh.send(to, frame),
+      id: connection.id,
+      peers: () => connection.peers(),
+      broadcast: (frame) => connection.broadcast(frame),
+      send: (to, frame) => connection.send(to, frame),
       listen: (handler) => {
         this.handler = handler;
         const waiting = this.backlog.splice(0, this.backlog.length);
@@ -409,6 +430,6 @@ export class Lobby {
 
   close(): void {
     this.clearWatchdog();
-    this.mesh.close();
+    this.connection.close();
   }
 }

@@ -15,7 +15,8 @@ import {
   Sim,
 } from "@tessera/sim";
 import { Roster } from "@tessera/protocol";
-import { Archive, Lobby, Lockstep, MAX_SEATS } from "@tessera/net";
+import { Archive, Lobby, Lockstep, MAX_SEATS, parseRef } from "@tessera/net";
+import type { ConnectionRef } from "@tessera/net";
 import pkg from "../package.json";
 import { LocalGame } from "./game/Local";
 import { boardClick } from "./game/input";
@@ -584,7 +585,7 @@ const setup = new Setup(
   {
     start: (mode) => (mode === "solo" ? startSolo() : startHosted()),
     host: () => void begin(),
-    join: (code) => void begin(code),
+    join: (input) => void begin(input),
     back: () => leaveMesh(),
     summary: (mode) => summarise(mode),
   },
@@ -632,14 +633,27 @@ function rosterView(driver: Lockstep): RosterView {
   };
 }
 
-async function begin(code?: string): Promise<void> {
+async function begin(input?: string): Promise<void> {
   if (lobby) return;
+
+  // Parsed before the panel says "connecting", because a string that was never
+  // going to be a room should not flash a spinner on its way to being rejected.
+  // This is the whole of the client's involvement in transports: one input, and
+  // the string chooses.
+  let ref: ConnectionRef | undefined;
+  try {
+    if (input) ref = parseRef(input);
+  } catch (error) {
+    panel.detach((error as Error).message);
+    return;
+  }
+
   panel.connecting();
 
   const identity = await myIdentity();
   let opened: Lobby;
   try {
-    opened = await Lobby.open(identity, code);
+    opened = await Lobby.open(identity, ref);
   } catch (error) {
     // Reaching the broker can fail outright — offline, blocked, or the service
     // is down. Swallowing it left the panel looking like the click did nothing.
@@ -685,7 +699,7 @@ async function begin(code?: string): Promise<void> {
     mesh = driver;
     if (seat) openChat(seat);
 
-    mount(new OnlineGame(driver, lobby!.mesh));
+    mount(new OnlineGame(driver, lobby!.connection));
     // The record is sealed and every peer has checked it, so there is nothing
     // left on the setup screen to configure — only who is in the game, which
     // the panel keeps showing.

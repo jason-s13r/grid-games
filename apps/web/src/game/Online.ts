@@ -1,4 +1,4 @@
-// Mesh play: the same simulation, driven by signed moves from every seat.
+// Network play: the same simulation, driven by signed moves from every seat.
 //
 // Nothing here decides anything about the game. It adapts the lockstep driver
 // to the interface the view already speaks, and turns its callbacks into a line
@@ -6,7 +6,7 @@
 
 import { MOVE, STEPS_PER_SECOND } from "@tessera/sim";
 import type { Move, Sim } from "@tessera/sim";
-import type { Lockstep, PeerMesh } from "@tessera/net";
+import type { Lockstep, Transport } from "@tessera/net";
 import type { Driver, MoveKind } from "./Driver";
 
 export class OnlineGame implements Driver {
@@ -21,7 +21,9 @@ export class OnlineGame implements Driver {
 
   constructor(
     private readonly lockstep: Lockstep,
-    private readonly mesh: PeerMesh,
+    /** Read for its peer count and nothing else, which is why it is the
+     *  narrow interface rather than whichever transport opened it. */
+    private readonly net: Transport,
   ) {
     lockstep.onEjection = (who, atStep, reason) => {
       const seat = `Empire ${who.empire} seat ${who.member}`;
@@ -117,9 +119,9 @@ export class OnlineGame implements Driver {
       return `Waiting for ${who}`;
     }
     if (!this.lockstep.seat) {
-      return `Watching · ${this.mesh.peers().length} peers · step ${this.lockstep.step}`;
+      return `Watching · ${this.net.peers().length} peers · step ${this.lockstep.step}`;
     }
-    const peers = this.mesh.peers().length;
+    const peers = this.net.peers().length;
     return `${peers} peer${peers === 1 ? "" : "s"} · step ${this.lockstep.step}`;
   }
 }

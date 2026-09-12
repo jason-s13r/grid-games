@@ -6,8 +6,10 @@
     "declaration": true,
     "declarationMap": true,
     "sourceMap": true,
-    // DOM is here for mesh.ts alone — RTCIceServer and the data-channel
-    // types. Everything the lockstep driver touches must stay Node-runnable.
+    // DOM is here for the browser types a transport cannot avoid naming:
+    // RTCIceServer and the data-channel types in mesh.ts and connect.ts, URL
+    // in ref.ts. Everything the lockstep driver touches must stay
+    // Node-runnable.
     "lib": ["ES2022", "DOM"]
   },
   "include": ["src"],
