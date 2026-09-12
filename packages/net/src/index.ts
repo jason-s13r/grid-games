@@ -1,11 +1,13 @@
 export { LoopbackNetwork } from "./transport.js";
 export type { Transport, FrameHandler, LoopbackOptions } from "./transport.js";
-export { SnapshotStore, encodeSnapshot, decodeSnapshot } from "./snapshots.js";
+export { SnapshotStore, SNAPSHOT_TAIL, encodeSnapshot, decodeSnapshot } from "./snapshots.js";
 export type { Checkpointed } from "./snapshots.js";
 export { Archive, ARCHIVE_FORMAT, verifyArchive, seatsOf } from "./archive.js";
 export type { ArchivedGame, ArchiveOptions, ArchiveRecord, ArchiveSource, Verdict } from "./archive.js";
 export { rankArchives } from "./rankings.js";
 export type { Leaderboard, Standing } from "./rankings.js";
+export { rosterAt, verifyResumePoint } from "./resume.js";
+export type { ResumePoint, ResumeTally } from "./resume.js";
 export { Lockstep } from "./lockstep.js";
 export type { LockstepOptions, Seat, EjectionReason } from "./lockstep.js";
 export { PeerBot } from "./peerbot.js";

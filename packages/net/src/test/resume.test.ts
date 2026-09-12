@@ -96,6 +96,10 @@ describe("a peer arriving late resumes without being told to", () => {
       transport: t.net.connect("latecomer"),
       now: t.clock.now,
       snapshotInterval: 24,
+      // Matching the table's own pair. A snapshot interval that is not a multiple
+      // of the checkpoint interval means snapshots landing on steps no seat ever
+      // signs for, which the driver now refuses to be built with.
+      checkpointInterval: 12,
     });
     latecomer.start();
 
@@ -153,6 +157,7 @@ describe("a reload rejoins with its own seat intact", () => {
       now: t.clock.now,
       stallTimeout: 60_000,
       snapshotInterval: 24,
+      checkpointInterval: 12,
     });
     back = {
       name: "e2m0-again",
@@ -241,6 +246,10 @@ describe("a resume request that goes unanswered", () => {
       transport: t.net.connect("deaf"),
       now: t.clock.now,
       snapshotInterval: 24,
+      // Matching the table's own pair. A snapshot interval that is not a multiple
+      // of the checkpoint interval means snapshots landing on steps no seat ever
+      // signs for, which the driver now refuses to be built with.
+      checkpointInterval: 12,
     });
     latecomer.start();
 

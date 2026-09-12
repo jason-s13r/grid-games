@@ -54,12 +54,15 @@ import type {
   Message,
   Roster,
   SignedAmendment,
+  SignedCheckpoint,
   SignedDrop,
   SignedMessage,
   SignedMove,
 } from "@tessera/protocol";
 import type { Transport } from "./transport.js";
-import { SnapshotStore, decodeSnapshot, encodeSnapshot } from "./snapshots.js";
+import { SNAPSHOT_TAIL, SnapshotStore, decodeSnapshot, encodeSnapshot } from "./snapshots.js";
+import { verifyResumePoint } from "./resume.js";
+import type { ResumePoint, ResumeTally } from "./resume.js";
 
 export interface Seat {
   empire: number;
@@ -235,6 +238,13 @@ export class Lockstep {
   private readonly ejected = new Map<string, number>();
   private readonly ourHashes = new Map<number, number>();
   private readonly claims = new Map<number, Map<string, number>>();
+  /** Signed checkpoints kept whole, at snapshot steps only.
+   *
+   *  `claims` keeps hashes and is pruned to a forty-second horizon by `forget`,
+   *  because that is all `compare` needs. A witness has to outlive the snapshot
+   *  it vouches for, so it is a separate map with the snapshot store's tail and
+   *  no other retention rule. */
+  private readonly witnesses = new Map<number, Map<string, SignedCheckpoint>>();
   private readonly watch = new EquivocationWatch();
   /** Wall-clock, and deliberately never consulted when deciding what to
    *  simulate. It only decides when to *propose* a drop; what the drop does is
@@ -307,6 +317,18 @@ export class Lockstep {
     this.gameId = options.genesis.gameId ?? "";
     this.inputDelay = options.inputDelay ?? DEFAULT_INPUT_DELAY;
     this.now = options.now ?? (() => Date.now());
+
+    // Both intervals are free options a caller sets independently, and a pair
+    // that does not divide produces a driver where every other part works
+    // perfectly and `resumePoint()` returns undefined forever, silently.
+    const snapshotInterval = options.snapshotInterval ?? DEFAULT_SNAPSHOT_INTERVAL;
+    const checkpointInterval = options.checkpointInterval ?? DEFAULT_CHECKPOINT_INTERVAL;
+    if (snapshotInterval % checkpointInterval !== 0) {
+      throw new Error(
+        `snapshotInterval (${snapshotInterval}) must be a multiple of checkpointInterval ` +
+          `(${checkpointInterval}), or no snapshot ever lands on a step anyone signed for`,
+      );
+    }
   }
 
   get seat(): Seat | undefined {
@@ -596,7 +618,13 @@ export class Lockstep {
           hash,
           empire: seat.empire,
           member: seat.member,
-        }).then((signed) => this.transport.broadcast({ t: FRAME.CHECKPOINT, signed }));
+        }).then((signed) => {
+          // Ours counts. Without this the electorate in a two-seat game is 2 and
+          // the most a peer could ever hold is 1, which is not a majority — so no
+          // two-seat game could produce a resume point at all.
+          this.witness(signed);
+          this.transport.broadcast({ t: FRAME.CHECKPOINT, signed });
+        });
       }
       this.forget(step);
     }
@@ -721,6 +749,7 @@ export class Lockstep {
     sig: string;
   }): Promise<void> {
     if (!(await verifyCheckpoint(this.roster, this.gameId, signed))) return;
+    this.witness(signed);
     const { step, hash, empire, member } = signed.checkpoint;
 
     let atStep = this.claims.get(step);
@@ -1226,9 +1255,92 @@ export class Lockstep {
     }
   }
 
+  /** Keep a signed checkpoint whole, if there is a snapshot at its step for it to
+   *  vouch for. Everything else about it has already been done by the caller —
+   *  this is a side effect on the way past, and nothing in the driver reads the
+   *  map except `resumePoint`. */
+  private witness(signed: SignedCheckpoint): void {
+    const interval = this.options.snapshotInterval ?? DEFAULT_SNAPSHOT_INTERVAL;
+    const { step } = signed.checkpoint;
+    if (step % interval !== 0) return; // no snapshot here to vouch for
+    let at = this.witnesses.get(step);
+    if (!at) this.witnesses.set(step, (at = new Map()));
+    at.set(seatKey(signed.checkpoint), signed);
+    while (this.witnesses.size > SNAPSHOT_TAIL) {
+      this.witnesses.delete(Math.min(...this.witnesses.keys()));
+    }
+  }
+
+  /** Seats that could still sign: the roster, less anyone ejected. */
+  private electorate(): number {
+    return this.roster.all().filter((seat) => !this.ejected.has(seatKey(seat))).length;
+  }
+
+  /** The newest snapshot this peer holds that a majority of live seats signed for.
+   *
+   *  Newest rather than best: an older point is not safer, only staler, and
+   *  staleness costs a returning peer real steps to re-simulate. */
+  resumePoint(): ResumePoint | undefined {
+    for (const step of [...this.witnesses.keys()].sort((a, b) => b - a)) {
+      const stored = this.snapshots.get(step);
+      if (!stored) continue;
+      // Only the witnesses that agree with the bytes we are about to send. A peer
+      // that was desynced at this step signed a different hash for it, honestly,
+      // and it vouches for somebody else's state rather than ours.
+      const agreeing = [...this.witnesses.get(step)!.values()].filter(
+        (signed) => signed.checkpoint.hash === stored.hash,
+      );
+      if (agreeing.length < Math.floor(this.electorate() / 2) + 1) continue;
+      return {
+        step,
+        hash: stored.hash,
+        data: encodeSnapshot(stored.data),
+        amendments: [...this.applied],
+        drops: [...this.enforced],
+        witnesses: agreeing,
+      };
+    }
+    return undefined;
+  }
+
+  /** Take a resume point, having checked it.
+   *
+   *  Returns the tally rather than a boolean: a caller that wants a boolean reads
+   *  `.ok`, and a caller that wants to tell a player why it refused cannot
+   *  recover the reason from `false`. */
+  async resume(point: ResumePoint): Promise<ResumeTally> {
+    const tally = await verifyResumePoint(this.options.genesis, point);
+    if (!tally.ok) return tally;
+    if (point.step < this.sim.step) {
+      return { ...tally, ok: false, problems: [...tally.problems, "that point is behind us"] };
+    }
+    const buffer = decodeSnapshot(point.data);
+    if (!buffer) {
+      return { ...tally, ok: false, problems: [...tally.problems, "the snapshot will not decode"] };
+    }
+    // The roster first, for the reason onSnapshot gives: a state whose seats
+    // cannot be attributed leaves this peer rejecting moves everyone else accepts.
+    await this.catchUpRoster(point.amendments ?? []);
+    await this.catchUpDrops(point.drops ?? []);
+    if (!this.adopt(buffer, point.hash)) {
+      return {
+        ...tally,
+        ok: false,
+        problems: [...tally.problems, "the bytes are not the state they claim"],
+      };
+    }
+    return tally;
+  }
+
   /** Safe from anyone: restore it, hash it, and put the old state back if the
-   *  number disagrees. The hash is the proof, which is exactly what lets an
-   *  untrusted archive peer be useful without being trusted. */
+   *  number disagrees.
+   *
+   *  The hash is a content *address*, not a proof — it is 32-bit FNV-1a, and
+   *  bytes with a chosen hash are arithmetic rather than a search. What makes an
+   *  untrusted peer's snapshot safe to take is that everyone's signed checkpoints
+   *  contradict a forged one within one checkpoint interval; `resume` is the
+   *  version of that argument for a game with nobody left to do the
+   *  contradicting. */
   adopt(buffer: ArrayBuffer, expected: number): boolean {
     const backup = this.sim.snapshot();
     try {

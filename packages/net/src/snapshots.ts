@@ -14,13 +14,19 @@ export interface Checkpointed {
   data: ArrayBuffer;
 }
 
+/** How many snapshots a peer keeps, and therefore how far back a resume point can
+ *  reach. Named because the witnesses a resume point carries have to be kept to
+ *  the same depth: a witness without its snapshot vouches for nothing, and a
+ *  snapshot without its witnesses is only a content address. */
+export const SNAPSHOT_TAIL = 8;
+
 export class SnapshotStore {
   private readonly kept = new Map<number, Checkpointed>();
 
   /** Snapshots are megabytes on a large map, so the store is a short tail
    *  rather than a history. Anything older is reconstructed by replaying the
    *  move log, which is what the log is for. */
-  constructor(private readonly keep = 8) {}
+  constructor(private readonly keep = SNAPSHOT_TAIL) {}
 
   put(entry: Checkpointed): void {
     this.kept.set(entry.step, entry);
