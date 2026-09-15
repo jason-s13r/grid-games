@@ -87,6 +87,41 @@ describe("checking a plan", () => {
   it("refuses an empty plan", () => {
     expect(checkPlan({ empires: [], simbots: ["steady", "steady"] }, here)).toMatch(/nobody is seated/);
   });
+
+  // An empire held open for somebody who has not arrived yet. Asked for as a
+  // count, deliberately: `empires` is `MemberKey[][]`, a shape in which a
+  // vacancy is indistinguishable from a mistake, so an empty entry there stays
+  // the error it always was and a vacancy stays a decision somebody made.
+  describe("empires held open", () => {
+    it("accepts them beside a game two empires are already playing", () => {
+      expect(checkPlan({ empires: [["a"], ["b"]], simbots: [], vacancies: 2 }, here)).toBe("");
+    });
+
+    it("does not let one stand in for the second player", () => {
+      // The trap this check exists for. An unclaimed empire is territory, so
+      // `victory.ts` leaves it out of `alive` — one player plus one vacancy is
+      // one empire standing, `WIN.LAST_EMPIRE` fires on the first pass, and the
+      // game ends before anybody can arrive into the seat it was held open for.
+      const said = checkPlan({ empires: [["a", "b"]], simbots: [], vacancies: 1 }, here);
+      expect(said).toMatch(/somebody is playing/);
+    });
+
+    it("still refuses an empty entry in the seat lists", () => {
+      // The two say different things and only one of them is on purpose.
+      expect(
+        checkPlan({ empires: [["a"], [], ["b"]], simbots: [], vacancies: 1 }, here),
+      ).toMatch(/no members/);
+    });
+
+    it("refuses a count that is not a whole number of empires", () => {
+      expect(
+        checkPlan({ empires: [["a"], ["b"]], simbots: [], vacancies: -1 }, here),
+      ).toMatch(/whole number/);
+      expect(
+        checkPlan({ empires: [["a"], ["b"]], simbots: [], vacancies: 1.5 }, here),
+      ).toMatch(/whole number/);
+    });
+  });
 });
 
 describe("the seat cap", () => {

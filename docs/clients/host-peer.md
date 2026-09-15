@@ -86,6 +86,17 @@ there is no safe default number of players:
   somebody else's team.
 - **`--wait <secs>`** seals early at a deadline with whoever is present, because a
   host that waits forever for a fifth player is a room three people gave up on.
+- **`--vacancies <n>`** holds `n` empires open for people who have not arrived
+  yet — the reason a host peer is the natural place to ask for one, since a
+  vacancy is only useful in a game that is still there when the person who wants
+  it turns up. The flag overrides `vacancies` in the plan file, so a seat can be
+  held open without editing a roster you want otherwise unchanged.
+
+A held-open empire **cannot be the second empire**. It is territory rather than a
+player, so it is outside every count victory makes — one player plus one vacancy
+is one empire standing, and the game would end before anybody could arrive into
+the seat. `--auto 1 --vacancies 1` is refused for that reason, and says so. See
+[vacancies](../gameplay/empires-and-seats.md).
 
 When both are given, `--auto` wins and the plan file is the *settings* — bots, map,
 duration. A refusal from `checkPlan` is **fatal**, not retried: the reasons are

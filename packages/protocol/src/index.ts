@@ -17,6 +17,10 @@ export {
   encodeMessage,
   encodeMove,
   encodeReady,
+  encodeClaim,
+  claimMove,
+  signClaim,
+  verifyClaim,
   endorseAmendment,
   endorseDrop,
   mergeAmendment,
@@ -43,6 +47,8 @@ export type {
   Amendment,
   Channel,
   Checkpoint,
+  Claim,
+  SignedClaim,
   Drop,
   EquivocationProof,
   Message,
@@ -58,6 +64,7 @@ export type {
 export { FRAME, encodeFrame, decodeFrame } from "./wire.js";
 export type {
   AmendmentFrame,
+  ClaimFrame,
   ByeFrame,
   CheckpointFrame,
   DropFrame,

@@ -67,6 +67,13 @@ export interface Plan {
    *  unseated" and "the composer forgot to seat themselves" are the same tree and
    *  only one of them is on purpose. */
   watching?: readonly MemberKey[];
+  /** Empires to leave unclaimed, for somebody to arrive into later.
+   *
+   *  A count, asked for, and that is the point of the field existing at all.
+   *  `empires` is `MemberKey[][]`, a shape in which a vacancy is indistinguishable
+   *  from a mistake — so an empty array stays the error it always was, and a
+   *  vacancy stays a decision somebody made. Absent or 0 is today's game. */
+  vacancies?: number;
 }
 
 /** Seats one empire may hold, which is the genesis rule every peer will check
@@ -83,7 +90,11 @@ export function checkPlan(plan: Plan, expected: Iterable<MemberKey>): string {
   const seated = plan.empires.flat();
   if (seated.length === 0) return "nobody is seated";
   if (new Set(seated).size !== seated.length) return "somebody is seated twice";
+  // Still an error. A vacancy is `vacancies`, which somebody typed a number
+  // into; an empty entry here is a seat list that lost its seats.
   if (plan.empires.some((keys) => keys.length === 0)) return "an empire has no members";
+  const vacancies = plan.vacancies ?? 0;
+  if (!Number.isInteger(vacancies) || vacancies < 0) return "a vacancy count is a whole number";
 
   const waiting = new Set(expected);
   for (const key of seated) if (!waiting.delete(key)) return "a stranger is seated";
@@ -102,6 +113,17 @@ export function checkPlan(plan: Plan, expected: Iterable<MemberKey>): string {
   }
 
   // One empire is last-empire-standing on the first step: a game nobody plays.
-  if (plan.empires.length + plan.simbots.length < 2) return "a game needs at least two empires";
+  //
+  // **Vacancies do not count toward this**, and that is the whole of what makes
+  // the check worth rewriting. An unclaimed empire is territory, so `victory.ts`
+  // leaves it out of `alive` — which means one player plus one vacancy is one
+  // empire standing and `WIN.LAST_EMPIRE` fires on the first pass. The game
+  // would end before anybody could arrive into the seat it was held open for,
+  // which is a trap wearing the shape of a feature.
+  if (plan.empires.length + plan.simbots.length < 2) {
+    return vacancies > 0
+      ? "a game needs two empires somebody is playing — a held-open seat cannot be one of them"
+      : "a game needs at least two empires";
+  }
   return "";
 }

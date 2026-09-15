@@ -192,6 +192,12 @@ export class Renderer {
       if (isProtected(state, empire)) cls += " is-protected";
     }
 
+    // An unclaimed empire's pocket. Drawn because a region where every click
+    // silently fails is not a rule players can play around; it is a bug they
+    // will report. The shield is the one rule in the game that refuses a move
+    // for a reason nothing on the board would otherwise show.
+    if (state.shielded[i]! > 0) cls += " is-shielded";
+
     if (el.className !== cls) el.className = cls;
 
     const attr = owner > 0 ? String(owner) : "";

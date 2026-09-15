@@ -65,6 +65,7 @@ Options:
   --reachable <base>   the URL the outside world reaches this host at, if it is
                        not --bind:--port — a proxy, a tunnel, a certificate
   --plan <file>        a fixed roster: empires of member keys, bots, map, duration
+  --vacancies <n>      empires left unclaimed, for players to arrive into later
   --auto <n>           seal as soon as n players are here, one empire each
   --wait <secs>        seal early at this deadline with whoever is present
   --dir <path>         where archives go (default ./archives)
@@ -88,6 +89,7 @@ const { values, positionals } = parseArgs({
     port: { type: "string", default: "8080" },
     ref: { type: "string" },
     announce: { type: "string" },
+    vacancies: { type: "string" },
     ttl: { type: "string" },
     reachable: { type: "string" },
     plan: { type: "string" },
@@ -161,6 +163,10 @@ async function run(): Promise<void> {
   }
 
   const file = await planFile(values.plan);
+  // The flag wins over the file, so a host can hold a seat open for somebody
+  // without editing a roster it otherwise wants unchanged.
+  const asked = number(values.vacancies, "--vacancies");
+  if (asked !== undefined) file.vacancies = asked;
   const auto = number(values.auto, "--auto");
   const wait = number(values.wait, "--wait");
   if (!values.plan && auto === undefined && !values.ref) {
@@ -171,17 +177,30 @@ async function run(): Promise<void> {
   // composes, is refused, and prints that it is waiting for players who have
   // already arrived — forever.
   const bots = file.simbots?.length ?? 0;
+  // A vacancy counts toward a world worth playing in and not toward there being
+  // anybody to play against — it cannot play. So it is in the total below and
+  // never a substitute for a seat.
+  const vacant = file.vacancies ?? 0;
   if (auto === undefined && values.plan && file.empires.length === 0) {
     throw new Error(
       `${values.plan} seats nobody. A game with no human seats is a game nobody is ` +
         `playing — name empires in it, or use --auto <n> to seat whoever arrives`,
     );
   }
+  // Vacancies are deliberately not in this sum. An unclaimed empire is
+  // territory, so it is outside every count `victory.ts` makes — one player plus
+  // one vacancy is one empire standing, and the game ends before anybody can
+  // arrive into the seat it was held open for.
   if (auto !== undefined && auto + bots < 2) {
+    const total = auto + bots;
     throw new Error(
-      `--auto ${auto} would be a game of ${auto + bots} empire${auto + bots === 1 ? "" : "s"}; ` +
-        `a game needs two. Wait for more players, or give --plan a file with simbots in it`,
+      `--auto ${auto} would be a game of ${total} empire${total === 1 ? "" : "s"} somebody is ` +
+        `playing; a game needs two, and a --vacancies seat cannot be one of them. Wait for ` +
+        `more players, or add simbots to --plan`,
     );
+  }
+  if (vacant > 0 && auto === undefined && !values.plan) {
+    throw new Error("--vacancies needs a game to put them in: --plan <file> or --auto <n>");
   }
 
   const port = number(values.port, "--port") ?? 8080;

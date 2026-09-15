@@ -12,7 +12,7 @@
 //     bytes share a signature. Out of range is therefore rejected before the
 //     encoder is ever reached, on both sides.
 
-import { MOVE } from "@tessera/sim";
+import { MEMBER, MOVE } from "@tessera/sim";
 import type { MemberKind, Move, MoveType } from "@tessera/sim";
 import { Writer, concat, utf8 } from "./bytes.js";
 import { Identity, verify } from "./identity.js";
@@ -26,6 +26,7 @@ const TAG_AMENDMENT = "tessera/amendment/1";
 const TAG_HELLO = "tessera/hello/1";
 const TAG_READY = "tessera/ready/1";
 const TAG_DROP = "tessera/drop/1";
+const TAG_CLAIM = "tessera/claim/1";
 
 export const NONCE_BYTES = 16;
 
@@ -456,7 +457,17 @@ export interface Tally {
  *  is not finished yet: one valid signature is what tells it a proposal is real
  *  rather than noise, and worth holding a step open for. Counting is the
  *  expensive part either way — one verification per signature — so the two
- *  questions share it. */
+ *  questions share it.
+ *
+ *  The vacant-empire guard below — no members, no tally — is load-bearing in a
+ *  way it was not written to be, and it is worth saying that it stays. An
+ *  empire nobody has claimed has no seats to endorse anything, and the
+ *  temptation is to read that as "zero endorsements is the quorum rule on an
+ *  empty set" and let it through. It is not: `Roster.quorum` of an empty empire
+ *  is one, and a path that seated a key on nobody's authority would be the
+ *  amendment path doing exactly what its quorum exists to prevent. Arriving at
+ *  an unclaimed empire goes through `verifyClaim`, which is a different
+ *  function for a different rule, and the two stay apart. */
 export async function tallyAmendment(
   roster: Roster,
   gameId: string,
@@ -510,6 +521,104 @@ export function amendmentMove(amendment: Amendment, seq: number, by: number): Mo
     seq,
     type: MOVE.ROSTER_AMEND,
     x: amendment.kind,
+    y: 0,
+  };
+}
+
+// --- claiming a vacancy ------------------------------------------------------
+
+/** Arriving at a game as yourself, in an empire nobody has taken.
+ *
+ *  A claim cannot be a `Move`. Moves carry no key — attribution is
+ *  `roster.keyOf(empire, member)` — and a claimant holds no seat, so
+ *  `verifyMove` refuses one by construction, correctly. So it is a signed record
+ *  that names its own key, exactly as an amendment does, and converts into the
+ *  same ordinary ROSTER_AMEND move.
+ *
+ *  What it is **not** is an amendment with the quorum relaxed. An amendment
+ *  needs a majority of the empire's existing seats and a vacant empire has none
+ *  to ask; `Roster.quorum` of an empty empire is 1, not 0, and `tallyAmendment`
+ *  refuses a vacant empire outright. That path was deliberately closed against
+ *  exactly this record and it stays closed — `verifyClaim` is a separate
+ *  function beside `verifyAmendment`, not a loosening of it. What the two share
+ *  is the move they produce and the order they produce it in.
+ *
+ *  What stops a claim being forged is that it is signed by the key it seats.
+ *  What stops it being abused is that a vacancy can be claimed once, and that is
+ *  enforced where authorisation already lives — in the driver, against the
+ *  roster as it stands — because the simulation cannot tell a claim from an
+ *  amendment and should not be taught to. */
+export interface Claim {
+  empire: number;
+  key: MemberKey;
+  step: number;
+}
+
+export interface SignedClaim {
+  claim: Claim;
+  /** By `claim.key`, and there is no second signature to collect: the record
+   *  authorises itself, which is the whole difference from an amendment. */
+  sig: string;
+}
+
+export function encodeClaim(gameId: string, claim: Claim): Uint8Array {
+  const key = utf8(claim.key);
+  if (!u8(claim.empire) || claim.empire < 1 || !u32(claim.step)) {
+    throw new Error("claim field out of range");
+  }
+  if (!u16(key.length) || key.length === 0) throw new Error("claim key is absurd");
+
+  const record = new Writer(9 + key.length)
+    .u32(claim.step)
+    .u8(claim.empire)
+    .u32(key.length)
+    .raw(key)
+    .finish();
+  return concat(preamble(TAG_CLAIM, gameId), record);
+}
+
+export async function signClaim(
+  identity: Identity,
+  gameId: string,
+  claim: Omit<Claim, "key">,
+): Promise<SignedClaim> {
+  const whole: Claim = { ...claim, key: identity.key };
+  return { claim: whole, sig: await identity.sign(encodeClaim(gameId, whole)) };
+}
+
+/** Whether a claim was signed by the key it seats, and nothing else.
+ *
+ *  Deliberately narrow. That the empire is actually vacant, that the step is
+ *  sane, that nobody else got there first — every one of those is a question
+ *  about the game rather than about the record, and answering them here would
+ *  put a stale copy of the roster inside a signature check. The driver asks them
+ *  against the roster it is holding at the moment it applies this. */
+export async function verifyClaim(gameId: string, signed: SignedClaim): Promise<boolean> {
+  if (!signed || typeof signed !== "object" || typeof signed.sig !== "string") return false;
+  const claim = signed.claim;
+  if (!claim || typeof claim.key !== "string" || !claim.key) return false;
+  try {
+    return await verify(claim.key, signed.sig, encodeClaim(gameId, claim));
+  } catch {
+    // An out-of-range field throws out of `encodeClaim`, and a record nobody
+    // could have signed is a record that does not verify.
+    return false;
+  }
+}
+
+/** The simulation move an accepted claim produces — the same shape an amendment
+ *  produces, because to the simulation it is the same event: append a member to
+ *  an empire. A claimant is always HUMAN (a bot claiming a vacancy is a bot
+ *  playing a seat nobody chose to give it) and always arrives at member 0, which
+ *  is what `by` says: there is no existing seat to attribute the move to. */
+export function claimMove(claim: Claim, seq: number): Move {
+  return {
+    step: claim.step,
+    empire: claim.empire,
+    member: 0,
+    seq,
+    type: MOVE.ROSTER_AMEND,
+    x: MEMBER.HUMAN,
     y: 0,
   };
 }

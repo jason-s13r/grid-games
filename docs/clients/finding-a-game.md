@@ -214,6 +214,31 @@ It is scoped to what you have, and says so. There is no index of finished games
 anywhere in Tessera — a board holds live doors and drops the row when the last
 one closes — so a public, cross-host table is a plan and not a setting.
 
+## Getting in after it has started
+
+A game listed on a board on Monday is not much use if it only seats the people
+who happened to be in the tab when it was sealed. Two ways in:
+
+**Be voted in.** A team with a spare seat endorses you onto their empire. That is
+the right mechanism for a substitute and the wrong one for a stranger, because it
+needs somebody already inside to say yes.
+
+**Take an empire nobody has taken.** A host can hold empires open when the game is
+composed — `--vacancies` on a [host peer](host-peer.md), *Seats held open* on the
+web client's create form. They are placed by the map generator from the shared
+seed, with a capital and separation like any other empire, before anybody knows
+who will sit there. Once the game is running, an unclaimed empire shows in the
+standings with a **Take it** button, and pressing it puts you in.
+
+You do not choose where. That is the point: you take the ground the map gave that
+empire, not the best ground still going. What you do choose is *which* one.
+
+Your ground is kept clear until you arrive — nothing can be taken, marched
+through or built on inside a radius of the capital — and on arrival that whole
+pocket becomes yours, so you appear with a border to push from rather than one
+tile inside somebody's wall. The [join window](../gameplay/durations.md) closes
+this door at the same time it closes the other one.
+
 ## What is not here yet
 
 - **A game composed together.** Until plan 0009, whoever presses start seals the

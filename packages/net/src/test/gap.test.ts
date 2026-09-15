@@ -57,15 +57,27 @@ describe("an observer whose socket drops", () => {
     const watcher = t.peers.find((peer) => !peer.seat)!;
     expect(t.bus!.socketOf(watcher.name), "the observer should hold a socket").toBeDefined();
 
-    // Killed repeatedly, because the transport is doing its job: the backoff is
-    // real time and a long run gives it several chances to come back. A relay
-    // that stays unreachable is the case worth testing.
+    // Killed on every step, not once per chunk, because the transport is doing
+    // its job: the backoff is real time, and a socket killed once has several
+    // chances to come back inside a five-step run. **A relay that stays
+    // unreachable is the case worth testing**, and the observer only falls
+    // behind while it actually is.
+    //
+    // Once per chunk was enough until the driver started waiting for its own
+    // signatures. A seated peer now pauses a pump while a move of its own is in
+    // flight — it may not simulate past a step it has an unsent move for — so
+    // the seats no longer reliably outrun an observer that keeps reconnecting,
+    // and "did it fall behind" became a race between two kinds of latency
+    // rather than a fact about a dead socket.
+    const clicking = await clickAround(t, 12);
+    for (let i = 0; i < 8; i++) {
+      await run(t, 5, async (step) => {
+        t.bus!.socketOf(watcher.name)?.kill();
+        await clicking(step);
+      });
+    }
     // The world does not wait for it, which is exactly what makes an always-on
     // archive peer possible and exactly what makes this gap invisible.
-    for (let i = 0; i < 8; i++) {
-      t.bus!.socketOf(watcher.name)?.kill();
-      await run(t, 5, await clickAround(t, 12));
-    }
     expect(watcher.driver.step).toBeLessThan(t.peers[0]!.driver.step);
 
     const before = t.bus!.sockets.length;

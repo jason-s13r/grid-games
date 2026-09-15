@@ -6,7 +6,7 @@
 
 import { beforeAll, describe, expect, it } from "vitest";
 import { Sim } from "@tessera/sim";
-import { proveHello, signMove, verifyHello, verifyMove } from "../records.js";
+import { proveHello, signClaim, signMove, verifyHello, verifyMove } from "../records.js";
 import type { SignedMove } from "../records.js";
 import { randomBytes } from "../identity.js";
 import { FRAME, decodeFrame, encodeFrame } from "../wire.js";
@@ -111,6 +111,24 @@ describe("framing", () => {
 // Signing, framing, parsing, verification, and then the simulation deciding.
 // The last step is the point: a signature says who sent a move, never that the
 // move is legal — that judgement belongs to the rules, on every peer alike.
+describe("a claim on the wire", () => {
+  it("round-trips, carrying one signature rather than a tally", async () => {
+    const signed = await signClaim(f.mallory, f.gameId, { empire: 3, step: 240 });
+    const back = decodeFrame(encodeFrame({ t: FRAME.CLAIM, signed }));
+    expect(back?.t).toBe(FRAME.CLAIM);
+  });
+
+  it("is null rather than a throw when there is nothing to verify", () => {
+    // Field-level checking belongs to `verifyClaim`, which has to re-derive the
+    // payload anyway. All this layer asks is whether there is a record here at
+    // all — and it answers with null, never an exception, because a malformed
+    // frame arrives from a stranger and must not be able to stop a driver.
+    expect(decodeFrame('{"t":"claim"}')).toBeNull();
+    expect(decodeFrame('{"t":"claim","signed":"not an object"}')).toBeNull();
+    expect(decodeFrame('{"t":"claim","signed":{}}')?.t).toBe(FRAME.CLAIM);
+  });
+});
+
 describe("wire to simulation", () => {
   it("a move survives the whole path, and the sim is what judges it", async () => {
     const live = new Sim(f.genesis);

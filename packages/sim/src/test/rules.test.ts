@@ -8,10 +8,11 @@ import { beforeAll, describe, expect, it } from "vitest";
 import { Sim, makeGenesis, CLAIM } from "../sim.js";
 import { MOVE, MEMBER, CONTROL, TERRAIN, ITEM, WIN } from "../types.js";
 import { idx } from "../geometry.js";
-import { DEFAULT_RULES, STAT, STEPS_PER_SECOND } from "../constants.js";
+import { DEFAULT_RULES, STAT, STEPS_PER_SECOND, VACANCY_RULES } from "../constants.js";
 import { arena, at, claimNow, held, humans, own, ownerAt, popAt } from "./testkit.js";
 import { DIFFICULTY, TUNING, simbot, tuneBot } from "../specs.js";
 import { turnOf } from "../policy.js";
+import { isProtected } from "../rules.js";
 import type { Difficulty } from "../specs.js";
 import type { BotProfile } from "../types.js";
 
@@ -227,8 +228,14 @@ describe("noob protection", () => {
         rules: {
           coinIntervalMin: 1 << 28,
           coinIntervalMax: 1 << 28,
-          noobTiles: 40,
-          noobSteps: 100 * STEPS_PER_SECOND,
+          graceTiles: 40,
+          graceSteps: 100 * STEPS_PER_SECOND,
+          // The population bars out of the way: this suite is about the tile
+          // threshold and the clock, and a capital that grows past a pop bar
+          // would end protection for a reason none of these tests is asking
+          // about.
+          graceCapitalPop: 1 << 28,
+          gracePopTotal: 1 << 28,
         },
       }),
     );
@@ -267,8 +274,10 @@ describe("noob protection", () => {
 
     beforeAll(() => {
       grown = arena([humans(1), humans(1)], 7, {
-        noobTiles: 40,
-        noobSteps: 100 * STEPS_PER_SECOND,
+        graceTiles: 40,
+        graceSteps: 100 * STEPS_PER_SECOND,
+        graceCapitalPop: 1 << 28,
+        gracePopTotal: 1 << 28,
       });
       victim = grown.state.empires[1]!.capital;
       own(grown, 3, 0, 1); // adjacent to empire 2's parked capital
@@ -282,7 +291,7 @@ describe("noob protection", () => {
 
     it("and the shield lifts at the tile threshold, with the clock untouched", () => {
       grown.state.empires[1]!.tilesOwned = 40;
-      expect(grown.step).toBeLessThan(grown.state.genesis.rules.noobSteps);
+      expect(grown.step).toBeLessThan(grown.state.genesis.rules.graceSteps!);
       expect(grown.validate(CLAIM(grown.step, 1, 0, 0, 4, 0))).toBe(true);
     });
 
@@ -290,6 +299,52 @@ describe("noob protection", () => {
       grown.advance([CLAIM(grown.step, 1, 0, 0, 4, 0)]);
       expect(grown.state.owner[victim]).toBe(1);
     });
+  });
+});
+
+// The claim the two new population bars rest on, measured rather than asserted.
+//
+// `graceCapitalPop` and `gracePopTotal` exist so that "established" means more
+// than "owns ground" — forty tiles of one population each is not an empire that
+// can defend anything, and it is exactly what a claimant holding a granted
+// pocket looks like on the step they arrive. But they are only safe to add if a
+// *genesis-seated* empire still loses protection the way it always did: on the
+// tile bar, first. A default that ended protection early for an ordinary empire
+// would be a silent change to every new game's opening minutes.
+describe("a game with vacancies still ends an ordinary empire's grace on tiles", () => {
+  it("carries none of the grace rules when nobody asked for a vacancy", () => {
+    // The whole of the no-bump argument, asserted where it can be broken. Two of
+    // the grace fields change `isProtected` for any game at all, and a field in
+    // `rules` is read straight past by an older build — so they must not be in
+    // the defaults. A game with no unclaimed empires composes the rules every
+    // build before this one composed.
+    expect(DEFAULT_RULES).not.toHaveProperty("graceCapitalPop");
+    expect(DEFAULT_RULES).not.toHaveProperty("vacancyRadius");
+  });
+
+  it("keeps the tile bar as the one that fires, with room under both new ones", () => {
+    // Under the vacancy rules, an empire that grows the ordinary way must still
+    // lose protection because of its *tiles*. If either population bar fired
+    // first, adding them would have quietly changed every new game's opening
+    // minutes rather than only a claimant's arrival.
+    const sim = arena([humans(1), humans(1)], 11, {
+      ...VACANCY_RULES,
+      graceSteps: 100 * STEPS_PER_SECOND,
+    });
+    const held = sim.state.empires[1]!;
+    held.tilesOwned = VACANCY_RULES.graceTiles - 1;
+    // One population a tile, which is what an empire spreading thinly looks
+    // like — and what a granted pocket looks like exactly.
+    held.popTotal = held.tilesOwned;
+    sim.state.pop[held.capital] = 1;
+    expect(isProtected(sim.state, held)).toBe(true);
+
+    held.tilesOwned++;
+    held.popTotal++;
+    expect(isProtected(sim.state, held)).toBe(false);
+    // And the reason was the tiles: both population bars still have room.
+    expect(held.popTotal).toBeLessThan(VACANCY_RULES.gracePopTotal);
+    expect(sim.state.pop[held.capital]!).toBeLessThan(VACANCY_RULES.graceCapitalPop);
   });
 });
 

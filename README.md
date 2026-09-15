@@ -76,6 +76,13 @@ It is off, and it is worded as what it sends — the room code and the sealed
 record, which carries every player's key — because that is a disclosure about the
 people you are playing with rather than a display preference.
 
+A game can also hold empires **open**. They are placed by the map generator from
+the shared seed, with a capital and separation like any other, before anybody
+knows who will sit there — so somebody who finds your game on a board on Thursday
+can take one and start playing, on ground the map gave that empire rather than
+whatever was left over. Their pocket is kept clear until they arrive, and becomes
+theirs when they do.
+
 No board ships with this client and none is assumed, which is the point: a board
 is a URL that arrives the way a room code used to. A static JSON file behind any
 HTTP server is a perfectly good one for a group of friends, because

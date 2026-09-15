@@ -26,9 +26,22 @@
 // moves as it applies them. For a latecomer to a running game, the present state
 // plus its re-sent pending moves is both the existing answer and the right one.
 
-import { Roster, verifyAmendment, verifyCheckpoint, verifyDrop } from "@tessera/protocol";
+import {
+  Roster,
+  verifyAmendment,
+  verifyCheckpoint,
+  verifyClaim,
+  verifyDrop,
+} from "@tessera/protocol";
 import type { Genesis } from "@tessera/sim";
-import type { SignedAmendment, SignedCheckpoint, SignedDrop } from "@tessera/protocol";
+import type {
+  SignedAmendment,
+  SignedCheckpoint,
+  SignedClaim,
+  SignedDrop,
+} from "@tessera/protocol";
+import { isClaim, mergeSeatings, seatingOf } from "./seating.js";
+import type { Seating } from "./seating.js";
 
 export interface ResumePoint {
   step: number;
@@ -36,6 +49,11 @@ export interface ResumePoint {
   /** base64url, exactly as the SNAPSHOT frame carries it. */
   data: string;
   amendments: SignedAmendment[];
+  /** Claims, apart from the amendments because they verify by a different rule:
+   *  one signature from the key being seated, rather than a quorum of an
+   *  empire's existing seats. Optional, because every point written before
+   *  vacancies existed has none. */
+  claims?: SignedClaim[];
   drops: SignedDrop[];
   /** (step, hash) signed by seats. The whole point of the file. */
   witnesses: SignedCheckpoint[];
@@ -82,14 +100,20 @@ const isStep = (value: unknown): value is number =>
  *  refactoring the one piece of code that decides who may act. */
 export async function rosterAt(
   genesis: Genesis,
-  amendments: readonly SignedAmendment[],
+  seatings: readonly Seating[],
 ): Promise<Roster> {
   const roster = Roster.fromGenesis(genesis);
   const gameId = genesis.gameId ?? "";
-  for (const record of amendments) {
-    if (roster.has(record.amendment.key)) continue;
-    if (!(await verifyAmendment(roster, gameId, record))) break;
-    const { empire, key, kind, step } = record.amendment;
+  for (const record of seatings) {
+    const { empire, key, kind, step } = seatingOf(record);
+    if (roster.has(key)) continue;
+    // Each by its own rule. A claim is valid only while its empire is still
+    // empty, which is a fact about where in this walk we are rather than about
+    // the record — so the order matters here as much as it does live.
+    const ok = isClaim(record)
+      ? roster.size(empire) === 0 && (await verifyClaim(gameId, record))
+      : await verifyAmendment(roster, gameId, record);
+    if (!ok) break;
     roster.amend(empire, key, kind, step);
   }
   return roster;
@@ -125,7 +149,7 @@ export async function verifyResumePoint(
     return none;
   }
 
-  const roster = await rosterAt(genesis, point.amendments ?? []);
+  const roster = await rosterAt(genesis, mergeSeatings(point.amendments, point.claims));
 
   // Seats that were dropped cannot sign, and counting them in the electorate is
   // what would make a long game unresumable: three signatures needed from two

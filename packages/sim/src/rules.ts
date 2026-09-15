@@ -4,9 +4,10 @@
 
 import { MOVE, ITEM, TERRAIN, MEMBER, PHASE, ELIMINATION } from "./types.js";
 import type { Empire, Member, Move, EmpireId, Item } from "./types.js";
-import { PASSABLE, COIN_RADIUS, SEAT_CEILING, STAT } from "./constants.js";
+import { PASSABLE, COIN_RADIUS, SEAT_CEILING, STAT, STAT_SLOTS } from "./constants.js";
 import { ORTHO, vonNeumannBall, idx, xOf, yOf, inBounds } from "./geometry.js";
 import { bump, raise } from "./stats.js";
+import { isVacant, markShield } from "./state.js";
 import type { State } from "./state.js";
 
 export type DirtySet = Set<number>;
@@ -24,10 +25,53 @@ export function setOwner(state: State, i: number, next: EmpireId): void {
   state.owner[i] = next;
 }
 
-/** Protection lifts on the tile threshold OR the timer, whichever lands first. */
+/** When an empire came into existence, which is not when the game did.
+ *
+ *  The minimum `joinedAt` across its members — a field `Member` already carries
+ *  and `applyMove` already stamps, so this is derived and nothing new is stored.
+ *  An empire seated at genesis is 0 forever however many substitutes it amends
+ *  in on day six: grace belongs to the empire, and a team does not get its
+ *  capital immunity back by recruiting.
+ *
+ *  An empire with no members returns `state.step`, and that is the definition
+ *  rather than a fallback for an empty minimum. An empire that has not arrived
+ *  arrives now — which keeps `since` at 0, keeps every strength bar uncrossed at
+ *  one tile and no population, and therefore makes an unclaimed capital
+ *  protected for as long as it is unclaimed. A second lock behind the shield,
+ *  holding even at `vacancyRadius: 0`. */
+export function arrivedAt(state: State, empire: Empire): number {
+  let earliest = state.step;
+  for (const member of empire.members) earliest = Math.min(earliest, member.joinedAt);
+  return earliest;
+}
+
+/** Whether an empire's capital still cannot be taken.
+ *
+ *  **A hard ceiling in time, lifted early by any one measure of strength.** Read
+ *  it in that order, because the obvious alternative — four conditions OR'd
+ *  together — is a trap: every condition added to a disjunction is another way
+ *  to lose protection early, and a claimant granted a pocket would trip the tile
+ *  bar on the step they arrive. The time bound has to sit *outside* the
+ *  disjunction for grace to mean anything to somebody who arrives holding
+ *  ground.
+ *
+ *  The clock is the empire's own (`arrivedAt`), not the game's. Three minutes
+ *  from step zero is no grace at all to a player claiming a vacancy on day
+ *  three, and that is the difference between a door and a decoration.
+ *
+ *  One tile threshold was always too blunt: forty tiles of one population each
+ *  is not an established empire. The two population bars default high enough
+ *  that a genesis-seated empire crosses the tile bar first, exactly as it does
+ *  today — which is the migration test rather than a hope. */
 export function isProtected(state: State, empire: Empire): boolean {
-  const rules = state.genesis.rules;
-  return empire.tilesOwned < rules.noobTiles && state.step < rules.noobSteps;
+  const r = state.genesis.rules;
+  const since = state.step - arrivedAt(state, empire);
+  if (since >= (r.graceSteps ?? r.noobSteps)) return false;
+  return (
+    state.pop[empire.capital]! < (r.graceCapitalPop ?? Infinity) &&
+    empire.popTotal < (r.gracePopTotal ?? Infinity) &&
+    empire.tilesOwned < (r.graceTiles ?? r.noobTiles)
+  );
 }
 
 /** What a capital will not absorb.
@@ -48,11 +92,69 @@ export function isProtected(state: State, empire: Empire): boolean {
  *  to do it. An empire is annexed by losing its capital, so the alternative was
  *  the whole game reachable from two tiles away. */
 function isShielded(state: State, i: number, attacker: EmpireId, direct = false): boolean {
+  // An unclaimed empire's pocket, and it is checked first because it is a
+  // property of the *ground* rather than of whoever holds the tile: a neutral
+  // tile inside a vacancy's ball is closed, and that is most of the pocket.
+  //
+  // One check closes four routes. Every ownership change in the game goes
+  // through `place`, which asks this on its second line — a claim arrives
+  // through `land`, a march arrives twice (through `land` for the gap tile and
+  // `place` for the target), and a cascade arrives once per tile it touches.
+  // `marchVia` asks separately about the route, so a shield also blocks a march
+  // *through* a pocket rather than only into one.
+  if (state.shielded[i]! > 0) return true;
+
   const owner = state.owner[i]!;
   if (owner === 0 || owner === attacker) return false;
   const empire = state.empires[owner - 1]!;
   if (empire.capital !== i) return false;
   return isProtected(state, empire) || !direct;
+}
+
+/** A vacancy stops being one.
+ *
+ *  Two things happen and the order between them matters. The shield comes down
+ *  first — the ball is walked once and decremented, which is also what makes
+ *  overlapping shields fall out of the data rather than out of special handling:
+ *  a tile under two vacancies drops to one and stays closed. Then the grant
+ *  fills what the shield was keeping.
+ *
+ *  The grant is the branch that makes claiming a vacancy structurally different
+ *  from being amended onto a team, and it is the answer to the camper. Without
+ *  it an arrival appears on a single tile inside a sealed pocket and is annexed
+ *  within minutes: the shield did not protect them, it marked the target and
+ *  told the camper where to build. With it they appear holding the pocket, and a
+ *  camper's wall buys them a siege — a fair thing to have built — rather than a
+ *  kill.
+ *
+ *  Only *neutral, passable* tiles are granted. A tile a camper actually holds is
+ *  theirs and stays theirs; the arrival gets ground to stand on and a border to
+ *  push from, not a free conquest. Ordinary hashed state, applied deterministically
+ *  from the move like any other transition. */
+function claimVacancy(state: State, empire: Empire, dirty: DirtySet): void {
+  markShield(state, empire, -1);
+
+  const grant = state.genesis.rules.vacancyGrant ?? 0;
+  const radius = state.genesis.rules.vacancyRadius ?? 0;
+  if (grant <= 0 || radius <= 0) return;
+
+  const cx = xOf(empire.capital, state.width);
+  const cy = yOf(empire.capital, state.width);
+  for (const [dx, dy] of vonNeumannBall(radius)) {
+    const x = cx + dx;
+    const y = cy + dy;
+    if (!inBounds(x, y, state.width, state.height)) continue;
+    const i = idx(x, y, state.width);
+    // Still under somebody else's shield: a tile inside two vacancies' balls
+    // belongs to neither claimant until both have arrived.
+    if (state.shielded[i]! > 0) continue;
+    if (!passable(state, i)) continue;
+    if (state.owner[i] !== 0 || state.pop[i] !== 0) continue;
+    state.pop[i] = grant;
+    addPop(state, empire.id, grant);
+    setOwner(state, i, empire.id);
+    dirty.add(i);
+  }
 }
 
 function addPop(state: State, empireId: EmpireId, delta: number): void {
@@ -254,7 +356,13 @@ export function validate(state: State, move: Move): boolean {
   const empire = state.empires[move.empire - 1];
   if (!empire || !empire.alive) return false;
   const member = empire.members[move.member];
-  if (!member) return false;
+  // The one move whose mover does not exist yet. A claim on an unclaimed empire
+  // is the record that *creates* the first seat, so there is nothing to look up
+  // — and the exemption is narrowed to exactly that case rather than to every
+  // ROSTER_AMEND, because a bogus member index on an empire that has members is
+  // still a bad move and refusing it is still the right answer.
+  const claiming = !member && move.type === MOVE.ROSTER_AMEND && isVacant(empire);
+  if (!member && !claiming) return false;
 
   const rules = state.genesis.rules;
 
@@ -297,9 +405,16 @@ export function validate(state: State, move: Move): boolean {
   if (!inBounds(move.x, move.y, state.width, state.height)) return false;
   const i = idx(move.x, move.y, state.width);
 
+  // Terrain is not ownership, and these two are the only moves that change the
+  // ground without going through `place`. Left alone, a camper could ladder the
+  // walls and bridge the rivers inside an unclaimed pocket days before anybody
+  // arrived — reshaping ground the claimant is promised, through the one door
+  // the shield does not cover. A smaller exploit than the wall and the same
+  // kind, so it gets the same answer.
   if (move.type === MOVE.PLACE_BRIDGE) {
     return (
       empire.bridges > 0 &&
+      state.shielded[i]! === 0 &&
       state.terrain[i] === TERRAIN.RIVER &&
       adjacentToOwned(state, move.x, move.y, empire.id)
     );
@@ -307,6 +422,7 @@ export function validate(state: State, move: Move): boolean {
   if (move.type === MOVE.PLACE_LADDER) {
     return (
       empire.ladders > 0 &&
+      state.shielded[i]! === 0 &&
       state.terrain[i] === TERRAIN.WALL &&
       adjacentToOwned(state, move.x, move.y, empire.id)
     );
@@ -342,7 +458,12 @@ export function validate(state: State, move: Move): boolean {
 
 export function applyMove(state: State, move: Move, dirty: DirtySet): void {
   const empire = state.empires[move.empire - 1]!;
-  const member = empire.members[move.member]!;
+  // Not asserted non-null. `validate` lets exactly one move through with no
+  // mover — the claim that seats an unclaimed empire's first member — and a
+  // non-null assertion over an empty array is a thrown TypeError inside
+  // `advance`, on every peer, at the same step. `bump` has always taken a null
+  // member, so the empire-only form costs nothing here.
+  const member = empire.members[move.member] ?? null;
   const rules = state.genesis.rules;
 
   bump(empire, member, STAT.MOVES);
@@ -394,8 +515,13 @@ export function applyMove(state: State, move: Move, dirty: DirtySet): void {
     }
 
     case MOVE.ROSTER_AMEND:
-      // Quorum of signatures is verified by the net layer before the move
-      // reaches the sim; here it is a deterministic roster append.
+      // Authorisation is the net layer's, and there are two kinds of it. An
+      // amendment carries a quorum of the empire's existing seats; a claim on an
+      // empire with no seats carries one signature from the key it seats,
+      // because there is nobody to ask. Both arrive here as the same move, and
+      // that is deliberate: the sim addresses members by index and knows nothing
+      // about keys, so it has nowhere to hold the difference and no business
+      // holding it. Here it is a deterministic roster append either way.
       empire.members.push({
         kind: move.x === MEMBER.BOT ? MEMBER.BOT : MEMBER.HUMAN,
         // A seat voted in mid-game plays on the plain rules. Difficulty is
@@ -407,12 +533,16 @@ export function applyMove(state: State, move: Move, dirty: DirtySet): void {
         popAcc: 0,
         lastBeat: state.step,
         joinedAt: state.step,
-        stats: new Uint32Array(member.stats.length),
+        stats: new Uint32Array(STAT_SLOTS),
       });
+      // The empire has just stopped being territory and started being a player.
+      // Its pocket opens on this step — the same step its own grace starts,
+      // because `arrivedAt` is now the `joinedAt` stamped one line above.
+      if (empire.members.length === 1) claimVacancy(state, empire, dirty);
       return;
 
     case MOVE.CLAIM:
-      claim(state, move, empire, member, dirty);
+      claim(state, move, empire, member!, dirty);
       return;
 
     case MOVE.MARCH:

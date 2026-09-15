@@ -18,13 +18,15 @@
 // browser, a loop in a test — which is what makes six peers in one process a
 // deterministic experiment rather than a race.
 
-import { MEMBER, MOVE, STEPS_PER_SECOND } from "@tessera/sim";
+import { MEMBER, MOVE, STEPS_PER_SECOND, isVacant } from "@tessera/sim";
 import type { Genesis, MemberKind, Move, Sim } from "@tessera/sim";
 import {
   CHANNEL,
   EquivocationWatch,
   FRAME,
   amendmentMove,
+  signClaim,
+  verifyClaim,
   endorseAmendment,
   endorseDrop,
   mergeAmendment,
@@ -47,6 +49,7 @@ import {
 import type {
   Amendment,
   Channel,
+  Claim,
   EquivocationProof,
   Frame,
   Identity,
@@ -55,12 +58,15 @@ import type {
   Roster,
   SignedAmendment,
   SignedCheckpoint,
+  SignedClaim,
   SignedDrop,
   SignedMessage,
   SignedMove,
 } from "@tessera/protocol";
 import type { Transport } from "./transport.js";
 import { SNAPSHOT_TAIL, SnapshotStore, decodeSnapshot, encodeSnapshot } from "./snapshots.js";
+import { isClaim, mergeSeatings, seatingMove, seatingOf, seatingOrder } from "./seating.js";
+import type { Seating } from "./seating.js";
 import { verifyResumePoint } from "./resume.js";
 import type { ResumePoint, ResumeTally } from "./resume.js";
 
@@ -228,6 +234,13 @@ export class Lockstep {
    *  needs — the ROSTER_AMEND move in the log carries no signature of its own,
    *  and this record is the authority behind it. */
   onAmended?: (amendment: SignedAmendment) => void;
+  /** Our own claim verified and is booked onto its step. Not "you are seated" —
+   *  that is `onSeated`, and it fires on every peer when the step arrives. */
+  onClaimBooked?: (claim: Claim) => void;
+  /** A claim was applied, on this peer, at its step. The counterpart to
+   *  `onAmended`: the ROSTER_AMEND move in the log carries no signature of its
+   *  own and this record is the authority behind it. */
+  onClaimed?: (claim: SignedClaim) => void;
   /** The simulation was moved to a state rather than advanced into it, so
    *  anything writing the inputs down has a hole between the step it last saw and
    *  this one. Nothing in the driver needs to know; an archive does, and an
@@ -273,11 +286,18 @@ export class Lockstep {
    *  over which step the newcomer's seat appeared on. */
   private readonly endorsedAmend = new Map<string, number>();
   /** Amendments that have their quorum, waiting for the step they name. */
-  private readonly seating = new Map<number, SignedAmendment[]>();
+  private readonly seating = new Map<number, Seating[]>();
   /** Amendments already applied, in the order they were applied. Sent with a
    *  snapshot, because the simulation inside one knows members by index and
    *  nothing about keys. */
   private readonly applied: SignedAmendment[] = [];
+  /** Claims already applied, kept apart from the amendments because the two
+   *  verify by completely different rules — a quorum of an empire's seats
+   *  against one signature from the key being seated. `seatingOrder` is what
+   *  puts them back into the single sequence a replay has to reproduce. */
+  private readonly appliedClaims: SignedClaim[] = [];
+  /** Claims booked but not yet reached, so readiness can be held below them. */
+  private readonly claimsHeld = new Map<string, SignedClaim>();
   /** Drop records this peer has acted on, for the same reason. */
   private readonly enforced: SignedDrop[] = [];
 
@@ -450,6 +470,20 @@ export class Lockstep {
     while (this.sim.step < target && budget-- > 0) {
       this.expireAmendments();
       const step = this.sim.step;
+      // A move of ours is signed asynchronously, and `blocked` deliberately
+      // never waits for our own seat — nobody can be waiting on themselves. So
+      // without this a peer can simulate past the step its own in-flight move
+      // belongs to, broadcast it, and end up the only peer in the game that
+      // never applied it: a one-move divergence with no bad actor and nothing
+      // in any log to explain it.
+      //
+      // `readyCeiling` is already exactly "the last step we may commit to while
+      // a signature is out", which is why it needs no new state. It bounds the
+      // simulation for the same reason it bounds the promise.
+      if (step > this.readyCeiling) {
+        this.announceReady();
+        break;
+      }
       const waiting = this.blocked(step);
       if (waiting.length > 0) {
         // Say again what we are ready for before settling in to wait. Our own
@@ -662,6 +696,8 @@ export class Lockstep {
         return this.onDrop(frame.signed);
       case FRAME.AMENDMENT:
         return this.onAmendment(frame.signed);
+      case FRAME.CLAIM:
+        return void this.onClaim(frame.signed);
       case FRAME.EQUIVOCATION:
         return this.onEquivocation(frame.proof);
       case FRAME.SNAPSHOT_REQUEST:
@@ -961,6 +997,82 @@ export class Lockstep {
     return true;
   }
 
+  /** Take an empire nobody has taken.
+   *
+   *  The other way into a running game, and the only one that does not need
+   *  permission: an amendment needs a quorum of an empire's existing seats, and
+   *  a vacant empire has none to ask. The record is signed by the key it seats,
+   *  which is the whole of its authority — and a vacancy can be taken once,
+   *  which `seatArrivals` enforces against the roster rather than the sim.
+   *
+   *  The step is this peer's own honest answer, the same `AMENDMENT_DELAY` an
+   *  amendment uses, so every peer has time to hear it before anyone simulates
+   *  it. */
+  async claim(empire: number): Promise<boolean> {
+    const identity = this.options.identity;
+    if (!identity) return false;
+    if (this.options.seat) return false; // already playing something
+    const held = this.sim.state.empires[empire - 1];
+    if (!held || !isVacant(held)) return false;
+
+    const signed = await signClaim(identity, this.gameId, {
+      empire,
+      step: this.sim.step + AMENDMENT_DELAY,
+    });
+    await this.considerClaim(signed, true);
+    return this.claimsHeld.has(`${empire}:${identity.key}`);
+  }
+
+  private async onClaim(signed: SignedClaim): Promise<void> {
+    if (!signed?.claim) return;
+    await this.considerClaim(signed, false);
+  }
+
+  /** Check a claim and book it. No tally, no gossip round: one signature
+   *  settles it, so it goes straight to `accept`.
+   *
+   *  Rebroadcast rather than merged. There is nothing to merge — a claim has one
+   *  signature and it is either there or it is not — but a claimant who has just
+   *  arrived may be connected to only some of the room, and every peer has to
+   *  know before it simulates that step. */
+  private async considerClaim(incoming: SignedClaim, mine: boolean): Promise<void> {
+    const { empire, key, step } = incoming.claim;
+    if (this.roster.has(key)) return;
+    if (this.claimsHeld.has(`${empire}:${key}`)) return;
+
+    // A step this record names, not one we computed, so it is bounded on
+    // receipt. A claim naming step 40,000,000 would sit in `seating` forever
+    // holding readiness below it; one naming `sim.step + 1` gives no peer time
+    // to hear it. Refused rather than clamped — a clamped step is a different
+    // record from the one that was signed, and nothing would verify it.
+    if (step <= this.sim.step || step > this.sim.step + AMENDMENT_DELAY * 2) return;
+
+    // The empire has to still be territory. Checked against the roster, which is
+    // where "who holds a seat" lives; the sim would let a second claimant in.
+    if (this.roster.size(empire) > 0) return;
+
+    // Same window expression as the sim's and the amendment path's. A claim is a
+    // human ROSTER_AMEND, so the join window is the front door's opening hours
+    // and needs no rule of its own.
+    const genesis = this.sim.state.genesis;
+    const window = genesis.protocol >= 4 ? (genesis.rules.joinWindow ?? 0) : 0;
+    if (window > 0 && step >= window) return;
+
+    if (!(await verifyClaim(this.gameId, incoming))) return;
+    // Re-checked after the await: verification is asynchronous and `pump` runs
+    // in the gap, so the step this record belongs to can be simulated while we
+    // are still checking the signature on it.
+    if (step <= this.sim.step || this.roster.has(key)) return;
+
+    this.accept(incoming);
+    this.transport.broadcast({ t: FRAME.CLAIM, signed: incoming });
+    if (mine && this.options.identity?.key === key) {
+      // Nothing to do but wait for the step. The seat is taken in
+      // `seatArrivals`, on every peer at once, including this one.
+      this.onClaimBooked?.(incoming.claim);
+    }
+  }
+
   /** A proposal this peer is holding for that empire and key, if any. */
   invitation(empire: number, key: MemberKey): SignedAmendment | undefined {
     for (const record of this.amendments.values()) {
@@ -1052,14 +1164,15 @@ export class Lockstep {
     }
   }
 
-  /** Book a carried amendment onto the step it names. */
-  private accept(signed: SignedAmendment): void {
-    const step = signed.amendment.step;
+  /** Book a carried seating onto the step it names. */
+  private accept(signed: Seating): void {
+    const { empire, key, step } = seatingOf(signed);
     const booked = this.seating.get(step) ?? [];
-    if (booked.some((held) => held.amendment.key === signed.amendment.key)) return;
+    if (booked.some((held) => seatingOf(held).key === key)) return;
     booked.push(signed);
     this.seating.set(step, booked);
-    this.amendments.delete(`${signed.amendment.empire}:${signed.amendment.key}@${step}`);
+    this.amendments.delete(`${empire}:${key}@${step}`);
+    if (isClaim(signed)) this.claimsHeld.set(`${empire}:${key}`, signed);
     this.hold();
   }
 
@@ -1075,6 +1188,17 @@ export class Lockstep {
     let earliest = Number.MAX_SAFE_INTEGER;
     for (const record of this.amendments.values()) {
       earliest = Math.min(earliest, record.amendment.step - 1);
+    }
+    // A claim holds the ceiling too, from the moment it is received to the step
+    // it names. It is *decided* the instant its one signature verifies, so
+    // unlike an amendment there is no vote to wait for — but a peer that had
+    // not received it by the time it simulated that step would take the
+    // already-spent branch, count a desync and fetch a snapshot. That is a real
+    // recovery path and it exists for an instantly-carried amendment too; the
+    // difference is that arriving at a game is an ordinary event rather than a
+    // rare one. Three seconds of latency is the cheaper side of that trade.
+    for (const record of this.claimsHeld.values()) {
+      earliest = Math.min(earliest, record.claim.step - 1);
     }
     this.amendCeiling = earliest;
   }
@@ -1115,19 +1239,42 @@ export class Lockstep {
     this.seating.delete(step);
     this.hold();
 
-    // Key order, so two amendments landing on one step are applied in the same
-    // order by everyone. Nothing else about a record is guaranteed to differ.
+    // `seatingOrder`, so two records landing on one step are applied in the
+    // same order by everyone — and exported from one place so this and
+    // `verifyArchive` cannot drift, because drifting means a different member
+    // index and a different member index breaks attribution on every move that
+    // seat ever signed.
     const moves: Move[] = [];
-    booked.sort((a, b) => (a.amendment.key < b.amendment.key ? -1 : 1));
+    booked.sort(seatingOrder);
     booked.forEach((record, i) => {
-      const { empire, key, kind } = record.amendment;
+      const { empire, key, kind } = seatingOf(record);
+      this.claimsHeld.delete(`${empire}:${key}`);
       if (this.roster.has(key)) return;
-      const move = amendmentMove(record.amendment, AMENDMENT_SEQ + i, 0);
+      // A claim authorises seating an **empty** empire and nothing else.
+      //
+      // The simulation cannot tell the two records apart: a ROSTER_AMEND is a
+      // ROSTER_AMEND and the only thing the sim reads out of one is the new
+      // member's kind. So `sim.validate` would happily seat a second claimant
+      // as member 1 of the empire the first claimant took thirty milliseconds
+      // ago — sharing their territory and their capital, with no quorum and
+      // nobody asked. That is not a lost race; it is the exact failure `amend`
+      // exists to prevent.
+      //
+      // It cannot be fixed in the sim and should not be. A distinct move type
+      // would move the hash and would put an authorisation concept inside the
+      // one layer that has no business holding one. So it is enforced here,
+      // where authorisation already lives, against the roster as it stands *at
+      // this point in this loop* — over a list every peer sorted identically,
+      // which is what makes it deterministic without a new tie-break.
+      if (isClaim(record) && this.roster.size(empire) > 0) return;
+      const move = seatingMove(record, AMENDMENT_SEQ + i);
       if (!this.sim.validate(move)) return;
       const member = this.roster.amend(empire, key, kind, step);
-      this.applied.push(record);
+      if (isClaim(record)) this.appliedClaims.push(record);
+      else this.applied.push(record);
       moves.push(move);
-      this.onAmended?.(record);
+      if (isClaim(record)) this.onClaimed?.(record);
+      else this.onAmended?.(record);
       this.onSeated?.({ empire, member }, key);
       // The invitation was ours: take the seat and start playing it.
       if (this.options.identity?.key === key && !this.options.seat) {
@@ -1135,6 +1282,12 @@ export class Lockstep {
         this.seq = 0;
       }
     });
+    // Again, after the loop. The records booked on this step are spent and are
+    // no longer holding the ceiling — and for a claim that matters more than it
+    // does for an amendment, because the peer whose ceiling it was holding is
+    // usually the claimant, and a claimant that cannot promise past its own
+    // arrival step is a table that stops one step after somebody joins it.
+    this.hold();
     return moves;
   }
 
@@ -1187,6 +1340,7 @@ export class Lockstep {
       hash: this.sim.hash(),
       data: encodeSnapshot(this.sim.snapshot()),
       amendments: this.applied,
+      claims: this.appliedClaims,
       drops: this.enforced,
     });
     for (const moves of this.pending.values()) {
@@ -1198,7 +1352,7 @@ export class Lockstep {
     step: number,
     hash: number,
     data: string,
-    roster: { amendments?: SignedAmendment[]; drops?: SignedDrop[] },
+    roster: { amendments?: SignedAmendment[]; claims?: SignedClaim[]; drops?: SignedDrop[] },
   ): Promise<void> {
     if (step === this.sim.step && this.sim.hash() === hash) return; // already there
     // Behind us, and we did not ask. Adopting it would throw away steps this
@@ -1210,12 +1364,14 @@ export class Lockstep {
     // The roster first: adopting a state whose seats we cannot attribute would
     // leave us rejecting the moves of a player everyone else can see, and
     // waiting forever on one they all stopped waiting for.
-    if (roster.amendments?.length) await this.catchUpRoster(roster.amendments);
+    if (roster.amendments?.length || roster.claims?.length) {
+      await this.catchUpRoster(mergeSeatings(roster.amendments, roster.claims));
+    }
     if (roster.drops?.length) await this.catchUpDrops(roster.drops);
     this.adopt(buffer, hash);
   }
 
-  /** Re-apply the amendments behind a snapshot, checking each quorum again.
+  /** Re-apply the seatings behind a snapshot, checking each one again.
    *
    *  In order, because an empire's quorum grows as it does: a record that
    *  carried when the empire had two seats is checked against the roster as it
@@ -1223,18 +1379,26 @@ export class Lockstep {
    *  does not check out stops the walk — the records after it were verified
    *  against a roster this peer is no longer reproducing, so continuing would
    *  be guessing. */
-  private async catchUpRoster(amendments: SignedAmendment[]): Promise<void> {
-    for (const record of amendments) {
-      const { empire, key, kind, step } = record.amendment;
+  private async catchUpRoster(seatings: Seating[]): Promise<void> {
+    for (const record of seatings) {
+      const { empire, key, kind, step } = seatingOf(record);
       if (this.roster.has(key)) continue; // already have this one
-      if (!(await verifyAmendment(this.roster, this.gameId, record))) return;
+      // Each by its own rule, and in the merged order, because a claim is only
+      // valid while its empire is still empty and that is a fact about where in
+      // this walk we are.
+      const ok = isClaim(record)
+        ? this.roster.size(empire) === 0 && (await verifyClaim(this.gameId, record))
+        : await verifyAmendment(this.roster, this.gameId, record);
+      if (!ok) return;
       // Checked again after the await. Verification is asynchronous and pump()
       // runs in the gap, so the step this record belongs to can be simulated —
       // and the seat added — while we are still checking the signatures on it.
       if (this.roster.has(key)) continue;
       const member = this.roster.amend(empire, key, kind, step);
-      this.applied.push(record);
-      this.onAmended?.(record);
+      if (isClaim(record)) this.appliedClaims.push(record);
+      else this.applied.push(record);
+      if (isClaim(record)) this.onClaimed?.(record);
+      else this.onAmended?.(record);
       this.onSeated?.({ empire, member }, key);
       if (this.options.identity?.key === key && !this.options.seat) {
         this.options.seat = { empire, member };
@@ -1301,6 +1465,7 @@ export class Lockstep {
         hash: stored.hash,
         data: encodeSnapshot(stored.data),
         amendments: [...this.applied],
+        claims: [...this.appliedClaims],
         drops: [...this.enforced],
         witnesses: agreeing,
       };

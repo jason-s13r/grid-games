@@ -100,8 +100,58 @@ export interface Rules {
   coinNearBias: number;
   coinNearRadius: number;
 
+  /** Superseded by `graceTiles` / `graceSteps` and kept because every record
+   *  written before vacancies carries them. Read through the grace fields, which
+   *  fall back to these, so a stored game keeps the protection it was composed
+   *  with. */
   noobTiles: number;
   noobSteps: number;
+
+  /** How long a new empire's capital cannot be taken, counted **from that
+   *  empire's own arrival** rather than from the start of the game.
+   *
+   *  The distinction is the whole of what makes a vacancy claimable. `noobSteps`
+   *  is three minutes from step zero, so a player claiming an empire on day
+   *  three would get not a shorter grace but none at all. Grace belongs to the
+   *  empire: one seated at genesis has arrived at 0 forever, however many
+   *  substitutes it amends in on day six, and a team does not get its capital
+   *  immunity back by recruiting.
+   *
+   *  Optional, and absent falls back to the two above. */
+  graceSteps?: number;
+  graceTiles?: number;
+  /** The two strength bars `graceTiles` alone cannot express.
+   *
+   *  Forty tiles of one population each is not an established empire, and it is
+   *  exactly what a claimant holding a granted pocket looks like on the step
+   *  they arrive. Protection ends when an empire is *established*, which is more
+   *  than one measure — but see `isProtected` for the shape, because four
+   *  conditions OR'd together can only ever shorten protection and that is the
+   *  trap this is written to avoid.
+   *
+   *  Defaulted high enough that a genesis-seated empire crosses the tile bar
+   *  first, exactly as it does today. */
+  graceCapitalPop?: number;
+  gracePopTotal?: number;
+
+  /** No empire may take, march into, or cascade into a tile within this von
+   *  Neumann ball of an **unclaimed** capital.
+   *
+   *  A von Neumann ball rather than a Euclidean disc because that is what
+   *  `COIN_RADIUS` already means here, and two radius metrics is one too many.
+   *
+   *  The number is paid by the people already playing: `ballSize(r) = 2r²+2r+1`,
+   *  so four vacancies at radius 14 would close 27% of the default map to
+   *  everyone who turned up on time, for as long as the vacancies stand. Six
+   *  closes 5.5% each and still costs a camper a ring of 24 tiles to wall.
+   *
+   *  Absent or 0 is no shield, which is every record written before vacancies. */
+  vacancyRadius?: number;
+
+  /** Population put on each neutral tile inside the ball when the vacancy is
+   *  claimed, so an arrival is a pocket with a border to push from rather than
+   *  one tile inside somebody's wall. 0 grants nothing. */
+  vacancyGrant?: number;
 
   heartbeatInterval: number;
   livenessWindow: number;

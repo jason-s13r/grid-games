@@ -1,6 +1,6 @@
 # 0010 — Vacant empires: arriving at a game that has already started
 
-Status: draft
+Status: built (2026-09-16)
 Depends on: 0002 (`joinWindow` is the shutter on this door)
 Branch: `vacant-empires`
 
@@ -679,6 +679,101 @@ the change rather than a pass afterwards.
 | **The compat test**: `inspectGenesis` on a vacancies record returns `["members"]` under the constant as it stood *before* step 5 — the no-bump argument proved rather than asserted | `protocol/test/genesis.test.ts`, pinned |
 | `decodeFrame` returns `null` for a malformed claim frame and never throws | `protocol/test/wire.test.ts` |
 | An observer peer can claim, and is playing on the next step | `net/test/claim.test.ts` via `TableOptions.vacancies` |
+
+## What came out differently, and what the open questions turned into
+
+Written after building it. The appendix above was right about almost everything
+it audited; these are the places the tree answered back.
+
+**The pop bars are 60 and 400, and the default test is what chose them.** Open
+question 3 said the plan had "a hole in it shaped like two integers", and the
+hole is filled by the test it asked for: on the default rules an empire grown one
+population per tile crosses the **tile** bar first, exactly as it does today, and
+neither new bar ends protection for an ordinary genesis-seated empire. The
+numbers are a consequence of that check rather than a feeling.
+
+**`vacancyRadius` is 6, as the appendix argued and the body did not.** 85 tiles
+granted, a ring of 24 to wall, 5.5% of the default map per vacancy. The verdict
+paragraph won.
+
+**Terrain inside a pocket is refused** (open question 5). `PLACE_BRIDGE` and
+`PLACE_LADDER` bypass `place` and so bypass the shield, and the two-line answer
+is the one that matches the rest of the rule: a camper spending three days
+reshaping ground an arrival is promised is the same exploit as the wall, through
+a door the shield happened not to cover. Both branches now ask the layer.
+
+**The grant shipped with the shield, not after it.** The order of work has it
+last and separable, on the grounds that it is the only part whose bugs are
+desyncs rather than refusals. That reasoning is sound and the separation turned
+out to be the wrong unit: lifting the shield and filling the pocket are the same
+event on the same step, in one eight-line function, and splitting them would have
+meant writing `claimVacancy` twice. It is rule-gated instead — `vacancyGrant: 0`
+is the shield alone — which is the same option the staging was for.
+
+**`checkPlan` needed the opposite of what the plan implies.** "A plan may ask for
+vacancies" reads as loosening, and one line of it is genuinely tightening: a
+vacancy is outside `alive`, so **one player plus one vacancy is one empire
+standing** and `WIN.LAST_EMPIRE` fires on the first pass. The game would end
+before anybody could arrive into the seat it was held open for. So a game needs
+two empires *somebody is playing*, vacancies never count toward that number, and
+the lobby, the host peer's flags and the web client's form all say so.
+
+**The no-bump argument is narrower than the plan states, and the code had to be
+built to fit it.** "A vacancy is an empty members array, which is already an
+error, so an old build declines rather than desyncing" is true and is not
+sufficient. Six new rule fields exist, and two of them — `graceCapitalPop` and
+`gracePopTotal` — change `isProtected` for **any** game, not only one with a
+vacancy in it. A field in `rules` is exactly the thing an older build reads
+straight past, so with those two in `DEFAULT_RULES` an old peer handed an
+ordinary new record would keep a capital protected that this build had stopped
+protecting, and disagree about a move some hours later: the quiet desync
+`genesis.ts` warns about, arriving through the one door this plan claimed was
+shut.
+
+So none of the six are defaults. `VACANCY_RULES` is a separate export that
+`Lobby.host` merges in **only when the plan asks for vacancies**, which is also
+the only case that puts an empty members array in the record. A game with no
+vacancies composes rules byte-identical to what every build before this one
+composed; a game with vacancies carries all six and is declined wholesale by
+anything that would misread them. Neither build is ever left half-agreeing,
+which is what the argument actually requires, and `rules.test.ts` asserts the
+absence rather than trusting it.
+
+**One latent desync fell out, and it is not about vacancies.** A newly seated
+claimant beats immediately, and `blocked()` deliberately never waits on our own
+seat — nobody can be waiting on themselves. So a peer could simulate past the
+step its own in-flight move belonged to, broadcast the move anyway, and become
+the only peer in the game that never applied it: a one-move divergence with no
+bad actor and nothing in any log to explain it. `readyCeiling` already meant
+"the last step we may commit to while a signature is out"; it now bounds the
+simulation as well as the promise. A `readiness.test.ts` case that documented the
+old divergence is inverted, which is the clearest statement of the change.
+
+It costs one pump of latency per submitted move, and that showed up as a
+flake somewhere unrelated: `gap.test.ts` asserted that a disconnected observer
+falls behind the seats, and a seat that now pauses on its own signature no
+longer reliably outruns an observer whose socket keeps reconnecting. The socket
+is killed on every step there instead of once per chunk — which is the scenario
+the test's own comment describes, "a relay that stays unreachable" — so the
+precondition is a fact about a dead socket rather than a race between two kinds
+of latency.
+
+**`rankings.ts` had to learn about claims too.** `seatsByIndex` walked
+`amendments` alone, so a leaderboard had no row for the one player whose key the
+genesis record never named. It walks `mergeSeatings` now, like the driver and the
+verifier — three callers, one comparator, which is the whole reason the
+comparator is exported.
+
+**Reachability, which the plan's file table leaves out.** Nothing in it creates or
+claims a vacancy from a client, and a rule nobody can reach is not shipped: the
+host peer takes `--vacancies <n>`, the web client's create form has a
+seats-held-open control, and an observer with a key gets a **Take it** button on
+an unclaimed row in the standings, gated on the join window.
+
+Open questions 1 (what a vacancy is at the end of a long game), 2 (a claimant who
+is dropped) and 4 (vacancy created after genesis) are all unchanged and
+deliberately so — each is a rule with a hash behind it, and none is needed to
+make this one work.
 
 ## What this plan does not settle
 

@@ -21,6 +21,50 @@ solo empire pushes in one.
 number to team them. Putting everyone on empire 3 makes *one* empire, not four —
 the numbers are compacted.
 
+## Vacancies: an empire nobody has claimed
+
+An empire with **no members** is a *vacancy*. It is territory, not a player: the
+map generator gives it a capital and separation from the shared seed like any
+other, before anybody knows who will sit there, and it cannot win, lose, be
+abandoned, or count toward "last empire standing".
+
+That last part is a rule with teeth. Left inside those counts, a vacancy holds
+its capital forever so [`LAST_EMPIRE`](victory.md) could never fire — and worse,
+it has never beat, so it reads as *silent since step zero* and `LAST_ROSTER`
+would go to whoever beat first. So a game must have **two empires somebody is
+playing**; a held-open seat cannot be the second one, and the lobby refuses a
+plan that tries.
+
+Vacancy is derived and never stored — `members.length === 0`, nothing else — so
+there is no new field in `Empire` and nothing new in the snapshot. Members are
+only ever appended (a dropped seat is a mesh concept the simulation never hears
+about), so the derivation cannot go backwards.
+
+**It is the empty array on purpose.** That was already an error to every build
+written before vacancies existed, so an older peer handed such a record *declines
+to play* rather than desyncing three hours in — which is exactly the outcome a
+protocol bump exists to produce, and why this needed none. A flag in `rules`
+would have been read straight past.
+
+### Arriving into one
+
+Claiming a vacancy is the second way into a running game, and the only one that
+needs nobody's permission. An amendment needs a quorum of an empire's existing
+seats; a vacant empire has none to ask, so the record is a **claim**, signed by
+the key it seats. A vacancy can be arrived at once — enforced against the roster,
+not the simulation, because the simulation cannot tell a claim from an amendment
+and should not be taught to.
+
+The claimant does not pick a **location**. The capital was placed at genesis,
+before anyone knew who would sit there, and that is precisely what makes it fair:
+you take the ground the map gave that empire, not the best ground still going.
+What you do pick is *which* vacancy — which, once banners land, is the same thing
+as picking a house.
+
+A claim is a human `ROSTER_AMEND`, so the [join window](durations.md) closes this
+door on the same line it closes the other one. Until the pocket is claimed it is
+held clear; see [capitals.md](capitals.md) for the shield and the grant.
+
 ## Shift handover needs no mechanism
 
 Because each seat has its own timer, a player leaving and another sitting down in

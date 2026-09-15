@@ -178,6 +178,15 @@ const duration = () => durationRules(Number(lengthEl.value));
  *  and there is one of it, read by a solo game and a hosted one alike. */
 const rivals = new Rivals(pick<HTMLElement>('[data-cfg="rivals"]'));
 
+/** Empires left unclaimed, for somebody to arrive into once the game is running.
+ *
+ *  Only meaningful in a hosted game — a solo game has nobody to wait for — so
+ *  the control is hidden everywhere else rather than shown and ignored. */
+const vacanciesEl = pick<HTMLInputElement>('[data-cfg="vacancies"]');
+const vacanciesFieldEl = pick<HTMLElement>('[data-cfg="vacancies-field"]');
+const vacanciesHintEl = pick<HTMLElement>('[data-cfg="vacancies-hint"]');
+const vacancies = (): number => Math.max(0, Math.min(8, Number(vacanciesEl.value) || 0));
+
 const soloSetup = () => ({ bots: rivals.list, duration: duration(), ...mapSize() });
 
 // --- settings ----------------------------------------------------------------
@@ -315,6 +324,13 @@ let announcer: Announcer | undefined;
  *  out rather than merely hidden: a box left ticked under a closed section is a
  *  disclosure nobody can see they consented to. */
 function sayListable(mode: SetupMode): void {
+  // Same rule, different reason: a vacancy is a hosted game's question, because
+  // a solo game has nobody to hold a seat for and a joiner composes nothing.
+  const composing = mode === "host" || mode === "compose";
+  vacanciesFieldEl.hidden = !composing;
+  vacanciesHintEl.hidden = !composing;
+  if (!composing) vacanciesEl.value = "0";
+
   const url = settings().board;
   listFieldEl.hidden = mode !== "host" || !url;
   if (listFieldEl.hidden) listEl.checked = false;
@@ -428,6 +444,7 @@ function startHosted(): void {
   void lobby?.host({
     empires: panel.seating.empires,
     simbots: rivals.list,
+    vacancies: vacancies(),
     ...mapSize(),
     duration: duration(),
   });
@@ -454,7 +471,10 @@ function summarise(mode: Composing): SetupSummary {
 
   const { empires, crowded } = mode === "solo" ? SOLO_SEATING : panel.seating;
   const people = empires.length;
-  const total = people + bots;
+  // A vacancy is in the world and is not somebody to play against: it counts
+  // toward there being a game and never toward there being an opponent.
+  const open = mode === "solo" ? 0 : vacancies();
+  const total = people + bots + open;
 
   if (crowded) {
     return {
@@ -473,12 +493,24 @@ function summarise(mode: Composing): SetupSummary {
       ready: false,
     };
   }
+  // A held-open seat cannot be the second empire. An unclaimed empire is
+  // territory, so it is outside every count victory makes: one player and one
+  // vacancy is one empire standing, and the game would end on the first pass,
+  // before anybody could arrive into the seat it was held open for.
+  if (people + bots < 2) {
+    return {
+      note: "Two empires have to be playing — a held-open seat cannot be one of them.",
+      problem: true,
+      ready: false,
+    };
+  }
 
   const who =
     mode === "solo"
       ? `you and ${bots} bot ${bots === 1 ? "empire" : "empires"}`
-      : `${people} of people, ${bots} of bots`;
-  return { note: `${total} empires will be playing: ${who}.`, problem: false, ready: true };
+      : `${people} of people, ${bots} of bots` +
+        (open > 0 ? `, ${open} held open for whoever turns up` : "");
+  return { note: `${total} empires will be in the world: ${who}.`, problem: false, ready: true };
 }
 
 /** A solo game is one empire of people, always. Written out so `summarise` can

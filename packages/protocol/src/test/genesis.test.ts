@@ -162,3 +162,75 @@ describe("genesis", () => {
     expect(await inspectGenesis(full)).toEqual([]);
   });
 });
+
+// An empire the map generator will place and nobody has claimed.
+//
+// The interesting thing about this record is not that it is accepted; it is
+// *how* it says what it says. A vacancy is the empty members array and nothing
+// else — no flag in `rules`, no sentinel key — and that choice is the whole
+// reason vacancies need no protocol bump.
+//
+// An empty members array was already an error to every build written before
+// them: `inspectGenesis` pushed "members" and the lobby declined the game. So
+// an older peer handed one of these *refuses to play*, today, with no new code,
+// which is exactly the outcome a version number exists to produce. A flag in
+// `rules` would be read straight past by that same peer, and the disagreement
+// would surface as a desync three hours in.
+//
+// So the tests below are as much about the encoding as about the check.
+describe("a game with empires nobody has claimed", () => {
+  const withEmpires = (empires: Genesis["empires"]): Genesis =>
+    ({ ...f.base, empires }) as Genesis;
+
+  const human = (key: string) => ({
+    control: CONTROL.HUMAN,
+    members: [{ kind: MEMBER.HUMAN, key }],
+  });
+  const vacancy = () => ({ control: CONTROL.HUMAN, members: [] });
+
+  it("is accepted beside an empire somebody is playing", async () => {
+    const genesis = withEmpires([human(f.alice.key), vacancy()]);
+    await expect(inspectGenesis(await sealGenesis(genesis))).resolves.toEqual([]);
+  });
+
+  it("is expressed as an empty members array, which is what makes the bump unnecessary", async () => {
+    // The property, asserted directly rather than inferred from the check
+    // passing. If a later change moved vacancy into `rules`, this is the test
+    // that would notice — and the failure would be the right one, because an
+    // old peer reads an unknown rule and plays on.
+    const genesis = withEmpires([human(f.alice.key), vacancy()]);
+    expect(genesis.empires[1]!.members).toHaveLength(0);
+    // And the other half: *which* empires are vacant is nowhere but in
+    // `empires`. The rules carry the shield's radius and the grant — numbers
+    // that describe a game, and that an older peer reading them as unknown
+    // fields plays on happily, which is correct because with no vacancy in the
+    // record neither number does anything. Two records that differ only by a
+    // vacancy therefore have byte-identical rules, and that is what keeps the
+    // refusal in the one field that was always an error.
+    const without = withEmpires([human(f.alice.key)]);
+    expect(canonicalJson(genesis.rules ?? {})).toBe(canonicalJson(without.rules ?? {}));
+  });
+
+  it("is refused for a SimBot empire, which nothing would ever play", async () => {
+    const genesis = withEmpires([
+      human(f.alice.key),
+      { control: CONTROL.SIMBOT, members: [] },
+    ]);
+    expect(await inspectGenesis(await sealGenesis(genesis))).toContain("members");
+  });
+
+  it("is refused when nobody at all is seated", async () => {
+    // Every check above passes on a record of nothing but vacancies, and then
+    // the first victory pass ends it with no winner. Somebody has to be playing.
+    const genesis = withEmpires([vacancy(), vacancy()]);
+    expect(await inspectGenesis(await sealGenesis(genesis))).toContain("members");
+  });
+
+  it("still refuses a members field that is not a list", async () => {
+    const genesis = withEmpires([
+      human(f.alice.key),
+      { control: CONTROL.HUMAN, members: undefined },
+    ] as unknown as Genesis["empires"]);
+    expect(await inspectGenesis(await sealGenesis(genesis))).toContain("members");
+  });
+});

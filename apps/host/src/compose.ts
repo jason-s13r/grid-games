@@ -18,6 +18,11 @@ import type { BotChoice, DurationRules } from "@tessera/sim";
 export interface PlanFile {
   empires: string[][];
   simbots?: BotChoice[];
+  /** Empires to leave unclaimed, for somebody to arrive into once the game is
+   *  running. The reason a host peer is the natural place to ask for one: a
+   *  vacancy is only useful in a game that is still there when the person who
+   *  wants it turns up, and a process is what keeps a game there. */
+  vacancies?: number;
   width?: number;
   height?: number;
   duration?: DurationRules;
@@ -69,6 +74,7 @@ function plan(file: PlanFile, empires: string[][], players: LobbyPlayer[]): Host
   return {
     empires: empires.map((keys) => keys.slice(0, MAX_SEATS)),
     simbots: file.simbots ?? [],
+    ...(file.vacancies ? { vacancies: file.vacancies } : {}),
     // Everybody here who is not seated, which is this process and nobody else
     // today. Without it `checkPlan` refuses every plan a host composes, because
     // the composer's own key is always among the members present.

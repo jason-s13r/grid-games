@@ -22,6 +22,7 @@ import {
   MEMBER,
   PROTOCOL_VERSION,
   SUPPORTED_PROTOCOLS,
+  VACANCY_RULES,
   makeGenesis,
   seedFrom,
   simbot,
@@ -92,6 +93,10 @@ export interface HostPlan {
    *  that decides a game the way `abandonWindow` could — and a host who makes
    *  the bots brutal has made them brutal to their own empire too. */
   simbots: readonly BotChoice[];
+  /** Empires left unclaimed, for somebody to arrive into once the game is
+   *  running. A count rather than an empty entry in `empires`, so that an empty
+   *  entry stays the mistake it always was. */
+  vacancies?: number;
   width: number;
   height: number;
   /** Keys that are here and deliberately not playing — a host peer composing a
@@ -405,6 +410,20 @@ export class Lobby {
       members: keys.map((key) => ({ kind: MEMBER.HUMAN, key })),
     }));
     for (const level of plan.simbots) empires.push(simbot(level));
+    const vacancies = plan.vacancies ?? 0;
+    // Empires the map generator will place and nobody has claimed. Territory
+    // rather than players: they get a capital and separation from the shared
+    // seed, before anyone knows who will sit there, which is precisely what
+    // makes arriving into one fair — a claimant takes the ground the map gave
+    // that empire, not the best ground still going.
+    //
+    // An empty members array and nothing else, deliberately. That is already an
+    // error to every build written before vacancies, so an older peer handed
+    // this record declines rather than desyncing — the outcome a version bump
+    // exists to produce, which is why this needs none.
+    for (let i = 0; i < vacancies; i++) {
+      empires.push({ control: CONTROL.HUMAN, members: [] });
+    }
 
     const genesis = makeGenesis({
       seed: seedFrom(`${this.code}:${Date.now()}`),
@@ -413,7 +432,17 @@ export class Lobby {
       // responsiveness, never agreement.
       startedAt: Date.now(),
       map: { width: plan.width, height: plan.height },
-      ...(plan.duration ? { rules: plan.duration } : {}),
+      // The vacancy rules travel with the vacancies and never without them.
+      //
+      // Two of them change `isProtected` for any game at all, and a field in
+      // `rules` is read straight past by an older build — so a game with no
+      // unclaimed empires carries none of them, and its rules are byte-identical
+      // to what every build before this one composed. A game *with* them carries
+      // an empty members array too, which that older build refuses outright, so
+      // it is never in the position of half-agreeing. See `VACANCY_RULES`.
+      ...(plan.duration || vacancies > 0
+        ? { rules: { ...(vacancies > 0 ? VACANCY_RULES : {}), ...plan.duration } }
+        : {}),
       empires,
     });
 

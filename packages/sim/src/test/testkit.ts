@@ -8,6 +8,7 @@ import { Sim, makeGenesis, CLAIM } from "../sim.js";
 import type { EmpireSpec, Rules } from "../types.js";
 import { TERRAIN, ITEM } from "../types.js";
 import { idx } from "../geometry.js";
+import { rebuildShields } from "../state.js";
 
 export { humans, simbot } from "../specs.js";
 
@@ -40,8 +41,17 @@ export function arena(
       coinIntervalMin: 1 << 28,
       coinIntervalMax: 1 << 28,
       upkeepInterval: 1 << 28,
+      // No capital protection: an arena is a board for testing one transition,
+      // and a shield nobody asked for is a refusal in the middle of a test about
+      // something else. The grace fields are absent from `DEFAULT_RULES` — they
+      // travel only with vacancies — so these two are what protection is read
+      // from here, and a test about grace names the grace fields itself.
       noobSteps: 0,
       noobTiles: 0,
+      // `vacancyRadius` is absent too, and that matters for this fixture in
+      // particular: `arena` parks capitals two tiles apart, so any nonzero
+      // radius would close the whole board and every rules test touching an
+      // unclaimed empire would fail for a reason unrelated to what it tests.
       ...rules,
     },
   });
@@ -65,6 +75,11 @@ export function arena(
     e.tilesOwned = 1;
     e.popTotal = 1;
   }
+  // The capitals just moved, and the shield layer is derived from where they
+  // are. A no-op at the arena's default radius of zero, and the difference
+  // between a working fixture and a silently wrong one for any test that sets
+  // `vacancyRadius` itself.
+  rebuildShields(s);
   return sim;
 }
 

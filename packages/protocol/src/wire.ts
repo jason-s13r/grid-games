@@ -14,6 +14,7 @@ import type { Genesis } from "@tessera/sim";
 import type {
   EquivocationProof,
   SignedAmendment,
+  SignedClaim,
   SignedCheckpoint,
   SignedMessage,
   SignedDrop,
@@ -33,6 +34,7 @@ export const FRAME = {
   MESSAGE: "message",
   CHECKPOINT: "checkpoint",
   AMENDMENT: "amendment",
+  CLAIM: "claim",
   EQUIVOCATION: "equivocation",
   SNAPSHOT_REQUEST: "snapshot?",
   SNAPSHOT: "snapshot",
@@ -110,6 +112,13 @@ export interface AmendmentFrame {
   signed: SignedAmendment;
 }
 
+/** Somebody arriving at an empire nobody took. One signature, not a tally: it is
+ *  signed by the key it seats, which is the whole of its authority. */
+export interface ClaimFrame {
+  t: typeof FRAME.CLAIM;
+  signed: SignedClaim;
+}
+
 export interface EquivocationFrame {
   t: typeof FRAME.EQUIVOCATION;
   proof: EquivocationProof;
@@ -138,6 +147,9 @@ export interface SnapshotFrame {
    *  themselves rather than a list of keys, so the receiver re-checks each
    *  quorum for itself: a snapshot stays safe to take from anyone. */
   amendments?: SignedAmendment[];
+  /** Claims behind the state, apart from the amendments because they verify by a
+   *  different rule. Absent in every snapshot a pre-vacancy build sent. */
+  claims?: SignedClaim[];
   /** The seats already dropped from that game, with the records that dropped
    *  them. Not part of the state hash — an ejection changes who a peer waits
    *  for, not what the world looks like — but a peer that adopted a snapshot
@@ -162,6 +174,7 @@ export type Frame =
   | MessageFrame
   | CheckpointFrame
   | AmendmentFrame
+  | ClaimFrame
   | EquivocationFrame
   | SnapshotRequestFrame
   | SnapshotFrame
@@ -219,6 +232,7 @@ export function decodeFrame(text: string): Frame | null {
     case FRAME.MESSAGE:
     case FRAME.CHECKPOINT:
     case FRAME.AMENDMENT:
+    case FRAME.CLAIM:
       // Field-level checking belongs to the verifier, which has to re-derive
       // the payload anyway. Here it is enough that there is something to verify.
       return isObject(parsed.signed) ? (parsed as unknown as Frame) : null;

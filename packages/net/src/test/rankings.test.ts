@@ -10,7 +10,7 @@
 import { beforeAll, describe, expect, it } from "vitest";
 import { MEMBER, MOVE, STAT } from "@tessera/sim";
 import type { SignedMove } from "@tessera/protocol";
-import { Archive, rankArchives } from "../index.js";
+import { Archive, rankArchives, verifyArchive } from "../index.js";
 import type { ArchivedGame } from "../index.js";
 import { clickAround, run, settleNetwork, table } from "./harness.js";
 import type { Table } from "./harness.js";
@@ -94,6 +94,53 @@ describe("a table built from archives", () => {
     ]);
     const solo = await rankArchives([game]);
     expect(board.standings).toEqual(solo.standings);
+  });
+});
+
+describe("a game somebody arrived into", () => {
+  it("credits the claimant's key, like any other seat", async () => {
+    // The point of a vacancy is that arriving into one makes you a player, and
+    // a player is a key the table has a row for. A claim seats a key the genesis
+    // record never named, so this is the one row in a leaderboard that could not
+    // have been derived from the record alone.
+    const t = await table({
+      seats: [1, 1],
+      vacancies: 1,
+      claimants: 1,
+      simbots: 0,
+      observer: true,
+      rules: { endStep: 90 },
+    });
+    const observer = t.peers.at(-1)!;
+    const archive = new Archive(t.genesis, observer.driver);
+    archive.attach(observer.driver);
+
+    const claimant = t.peers.find((peer) => peer.name === "c1")!;
+    await claimant.driver.claim(3);
+    await settleNetwork(t);
+    await run(t, 100, await clickAround(t, 5));
+    await settleNetwork(t);
+
+    const board = await rankArchives([archive.toJSON()]);
+    expect(board.refused).toEqual([]);
+    expect(board.counted).toEqual([t.gameId]);
+    expect(board.standings.map((one) => one.key)).toContain(claimant.identity!.key);
+  });
+
+  it("refuses a v1 archive that carries claims", async () => {
+    // An archive is the one artefact where an old reader neither refuses nor
+    // desyncs: it replays a claimed game against a roster missing a seat and
+    // reports the wrong hash as corruption somewhere else entirely. A file whose
+    // own header says its reader will get the roster wrong is refused here.
+    const { game } = await played(21);
+    const forged = {
+      ...game,
+      format: 1,
+      claims: [{ claim: { empire: 1, key: "whoever", step: 5 }, sig: "" }],
+    } as ArchivedGame;
+    const verdict = await verifyArchive(forged);
+    expect(verdict.ok).toBe(false);
+    expect(verdict.problems.join(" ")).toMatch(/format 1 but carries claimed empires/);
   });
 });
 

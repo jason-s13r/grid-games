@@ -14,6 +14,8 @@ export {
   cloneState,
   empireOf,
   memberOf,
+  isVacant,
+  rebuildShields,
 } from "./state.js";
 export type { State } from "./state.js";
 export { generate } from "./mapgen.js";

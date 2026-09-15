@@ -7,7 +7,16 @@
 // drivers do to each other is real: real signatures, real frames, real
 // verification, in arrival order.
 
-import { CONTROL, MEMBER, MOVE, STEPS_PER_SECOND, Sim, makeGenesis, validate } from "@tessera/sim";
+import {
+  CONTROL,
+  MEMBER,
+  MOVE,
+  STEPS_PER_SECOND,
+  Sim,
+  VACANCY_RULES,
+  makeGenesis,
+  validate,
+} from "@tessera/sim";
 import type { EmpireSpec, Genesis, MemberKind, Move, Rules } from "@tessera/sim";
 import { Identity, Roster, sealGenesis } from "@tessera/protocol";
 import type { Message } from "@tessera/protocol";
@@ -90,7 +99,17 @@ export interface TableOptions {
    *  is what a page running more than one seat looks like on the wire. */
   hosted?: boolean;
   simbots?: number;
+  /** Empires left unclaimed, for a test to claim. Placed after the human
+   *  empires and before the SimBot ones, so a claimant's empire number is
+   *  `seats.length + n` and a test can name it without counting. */
+  vacancies?: number;
   observer?: boolean;
+  /** Peers with a key and no seat — somebody who has arrived at the game and
+   *  has not been given anything to play yet. Named `c1`, `c2`, … and the only
+   *  kind of peer that can claim a vacancy: a claim is signed by the key it
+   *  seats, so a claimant has to hold a key, and it seats an empty empire, so
+   *  it must not already hold a seat. */
+  claimants?: number;
   loopback?: LoopbackOptions;
   stallTimeout?: number;
   checkpointInterval?: number;
@@ -137,6 +156,9 @@ export async function table(options: TableOptions): Promise<Table> {
     control: CONTROL.HUMAN,
     members: members.map((identity, m) => ({ kind: kinds[e]![m]!, key: identity.key })),
   }));
+  for (let i = 0; i < (options.vacancies ?? 0); i++) {
+    empires.push({ control: CONTROL.HUMAN, members: [] });
+  }
   for (let i = 0; i < (options.simbots ?? 1); i++) {
     empires.push({ control: CONTROL.SIMBOT, members: [{ kind: MEMBER.BOT }] });
   }
@@ -147,7 +169,18 @@ export async function table(options: TableOptions): Promise<Table> {
       startedAt: 0,
       empires,
       map: { width: 32, height: 32 },
-      ...(options.rules ? { rules: options.rules } : {}),
+      // The same pairing `Lobby.host` makes: the vacancy rules travel with the
+      // vacancies and never without them, so a table with none composes the
+      // rules every build before this one composed. A scenario that wants a
+      // different radius overrides it, as `options.rules` comes last.
+      ...(options.rules || (options.vacancies ?? 0) > 0
+        ? {
+            rules: {
+              ...((options.vacancies ?? 0) > 0 ? VACANCY_RULES : {}),
+              ...options.rules,
+            },
+          }
+        : {}),
     }),
   );
 
@@ -259,6 +292,9 @@ export async function table(options: TableOptions): Promise<Table> {
         kinds[offset]![member] === MEMBER.BOT,
       );
     }
+  }
+  for (let i = 0; i < (options.claimants ?? 0); i++) {
+    await build(`c${i + 1}`, await Identity.generate());
   }
   if (options.observer) await build("observer");
 

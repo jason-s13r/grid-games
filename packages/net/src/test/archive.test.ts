@@ -14,7 +14,7 @@ import { beforeAll, describe, expect, it } from "vitest";
 import { MOVE, Sim, hex } from "@tessera/sim";
 import { CHANNEL, Identity } from "@tessera/protocol";
 import type { SignedMove } from "@tessera/protocol";
-import { Archive, verifyArchive } from "../index.js";
+import { ARCHIVE_FORMAT, Archive, verifyArchive } from "../index.js";
 import type { ArchivedGame } from "../index.js";
 import { clickAround, run, settleNetwork, table } from "./harness.js";
 import type { Table } from "./harness.js";
@@ -45,7 +45,11 @@ describe("an archived game", () => {
 
   it("is the record the peers agreed to play", () => {
     expect(game.genesis.gameId).toBe(t.gameId);
-    expect(game.format).toBe(1);
+    // The number a reader checks before it trusts the shape. Asserted against
+    // the constant rather than a literal: what matters is that an archive stamps
+    // the format this build writes, and pinning the digit would make every
+    // future bump a test edit that carries no information.
+    expect(game.format).toBe(ARCHIVE_FORMAT);
   });
 
   it("kept every move that was applied", () => {

@@ -177,6 +177,27 @@
                    and not a display preference. Hidden entirely for a solo
                    game, which has no door, and while no address book is
                    configured, which is the default. See net/announce.ts. -->
+              <!-- Only for a hosted game: a solo game has nobody to wait for.
+                   An empire held open gets a capital and separation from the
+                   shared seed like any other, before anybody knows who will sit
+                   there, which is what makes arriving into one fair. -->
+              <div class="field" data-cfg="vacancies-field" hidden>
+                <label for="cfg-vacancies">Seats held open</label>
+                <input
+                  id="cfg-vacancies"
+                  type="number"
+                  min="0"
+                  max="8"
+                  value="0"
+                  data-cfg="vacancies"
+                />
+              </div>
+              <p class="hint" data-cfg="vacancies-hint" hidden>
+                Empires nobody is playing yet, for people to claim after the game
+                has started &mdash; which is how somebody who finds your game on
+                a board gets in. Their ground is kept clear until they arrive.
+              </p>
+
               <label class="field field-check" data-cfg="list-field" hidden>
                 <input type="checkbox" data-cfg="list" />
                 <span>

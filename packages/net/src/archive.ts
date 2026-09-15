@@ -17,12 +17,31 @@
 import { MOVE, Sim, hex } from "@tessera/sim";
 import type { EmpireSummary, Genesis, Move } from "@tessera/sim";
 import { Roster, inspectGenesis, verifyAmendment, verifyMessage, verifyMove } from "@tessera/protocol";
-import type { Message, Seat, SignedAmendment, SignedMessage, SignedMove } from "@tessera/protocol";
+import { verifyClaim } from "@tessera/protocol";
+import type {
+  Message,
+  Seat,
+  SignedAmendment,
+  SignedClaim,
+  SignedMessage,
+  SignedMove,
+} from "@tessera/protocol";
+import { isClaim, mergeSeatings, seatingOf } from "./seating.js";
 
 /** Bumped when the shape below changes in a way a reader must know about.
  *  A reader that does not recognise the number should refuse rather than guess:
- *  a misread archive is a wrong hash, and a wrong hash looks like cheating. */
-export const ARCHIVE_FORMAT = 1;
+ *  a misread archive is a wrong hash, and a wrong hash looks like cheating.
+ *
+ *  **2 adds `claims`.** An archive is the one artefact where an old reader
+ *  neither refuses nor desyncs: handed a game somebody claimed a vacancy in, a
+ *  v1 reader replays it against a roster missing a seat, reaches a different
+ *  hash, and reports it as corruption somewhere else entirely. The number is
+ *  what turns that into a refusal. Compare the genesis record, which a v3 build
+ *  declines on its own because a vacancy is an empty members array and that was
+ *  always an error — and compare `LAYOUT_VERSION`, which does not move at all,
+ *  because the shield layer is derived and never written. Three artefacts, three
+ *  verdicts, each legible from what an old reader would otherwise do. */
+export const ARCHIVE_FORMAT = 2;
 
 /** A game, written down.
  *
@@ -37,6 +56,11 @@ export interface ArchivedGame {
   genesis: Genesis;
   moveLog: Array<SignedMove | Move>;
   amendments: SignedAmendment[];
+  /** Vacancies somebody claimed. Apart from the amendments because the two
+   *  verify by completely different rules — a quorum of an empire's existing
+   *  seats against one signature from the key being seated — and merged back
+   *  into one sequence by `seatingOrder` when the log is replayed. */
+  claims?: SignedClaim[];
   /** Chat is ordered, signed and attributable, and deliberately outside the
    *  state hash. It is archived as it crossed the wire, which means a team line
    *  stays ciphertext here exactly as it was to every peer but its recipients. */
@@ -71,6 +95,7 @@ export interface ArchiveSource {
 export type ArchiveRecord =
   | { k: "move"; entry: SignedMove | Move }
   | { k: "amend"; amendment: SignedAmendment }
+  | { k: "claim"; claim: SignedClaim }
   | { k: "chat"; message: SignedMessage }
   /** The simulation jumped to an adopted state, so the inputs between the last
    *  recorded step and this one were never seen by this peer. Written down
@@ -93,12 +118,14 @@ interface Archivable extends ArchiveSource {
   onApplied?: (step: number, moves: readonly Move[], signed: readonly SignedMove[]) => void;
   onMessage?: (message: Message, text: string | null, signed?: SignedMessage) => void;
   onAmended?: (amendment: SignedAmendment) => void;
+  onClaimed?: (claim: SignedClaim) => void;
   onAdopted?: (step: number) => void;
 }
 
 export class Archive {
   private readonly entries: Array<SignedMove | Move> = [];
   private readonly amended: SignedAmendment[] = [];
+  private readonly claimed: SignedClaim[] = [];
   private readonly said: SignedMessage[] = [];
   private readonly jumped: number[] = [];
   private readonly retain: boolean;
@@ -135,6 +162,7 @@ export class Archive {
     const applied = driver.onApplied;
     const message = driver.onMessage;
     const amended = driver.onAmended;
+    const claimed = driver.onClaimed;
     const adopted = driver.onAdopted;
 
     driver.onApplied = (step, moves, signed) => {
@@ -149,6 +177,10 @@ export class Archive {
       amended?.(amendment);
       this.amend(amendment);
     };
+    driver.onClaimed = (claim) => {
+      claimed?.(claim);
+      this.claim(claim);
+    };
     driver.onAdopted = (step) => {
       adopted?.(step);
       this.gap(step);
@@ -158,6 +190,7 @@ export class Archive {
       driver.onApplied = applied;
       driver.onMessage = message;
       driver.onAmended = amended;
+      driver.onClaimed = claimed;
       driver.onAdopted = adopted;
     };
   }
@@ -174,6 +207,10 @@ export class Archive {
 
   amend(amendment: SignedAmendment): void {
     this.record({ k: "amend", amendment });
+  }
+
+  claim(claim: SignedClaim): void {
+    this.record({ k: "claim", claim });
   }
 
   chat(message: SignedMessage): void {
@@ -205,6 +242,7 @@ export class Archive {
     if (this.retain) {
       if (record.k === "move") this.entries.push(record.entry);
       else if (record.k === "amend") this.amended.push(record.amendment);
+      else if (record.k === "claim") this.claimed.push(record.claim);
       else if (record.k === "chat") this.said.push(record.message);
     }
     this.onRecord?.(record);
@@ -218,6 +256,7 @@ export class Archive {
       genesis: this.genesis,
       moveLog: [...this.entries],
       amendments: [...this.amended],
+      ...(this.claimed.length > 0 ? { claims: [...this.claimed] } : {}),
       messages: [...this.said],
       steps: this.steps,
       hash: hex(this.source.hash()),
@@ -276,7 +315,19 @@ export async function verifyArchive(game: ArchivedGame): Promise<Verdict> {
       summary: [],
     };
   }
-  if (game.format !== ARCHIVE_FORMAT) problems.push(`unknown archive format ${game.format}`);
+  // A newer format is refused; an older one is read, because everything v1
+  // described is still described the same way and a game with no claims in it is
+  // byte-for-byte a v1 game. Refusing those would be refusing every archive
+  // written before vacancies existed, which is the opposite of what the number
+  // is for.
+  if (game.format > ARCHIVE_FORMAT || !(game.format >= 1)) {
+    problems.push(`unknown archive format ${game.format}`);
+  }
+  if ((game.format ?? 0) < 2 && (game.claims?.length ?? 0) > 0) {
+    // A v1 archive that carries claims is a file whose own header says its
+    // reader will get the roster wrong.
+    problems.push("archive claims to be format 1 but carries claimed empires");
+  }
 
   const { genesis } = game;
   for (const wrong of await inspectGenesis(genesis)) problems.push(`genesis: ${wrong}`);
@@ -291,20 +342,39 @@ export async function verifyArchive(game: ArchivedGame): Promise<Verdict> {
   const gameId = genesis.gameId ?? "";
   const roster = Roster.fromGenesis(genesis);
 
-  // Amendments first, because a move signed by a substitute is only verifiable
-  // once the roster knows about the seat that endorsement created.
+  // Seatings first, because a move signed by a substitute or a claimant is only
+  // verifiable once the roster knows about the seat that record created.
+  //
+  // In **one merged order**, `seatingOrder`, shared with the driver's
+  // `seatArrivals`. Two arrays each walked in their own order diverge the moment
+  // a claim and an amendment land on the same step, and the divergence is a
+  // different member index — which is a `keyOf` miss on every later move that
+  // seat signed, surfacing as a hash mismatch that describes nothing.
   const seatedAt = new Map<string, number>();
-  for (const signed of game.amendments ?? []) {
-    if (!(await verifyAmendment(roster, gameId, signed))) {
-      problems.push(`amendment for empire ${signed.amendment?.empire} lacks a quorum`);
+  const seatings = mergeSeatings(game.amendments, game.claims);
+  for (const signed of seatings) {
+    const { empire, key, kind, step } = seatingOf(signed);
+    if (isClaim(signed)) {
+      // A claim authorises seating an empty empire and nothing else, and
+      // "empty" is a fact about where in this walk we are. Same guard the
+      // driver applies, for the same reason and against the same roster.
+      if (roster.size(empire) > 0) {
+        problems.push(`a claim for empire ${empire} arrived after it was taken`);
+        continue;
+      }
+      if (!(await verifyClaim(gameId, signed))) {
+        problems.push(`the claim for empire ${empire} is not signed by the key it seats`);
+        continue;
+      }
+    } else if (!(await verifyAmendment(roster, gameId, signed))) {
+      problems.push(`amendment for empire ${empire} lacks a quorum`);
       continue;
     }
-    const { empire, key, kind, step } = signed.amendment;
     const member = roster.amend(empire, key, kind, step);
     seatedAt.set(`${empire}:${member}`, step);
   }
 
-  const amendedAt = new Set((game.amendments ?? []).map((one) => one.amendment.step));
+  const amendedAt = new Set(seatings.map((one) => seatingOf(one).step));
 
   let verified = 0;
   for (const entry of game.moveLog) {

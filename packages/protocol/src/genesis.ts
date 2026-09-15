@@ -6,6 +6,7 @@
 // given the insertion order of the object it was handed.
 
 import {
+  CONTROL,
   DEFAULT_RULES,
   MIN_ABANDON_WINDOW,
   SEAT_CEILING,
@@ -112,14 +113,40 @@ export async function inspectGenesis(genesis: Genesis): Promise<GenesisProblem[]
   // genesis record is the one place an empire could be born oversized — and a
   // peer that only checked amendments would join the unfair game and then
   // faithfully enforce fairness for the rest of it.
+  //
+  // The floor and the ceiling now say different things. The ceiling is fairness:
+  // no empire may be composed with more seats than every other empire is
+  // allowed. The floor is no longer "at least one" — an empire with no seats is
+  // a vacancy, which is a thing a record may legitimately contain — so what is
+  // left of the floor is the two refusals below: not for a SimBot empire, and
+  // not for every empire in the game.
   const seats = Math.min(rules.maxSeats ?? DEFAULT_RULES.maxSeats, SEAT_CEILING);
 
   const seen = new Set<string>();
+  let claimed = 0;
   for (const empire of genesis.empires) {
-    if (!Array.isArray(empire.members) || empire.members.length < 1) {
+    if (!Array.isArray(empire.members)) {
       problems.push("members");
       continue;
     }
+    // A vacancy: an empire the map generator will place and nobody has claimed.
+    // Territory rather than a player, and a legal thing for a record to contain
+    // — but only for a human empire, because a SimBot empire with no seats is
+    // an empire nothing will ever play, and only alongside at least one empire
+    // that does have members, because a record of nothing but vacancies is a
+    // game with no players in it.
+    //
+    // Deliberately encoded as the empty array and nothing else. That is already
+    // an error to every build written before this one, so an old peer handed a
+    // vacancies record *declines* rather than desyncing — which is the exact
+    // outcome a protocol bump exists to produce, and why this change does not
+    // need one. A flag in `rules` or a sentinel key would be read straight past
+    // by that same peer, and the disagreement would surface three hours in.
+    if (empire.members.length < 1) {
+      if ((empire.control ?? CONTROL.HUMAN) !== CONTROL.HUMAN) problems.push("members");
+      continue;
+    }
+    claimed++;
     if (empire.members.length > seats) problems.push("seats");
     for (const member of empire.members) {
       if (!member.key) continue; // an unkeyed seat is a SimBot's, and needs none
@@ -127,6 +154,10 @@ export async function inspectGenesis(genesis: Genesis): Promise<GenesisProblem[]
       seen.add(member.key);
     }
   }
+
+  // Somebody has to be playing. A record of nothing but vacancies would pass
+  // every check above and then end on the first victory pass with no winner.
+  if (claimed < 1) problems.push("members");
 
   return [...new Set(problems)];
 }

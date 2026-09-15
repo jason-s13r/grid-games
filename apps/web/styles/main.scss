@@ -332,6 +332,30 @@ body {
   50% { outline-color: rgba(127, 232, 240, 0.35); }
 }
 
+// The pocket around an empire nobody has claimed. Nothing may be taken, marched
+// into or cascaded into here until somebody arrives, and a region where every
+// click silently fails is a bug report waiting to happen — so it is hatched,
+// visibly, and it disappears the moment the empire is claimed.
+//
+// Deliberately quiet. It is ground that is out of play rather than ground
+// anybody owns, and it can be a quarter of what is on screen.
+.standing.vacant {
+  color: var(--muted);
+  font-style: italic;
+}
+
+.tile.is-shielded::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: repeating-linear-gradient(
+    45deg,
+    rgba(255, 255, 255, 0.16) 0 2px,
+    transparent 2px 6px
+  );
+}
+
 // --- map controls ------------------------------------------------------------
 
 .mapctl {

@@ -9,7 +9,7 @@
 // it stops being a button and becomes a badge on the HUD.
 
 import type { State } from "@tessera/sim";
-import { MOVE, PHASE, WIN, STEPS_PER_SECOND, isProtected, summarise } from "@tessera/sim";
+import { MOVE, PHASE, WIN, STEPS_PER_SECOND, isProtected, isVacant, summarise } from "@tessera/sim";
 import { empireTheme } from "./palette";
 import type { Driver } from "../game/Driver";
 
@@ -231,13 +231,38 @@ export class Controls {
       .slice()
       .sort((a, b) => b.tilesOwned - a.tilesOwned);
 
+    // Whether *this* viewer could take an empire nobody has taken: a mesh game,
+    // watching rather than playing, and the door still open. The same
+    // `joinWindow` expression the simulation and the lobby panel use, read off
+    // the record rather than off this build's constant — a claim is a human
+    // ROSTER_AMEND, so the join window is the front door's opening hours and
+    // needs no rule of its own.
+    const window =
+      state.genesis.protocol >= 4 ? (state.genesis.rules.joinWindow ?? 0) : 0;
+    const claimable =
+      this.game.online &&
+      this.game.empire === 0 &&
+      !(window > 0 && state.step >= window);
+
     this.els.standings.innerHTML = rows
       .map((e) => {
         const t = empireTheme(e.id);
-        return `<div class="standing${e.alive ? "" : " dead"}">
+        // An empire nobody has claimed is in the standings, not hidden from
+        // them: it has a name, a flag and a capital, all sealed into the record
+        // before anybody arrived, and "which vacancy" is a real choice a player
+        // makes. Listing it as territory with nobody in it is the honest
+        // rendering — and it never shows as dead, because it was never alive.
+        const vacant = isVacant(state.empires[e.id - 1]!);
+        return `<div class="standing${!vacant && !e.alive ? " dead" : ""}${vacant ? " vacant" : ""}">
           <span class="swatch" data-empire="${e.id}"></span>
           <span class="standing-name">${t.name}${e.id === this.game.empire ? " (you)" : ""}</span>
-          <span class="standing-tiles">${e.tilesOwned}</span>
+          <span class="standing-tiles">${
+            vacant && claimable
+              ? `<button class="btn btn-small" type="button" data-claim="${e.id}">Take it</button>`
+              : vacant
+                ? "unclaimed"
+                : e.tilesOwned
+          }</span>
           <span class="standing-meta">${e.largestCascade.tiles ? `${e.largestCascade.tiles}&#9733;` : ""}</span>
         </div>`;
       })

@@ -22,6 +22,7 @@ import { Roster } from "@tessera/protocol";
 import type { MemberKey, Seat } from "@tessera/protocol";
 import { verifyArchive } from "./archive.js";
 import type { ArchivedGame } from "./archive.js";
+import { mergeSeatings, seatingOf } from "./seating.js";
 
 /** One key's record across every game counted.
  *
@@ -75,8 +76,13 @@ export interface Leaderboard {
  *  runs over archives that passed. */
 function seatsByIndex(game: ArchivedGame): Map<string, Seat> {
   const roster = Roster.fromGenesis(game.genesis);
-  for (const signed of game.amendments ?? []) {
-    const { empire, key, kind, step } = signed.amendment;
+  // In the merged order, and both kinds: a claim seats a key the genesis record
+  // never named, so a table built from amendments alone has no row for the one
+  // player who could not have been derived from the record. Same comparator the
+  // driver and the verifier use, because a different order here would credit the
+  // right keys to the wrong seats.
+  for (const signed of mergeSeatings(game.amendments, game.claims)) {
+    const { empire, key, kind, step } = seatingOf(signed);
     roster.amend(empire, key, kind, step);
   }
   const byIndex = new Map<string, Seat>();

@@ -146,6 +146,52 @@ export const DEFAULT_RULES: Rules = {
   maxSeats: 4,
 };
 
+/** The rules a game with unclaimed empires needs, and **deliberately not part of
+ *  `DEFAULT_RULES`.**
+ *
+ *  This is the whole of why vacancies need no protocol bump, and it is a
+ *  narrower argument than "a vacancy is an empty members array" on its own.
+ *  That array is already an error to every older build, so a record containing
+ *  one is *declined* rather than desynced — but a field in `rules` is read
+ *  straight past by that same build. Two of the fields below change
+ *  `isProtected` for any game at all, not only one with a vacancy in it: an old
+ *  peer handed a record carrying `graceCapitalPop` would ignore it, keep a
+ *  capital protected that this build has stopped protecting, and disagree about
+ *  a move three hours in.
+ *
+ *  So they travel **together with the thing an old build refuses**. A game
+ *  composed with no vacancies carries none of them and its rules are
+ *  byte-identical to what every build before this one composed; a game composed
+ *  with vacancies carries all of them and is declined wholesale by anything that
+ *  would misread them. Neither build is ever in the position of half-agreeing.
+ *
+ *  The numbers:
+ *
+ *  - `graceSteps`/`graceTiles` are the same three minutes and forty tiles under
+ *    their new names, because this changes what the clock is measured *from* and
+ *    not how long protection lasts.
+ *  - `graceCapitalPop`/`gracePopTotal` are the bars that make "established" mean
+ *    more than "owns ground" — a claimant handed a whole pocket owns forty tiles
+ *    of one population each on the step they arrive, which is not an empire that
+ *    can defend anything. Set so a genesis-seated empire still crosses the tile
+ *    bar first, exactly as it does today; `rules.test.ts` measures that rather
+ *    than assuming it.
+ *  - `vacancyRadius: 6` is 85 tiles granted, a ring of 24 for an attacker to
+ *    wall, and 5.5% of the default map held per vacancy. Chosen from the side of
+ *    the ledger the cost falls on: the camper is hypothetical and the players
+ *    staring at ground they cannot enter are not.
+ *  - `vacancyGrant: 1` is one population a tile — enough to hold the pocket
+ *    against a probe and not enough to walk out of it, which is what makes the
+ *    grant a border rather than an army. */
+export const VACANCY_RULES = {
+  graceSteps: minutes(3),
+  graceTiles: 40,
+  graceCapitalPop: 60,
+  gracePopTotal: 400,
+  vacancyRadius: 6,
+  vacancyGrant: 1,
+} as const;
+
 /** The most seats any rule may allow. Empire and member ids ride in single
  *  bytes of every signed move, and 32 members is already an empire nobody could
  *  coordinate — the ceiling exists so a hand-rolled genesis cannot ask for a

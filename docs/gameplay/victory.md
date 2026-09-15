@@ -17,6 +17,12 @@ tests four end conditions.
 | **Abandonment** | more than 1 alive, but only 1 is *present* | the present one | `LAST_ROSTER` |
 | **Timeout** | `endStep > 0` and `step >= endStep` | the [leader](#the-leader) | `TIMEOUT` |
 
+Every count above is over empires **somebody is playing**. An empire nobody has
+claimed — a [vacancy](empires-and-seats.md) — is territory, not a player: it is
+outside `alive`, outside `present`, and never the leader, however much ground it
+happens to hold. Inside those counts it would make the first three conditions
+unreachable or instant, depending on which one you forgot.
+
 `endStep` defaults to **0** (no timeout), and a host sets it by choosing a
 [duration](durations.md). It is never set alone: `abandonWindow` scales with it,
 because a 3-hour abandonment window in a 10-day game is a losing condition for
@@ -45,9 +51,10 @@ desync.
 
 ## The leader
 
-[`leader(state)`](../../packages/sim/src/victory.ts#L74), for a timeout: highest
-`tilesOwned`, ties broken by `popTotal`, then by `id`. A **total** order, so
-every peer names the same winner.
+[`leader(state)`](../../packages/sim/src/victory.ts), for a timeout: highest
+`tilesOwned`, ties broken by `popTotal`, then by `id`, over the empires somebody
+is playing. A **total** order, so every peer names the same winner — and a
+vacancy sitting on its granted pocket is never it.
 
 ## Ending
 

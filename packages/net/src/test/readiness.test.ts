@@ -75,12 +75,23 @@ describe("a promise made while signing is renewed, not left stale", () => {
     expect(t.peers.flatMap((peer) => peer.ejections)).toEqual([]);
   });
 
-  // A signature held for a full second is far past the input delay, so the move
-  // it was signing misses the slot it was addressed to and one peer applies
-  // what the other never received. That is not what this scenario is about, and
-  // it is not swept up either: the checkpoint machinery is what catches it.
-  it("the move that missed its slot was noticed, not swallowed", () => {
-    expect(t.peers.some((peer) => peer.desyncs.length > 0)).toBe(true);
+  // This used to assert the opposite, and the change is the point.
+  //
+  // A signature held far past the input delay used to mean the move missed the
+  // slot it was addressed to: the signer kept simulating — `blocked` never waits
+  // on our own seat, because nobody can be waiting on themselves — so it sailed
+  // past the step, broadcast the move anyway, and became the only peer in the
+  // game that never applied it. A one-move divergence with no bad actor, caught
+  // eventually by the checkpoint machinery and explained by nothing in any log.
+  //
+  // The ceiling that holds the *promise* now bounds the *simulation* too, which
+  // is the same sentence the field was already documented with. So the peer
+  // waits for its own signature instead of outrunning it, the move lands on the
+  // slot it was signed for, and there is nothing left to notice. Waiting on
+  // ourselves is bounded by a local promise resolving; diverging was not
+  // bounded by anything.
+  it("the move made its slot after all, so nobody had anything to notice", () => {
+    expect(t.peers.flatMap((peer) => peer.desyncs)).toEqual([]);
   });
 });
 

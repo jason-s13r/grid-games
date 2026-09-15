@@ -19,7 +19,7 @@ import {
 import { PASSABLE } from "./constants.js";
 import { EVENT } from "./events.js";
 import { idx, xOf, yOf } from "./geometry.js";
-import { createState, snapshot, restore, hashState } from "./state.js";
+import { createState, snapshot, restore, hashState, rebuildShields } from "./state.js";
 import type { State } from "./state.js";
 import { generate, scheduleSpawn, scheduleUpkeep } from "./mapgen.js";
 import { upkeep } from "./upkeep.js";
@@ -64,6 +64,9 @@ export class Sim {
       );
     }
     this.state = generate(createState(genesis));
+    // After the map generator, because the shields are around capitals and
+    // `placeCapitals` is what decides where those are.
+    rebuildShields(this.state);
   }
 
   get step(): number {
