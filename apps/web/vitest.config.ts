@@ -9,6 +9,10 @@
 // package is simply where a browser can be launched from — the client is the
 // only thing here that ships to one.
 //
+// A third project since: the views that build markup as strings, checked
+// against a real DOM. One engine, because that is a question about the HTML
+// parser and not about arithmetic.
+//
 // Three browsers rather than one, because a single engine proves less than it
 // looks: Chromium and Node are both V8, so that pairing catches a bundler or
 // environment difference and never an engine one. WebKit and Firefox are the
@@ -34,7 +38,32 @@ export default defineConfig({
     projects: [
       {
         ...shared,
-        test: { ...shared.test, name: "node", include: ["src/test/**/*.test.ts"] },
+        test: {
+          ...shared.test,
+          name: "node",
+          include: ["src/test/**/*.test.ts"],
+          // The `.browser.` files are in that glob too, and they want a DOM.
+          exclude: [...(shared.test?.exclude ?? []), "src/test/**/*.browser.test.ts"],
+        },
+      },
+      {
+        ...shared,
+        test: {
+          ...shared.test,
+          name: "ui",
+          // The client's views build markup as strings, and a string a browser
+          // refuses to parse the way it was meant is a bug no Node test can
+          // see. One engine is enough for that: this is about the HTML parser
+          // and the DOM, which the three agree about — unlike a float, which is
+          // what the sweep below exists for.
+          include: ["src/test/**/*.browser.test.ts"],
+          browser: {
+            enabled: true,
+            provider: "playwright",
+            headless: true,
+            instances: [{ browser: "chromium" }],
+          },
+        },
       },
       {
         ...shared,

@@ -15,16 +15,25 @@ import {
   Sim,
 } from "@tessera/sim";
 import { Roster } from "@tessera/protocol";
-import { Archive, Lobby, Lockstep, MAX_SEATS, parseRef } from "@tessera/net";
-import type { ConnectionRef } from "@tessera/net";
+import { Archive, Directory, Lobby, Lockstep, MAX_SEATS, parseRef, resolve } from "@tessera/net";
+import type { ConnectionRef, ResumePoint } from "@tessera/net";
 import pkg from "../package.json";
 import { LocalGame } from "./game/Local";
 import { boardClick } from "./game/input";
 import { OnlineGame } from "./game/Online";
 import type { Driver } from "./game/Driver";
 import { myIdentity } from "./net/identity";
+import {
+  checkBoardUrl,
+  checkRefForPage,
+  onSettingsChange,
+  saveSettings,
+  settings,
+} from "./net/settings";
 import { LobbyPanel } from "./view/LobbyPanel";
 import { Setup } from "./view/Setup";
+import { Games } from "./view/Games";
+import type { GameRow } from "./view/Games";
 import { Rivals } from "./view/Rivals";
 import type { RosterView } from "./view/LobbyPanel";
 import type { SetupSummary } from "./view/Setup";
@@ -159,6 +168,124 @@ const duration = () => durationRules(Number(lengthEl.value));
 const rivals = new Rivals(pick<HTMLElement>('[data-cfg="rivals"]'));
 
 const soloSetup = () => ({ bots: rivals.list, duration: duration(), ...mapSize() });
+
+// --- settings ----------------------------------------------------------------
+//
+// One field so far, and it is the one nothing else can be tested without: the
+// address book. Validated the moment it is entered rather than the moment it is
+// read — a board on http behind a page on https fails as an opaque `TypeError`
+// several screens away from the field that caused it, and the field is the only
+// place the reason is still known. See net/settings.ts.
+
+const boardEl = pick<HTMLInputElement>('[data-cfg="board"]');
+const boardProblemEl = pick<HTMLElement>('[data-cfg="board-problem"]');
+boardEl.value = settings().board;
+
+boardEl.addEventListener("change", () => {
+  const text = boardEl.value.trim();
+  const problem = checkBoardUrl(text);
+
+  boardProblemEl.textContent = problem;
+  boardProblemEl.hidden = !problem;
+  boardProblemEl.classList.toggle("lobby-problem", !!problem);
+  // Refused rather than saved-and-broken: a stored URL this page can never read
+  // would fail on every render, a long way from here, with the reason gone.
+  if (problem) return;
+
+  if (text === settings().board) return;
+  // Whoever is reading the board hears about it from the store, not from here.
+  saveSettings({ board: text });
+});
+
+// --- the address book --------------------------------------------------------
+//
+// One card, its own root, its own listener. What it shows is `Directory.list()`,
+// which has already re-hashed every genesis it hands back and dropped the rows
+// that did not survive it — so nothing here is deciding whether a game is real,
+// only which of its numbers are facts and which are the board's claims.
+
+const games = new Games(pick<HTMLElement>("[data-games]"), {
+  open: (row) => void knock(row),
+  resume: (row) => void takeUp(row),
+});
+
+/** The board, rebuilt whenever its URL changes. Undefined is the default and is
+ *  not a failure: there is no board shipped with this client. */
+let board: Directory | undefined;
+
+/** What `resolve` last found for a row, kept so the button that says "Take it
+ *  up" has the point it was talking about. Cleared with the list. */
+const knocked = new Map<string, { genesis: Genesis; point: ResumePoint }>();
+
+function refreshGames(): void {
+  const url = settings().board;
+  knocked.clear();
+  board = url ? new Directory(url) : undefined;
+  if (!board) return games.unset();
+
+  games.loading();
+  void board.list().then(
+    (listings) => {
+      // The setting can change while a board is answering, and a slow reply
+      // from the board you just stopped using should not overwrite the one you
+      // just started.
+      if (settings().board === url) games.show(listings);
+    },
+    (error: Error) => {
+      if (settings().board === url) games.problem(error.message, url);
+    },
+  );
+}
+
+onSettingsChange(refreshGames);
+refreshGames();
+
+/** Knock on a row's doors, and do whatever the answer turns out to be.
+ *
+ *  Everything about "where is this game" is `resolve`'s (0007); this decides
+ *  nothing and only renders what came back. The knock is here rather than at
+ *  render time on purpose: probing a ref opens a connection, which on WebRTC
+ *  pulls the whole broker client down, and doing that for every row of a board
+ *  would cost a page load per game nobody clicked on. */
+async function knock(row: GameRow): Promise<void> {
+  // Leaving is the player's decision, so it is asked for rather than assumed. A
+  // click on a game while already in one used to do nothing whatsoever, which
+  // is the normal state of this screen once you have hosted anything.
+  if (lobby) return void panel.setStatus("Leave the game you are in first.");
+  if (!board) return;
+
+  games.offer(row.gameId, { kind: "knocking" });
+  const route = await resolve(board, row.gameId);
+
+  if (route.kind === "dial") {
+    // `expect` is the whole reason a ref from a board is safe to use: the room
+    // answered, its record will be well formed, and the only open question is
+    // whether it is the game we looked up.
+    games.offer(row.gameId, { kind: "gone", problems: [] });
+    return void begin({ ref: route.ref, expect: route.listing.gameId });
+  }
+
+  if (route.kind === "resume") {
+    knocked.set(row.gameId, { genesis: route.listing.genesis, point: route.point });
+    return games.offer(row.gameId, {
+      kind: "resume",
+      step: route.point.step,
+      tally: `Endorsed by ${route.tally.endorsed} of the ${route.tally.needed} seats it needs`,
+    });
+  }
+
+  games.offer(row.gameId, {
+    kind: "gone",
+    problems: route.problems.length > 0 ? route.problems : ["nothing answered, and nobody kept a resume point"],
+  });
+}
+
+/** Take up a dormant game the player has now seen the tally for. */
+function takeUp(row: GameRow): void {
+  const found = knocked.get(row.gameId);
+  if (!found) return;
+  void begin({ revive: found });
+}
 
 let MAP = { ...MAP_SIZES.medium! };
 
@@ -459,6 +586,29 @@ pick<HTMLButtonElement>('[data-action="pause"]').addEventListener("click", (even
   }
 });
 
+/** Which transport this game is running over.
+ *
+ *  It names what is known, which is less than it looks. The obvious line is
+ *  "direct" versus "relayed" and this client cannot write it: what it holds is a
+ *  `ConnectionRef`, and a `Connection` is deliberately four verbs and a close —
+ *  no route, no candidate pair. The ref distinguishes *peer to peer* from *a
+ *  room bus*, and a WebRTC connection running through TURN is peer-to-peer by
+ *  the ref and relayed in fact — which is the one case where the word would
+ *  matter and the one case it would be wrong.
+ *
+ *  The true answer is reachable: `RTCPeerConnection.getStats()`, the selected
+ *  candidate pair, `type: "relay"`. It costs a poll and a reach through PeerJS
+ *  into a connection object it does not expose, and a status line that is wrong
+ *  about TURN is worse than one that never claimed to know. */
+const transportLine = (ref: ConnectionRef): string =>
+  ref.kind === "rtc" ? "Connected peer to peer" : `Connected through ${new URL(ref.url).host}`;
+
+function sayTransport(ref?: ConnectionRef): void {
+  for (const el of document.querySelectorAll("[data-transport]")) {
+    el.textContent = ref ? transportLine(ref) : "";
+  }
+}
+
 /** Put down a mesh session if this client holds one. Leaving has to be real:
  *  the peers still playing would otherwise wait on a seat that had wandered
  *  off. A solo game has nothing to close. */
@@ -471,6 +621,7 @@ function leaveMesh(): void {
   archiveBtn.hidden = true;
   chat.close();
   panel.detach();
+  sayTransport();
 }
 
 /** Hand the player their own copy of the game.
@@ -633,18 +784,47 @@ function rosterView(driver: Lockstep): RosterView {
   };
 }
 
-async function begin(input?: string): Promise<void> {
-  if (lobby) return;
+/** Where a game is being joined from, when it is not a string somebody typed.
+ *
+ *  A typed ref and a ref from a board are not the same thing and the entry point
+ *  could express only the first. A row *names a game*, which is a new way to be
+ *  wrong — a board can post somebody's real record against a relay it controls —
+ *  and `expect` is 0007's answer to it. A revive has no ref at all: there is
+ *  nobody to dial, so the tab opens a room of its own and puts the game back up
+ *  in it. */
+interface JoinTarget {
+  ref?: ConnectionRef;
+  /** The game we were told is behind that door. Set by every caller that looked
+   *  a game up, and by none that was handed a code by a person — they were told
+   *  what it was by somebody they know. */
+  expect?: string;
+  /** A dormant game to put back up, and the state to put it back up at. */
+  revive?: { genesis: Genesis; point: ResumePoint };
+}
+
+async function begin(input?: string | JoinTarget): Promise<void> {
+  // Leaving is the player's decision, so it is asked for rather than assumed.
+  if (lobby) return void panel.setStatus("Leave the game you are in first.");
 
   // Parsed before the panel says "connecting", because a string that was never
   // going to be a room should not flash a spinner on its way to being rejected.
   // This is the whole of the client's involvement in transports: one input, and
   // the string chooses.
-  let ref: ConnectionRef | undefined;
+  const target: JoinTarget = typeof input === "object" ? input : {};
+  let ref: ConnectionRef | undefined = target.ref;
   try {
-    if (input) ref = parseRef(input);
+    if (typeof input === "string") ref = parseRef(input);
   } catch (error) {
     panel.detach((error as Error).message);
+    return;
+  }
+
+  // Parsed fine, and still not a room this page can open. A page on https
+  // cannot open a ws:// socket, and the browser refuses it before a byte
+  // leaves — so the reason is said here, where it is still known.
+  const unreachable = ref ? checkRefForPage(ref) : "";
+  if (unreachable) {
+    panel.detach(unreachable);
     return;
   }
 
@@ -655,6 +835,7 @@ async function begin(input?: string): Promise<void> {
   let driving: Lockstep | undefined;
   try {
     opened = await Lobby.open(identity, ref, {
+      ...(target.expect ? { expect: target.expect } : {}),
       // A socket that came back missed whatever was said while it was away. Our
       // own writes survived — the transport held them — so this is the other
       // half, and it is the same repair a desync already asks for.
@@ -692,6 +873,8 @@ async function begin(input?: string): Promise<void> {
     archive.attach(driver);
     archiveBtn.hidden = false;
 
+    sayTransport(lobby!.ref);
+
     driver.onMessage = (message, text) => chat.add(message, text);
     // Being voted a seat mid-game is the moment an observer becomes a player.
     // Nothing about the driver changes — it was already verifying every move —
@@ -701,18 +884,42 @@ async function begin(input?: string): Promise<void> {
       openChat(given);
       panel.setStatus(`You have been seated as ${empireTheme(given.empire).name}.`);
     };
-    driver.start();
+    // A revived game starts at the step its witnesses signed for rather than at
+    // zero, and the archive is attached first on purpose: `onAdopted` marks the
+    // gap, so the log this tab keeps says honestly that it begins in the middle.
+    const go = async (): Promise<void> => {
+      if (target.revive) {
+        const tally = await driver.resume(target.revive.point);
+        if (!tally.ok) {
+          // The bytes are checked separately from the signatures, and either can
+          // refuse. Both say why, because "could not resume" is not a reason.
+          panel.detach(
+            `could not take up that game: ${tally.problems.join(", ")} ` +
+              `(${tally.endorsed} of the ${tally.needed} signatures it needs)`,
+          );
+          leaveMesh();
+          return;
+        }
+      }
 
-    mesh = driver;
-    if (seat) openChat(seat);
+      driver.start();
 
-    mount(new OnlineGame(driver, lobby!.connection));
-    // The record is sealed and every peer has checked it, so there is nothing
-    // left on the setup screen to configure — only who is in the game, which
-    // the panel keeps showing.
-    setup.live();
-    shell.show("game");
+      mesh = driver;
+      if (seat) openChat(seat);
+
+      mount(new OnlineGame(driver, lobby!.connection));
+      // The record is sealed and every peer has checked it, so there is nothing
+      // left on the setup screen to configure — only who is in the game, which
+      // the panel keeps showing.
+      setup.live();
+      shell.show("game");
+    };
+    void go();
   };
+
+  // Nobody is going to send us this record — we are the one putting it back up —
+  // so it is adopted here rather than waited for.
+  if (target.revive) await lobby.revive(target.revive.genesis);
 }
 
 start(seedFrom("tessera"));

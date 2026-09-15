@@ -23,6 +23,39 @@ const clock = (steps: number): string => {
     : `${m}:${String(s).padStart(2, "0")}`;
 };
 
+/** What the clock says, which in a game with an end is not how long it has been
+ *  running.
+ *
+ *  `clock(step)` is elapsed time, and in an open-ended game that is the only
+ *  honest reading. In a game the record gives an `endStep`, it is the wrong
+ *  number on screen: a player three hours into a three-hour game wants to know
+ *  they have minutes left, and what they were shown was "3:00:00" counting up.
+ *
+ *  Both readings come off the genesis rules and this peer's own step. Never off
+ *  a listing, which is a claim somebody posted, and never off a wall clock —
+ *  the step number already is one, agreed by everybody playing.
+ *
+ *  `online` is only about the join window. A solo game is composed by the same
+ *  form as a hosted one and carries the same `DurationRules`, join window and
+ *  all — which is right, because the two are the same world with different
+ *  seats in it — but there is nobody who could walk through that door, so
+ *  counting down to it closing is a countdown to nothing. */
+export function clockLine(state: State, online = true): string {
+  const end = state.genesis.rules.endStep ?? 0;
+  const label = end > 0 ? `${clock(Math.max(0, end - state.step))} left` : clock(state.step);
+
+  // Only while it is open, and only where somebody could use it. Once the window
+  // has passed it stops being news about when to hurry, and the panel already
+  // says the seats are closed.
+  // Read the way the rest of the client reads it: a v3 record predates the
+  // field, and a number that means nothing should not be counted down.
+  const window = online && state.genesis.protocol >= 4 ? (state.genesis.rules.joinWindow ?? 0) : 0;
+  const joining =
+    window > 0 && state.step < window ? ` · seats open for ${clock(window - state.step)}` : "";
+
+  return `${label} · step ${state.step}${joining}`;
+}
+
 const WIN_TEXT: Record<number, string> = {
   [WIN.TIMEOUT]: "time expired",
   [WIN.LAST_EMPIRE]: "last empire standing",
@@ -81,7 +114,7 @@ export class Controls {
     // a board like everyone else; what it does not have is a seat to describe.
     const empire = state.empires[this.game.empire - 1];
     if (!empire) {
-      this.els.clock.textContent = `${clock(state.step)} · step ${state.step}`;
+      this.els.clock.textContent = clockLine(state, this.game.online);
       this.els.hud.innerHTML = `<strong class="hud-name">Watching</strong>`;
       this.els.acts.innerHTML = "";
       this.els.rosterPanel.hidden = true;
@@ -92,7 +125,7 @@ export class Controls {
     const rules = state.genesis.rules;
     const theme = empireTheme(empire.id);
 
-    this.els.clock.textContent = `${clock(state.step)} · step ${state.step}`;
+    this.els.clock.textContent = clockLine(state, this.game.online);
 
     const pct = Math.round((member.popTimer / rules.popMax) * 100);
 

@@ -59,6 +59,23 @@ would prove little, since it is V8 as Node is. The browsers come from
 Playwright; `pnpm --filter @tessera/web exec playwright install` fetches them,
 and `BROWSERS=chromium pnpm --filter @tessera/web test` narrows the loop.
 
+## Playing with somebody
+
+Host a game, copy the room code, send it to a person. That is still the shortest
+path and it has not changed.
+
+It is no longer the only one. Put an address book URL in the client's
+**Settings** and the **Games** card lists what other people are running — with
+what the sealed record says about each game separated from what the board merely
+claims, and with the one line a stranger cannot manufacture: a quorum of that
+game's own seats signing for the state it reached. A game whose doors have all
+closed offers to be taken up from a resume point instead of a dead dial.
+
+No board ships with this client and none is assumed, which is the point: a board
+is a URL that arrives the way a room code used to. A static JSON file behind any
+HTTP server is a perfectly good one for a group of friends, because
+[the checking is in the client](docs/clients/finding-a-game.md).
+
 ## Peers without a browser
 
 A game that runs for days needs somebody awake in it, and "somebody" should not

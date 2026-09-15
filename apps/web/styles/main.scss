@@ -704,6 +704,141 @@ body {
   &:hover:not(:disabled) { background: #37322a; border-color: #37322a; }
 }
 
+// --- the games card ----------------------------------------------------------
+//
+// A list of rows above the card that starts a game. Each row is four short
+// lines and a button: what the world is, how long is left, how to get in, and
+// who has vouched for it. Nothing here is a colour-coded verdict — a row that
+// cannot be played says so in words, because "greyed out" is not a reason.
+.games { margin-bottom: 14px; }
+
+.games-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 8px;
+}
+
+.games-row {
+  display: grid;
+  // The button sits to the right of everything and spans the rows beside it, so
+  // a row with a sunset notice does not push it out of reach of the row it
+  // belongs to.
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 2px 10px;
+  padding: 9px 10px;
+  border: 1px solid var(--edge);
+  border-radius: 4px;
+  background: #fffdf6;
+
+  > * { grid-column: 1; }
+}
+
+// A game this build cannot play is shown, never hidden: a lobby that silently
+// omits the game you are in is the worst possible answer. It is quieter, and
+// the row says why in words underneath.
+.games-row-off { opacity: 0.66; }
+
+.games-main {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.games-title { font-size: 13px; }
+
+.games-op { font-size: 11px; color: var(--muted); }
+
+.games-id {
+  margin-left: auto;
+  font-size: 11px;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.games-facts {
+  margin: 1px 0 0;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.games-proof {
+  margin: 3px 0 0;
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.games-act {
+  grid-column: 2;
+  grid-row: 1 / -1;
+  align-self: center;
+}
+
+// What knocking turned up, under the facts rather than instead of them: nobody
+// answering the door does not change what the game is.
+.games-found {
+  margin: 6px 0 0;
+  padding: 6px 8px;
+  font-size: 11px;
+  border-left: 2px solid var(--edge);
+  color: var(--muted);
+
+  p { margin: 0; }
+}
+
+.games-problems {
+  margin: 3px 0 0;
+  padding-left: 16px;
+}
+
+// The settings disclosure, between the card and the footer. It wears the
+// sidebar's triangle rather than the browser's marker, for the same reason that
+// one does, but it is not an `.acc`: those are panels beside a board and this is
+// a fold on a menu screen.
+.settings {
+  margin-top: 14px;
+}
+
+.settings > summary {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  cursor: pointer;
+  font-size: 10px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--muted);
+  user-select: none;
+
+  list-style: none;
+  &::-webkit-details-marker { display: none; }
+  &::before {
+    content: "";
+    flex: none;
+    width: 0;
+    height: 0;
+    border-left: 4px solid currentColor;
+    border-top: 3.5px solid transparent;
+    border-bottom: 3.5px solid transparent;
+    transition: transform 120ms ease;
+  }
+
+  &:hover { color: var(--ink); }
+}
+
+.settings[open] > summary::before { transform: rotate(90deg); }
+
+.settings-body {
+  padding: 4px 0 2px;
+
+  // The stacked field's own top margin is for a field under a field; this one
+  // is directly under the summary.
+  .field-stacked { margin-top: 6px; }
+}
+
 .screen-foot {
   display: flex;
   align-items: center;

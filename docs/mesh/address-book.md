@@ -9,6 +9,10 @@ reads.**
 shared artifact. It lives in `packages/net` so a browser and a
 [headless peer](../clients/headless-peers.md) use one implementation.
 
+This page is the mechanism. For the same thing from a player's side — what a row
+says, which half of it you can believe, and what pressing Join actually does —
+see [finding a game](../clients/finding-a-game.md).
+
 ## What a board is
 
 A bulletin board of connection parameters. It stores what is posted, expires what

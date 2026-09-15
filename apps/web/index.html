@@ -30,6 +30,10 @@
 
         <div class="topbar-end">
           <div class="clock" data-clock></div>
+          <!-- Which transport this game is running over. Empty in a solo game,
+               which has no connection to describe. See transportLine in main.ts
+               for why it does not say "direct" or "relayed". -->
+          <span class="version" data-transport></span>
           <span class="version" data-version></span>
           <button data-action="pause" class="btn">Pause</button>
           <button data-action="archive" class="btn" hidden title="Download this game's signed move log">Save log</button>
@@ -111,6 +115,13 @@
             </p>
           </header>
 
+          <!-- Games other people are running, above the card that starts one:
+               finding a game is the first question now that there is somewhere
+               to find one. Its own root and its own listener — deliberately not
+               inside the lobby panel, which rebuilds itself several times a
+               second. See view/Games.ts. -->
+          <section class="card games" data-games></section>
+
           <!-- One card, one flow. You say what kind of game you are starting,
                and the same form appears for a solo game and a hosted one alike
                — they are the same world with different seats in it, so asking
@@ -158,6 +169,34 @@
 
             <div class="setup-foot" data-setup-foot></div>
           </section>
+
+          <!-- Folded away, because the normal state of these is "never touched".
+               A board is a URL that arrives the way a room code used to: there
+               is no default, and nothing here breaks while it is empty. See
+               net/settings.ts. -->
+          <details class="settings" data-settings>
+            <summary>Settings</summary>
+            <div class="settings-body">
+              <div class="field field-stacked">
+                <label for="cfg-board">Address book</label>
+                <input
+                  id="cfg-board"
+                  class="lobby-code"
+                  data-cfg="board"
+                  placeholder="https://board.example/games"
+                  spellcheck="false"
+                  autocomplete="off"
+                />
+                <p class="hint" data-cfg="board-problem" hidden></p>
+              </div>
+              <p class="hint">
+                Where this browser looks for games other people are running, and
+                where it posts one of yours if you ask it to. Anyone can run a
+                board and anyone can list a game on one, so your browser checks
+                every game it is shown rather than believing the board.
+              </p>
+            </div>
+          </details>
 
           <footer class="screen-foot">
             <button class="btn" data-action="resume" hidden>Back to the game</button>

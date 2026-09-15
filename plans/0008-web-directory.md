@@ -1,6 +1,6 @@
 # 0008 — The web client: join, create, watch
 
-Status: draft
+Status: steps 1–6 built (2026-09-15); 7–11 draft
 Depends on: 0002, 0003, 0007 (uses them all)
 Branch: `web-directory-ui`
 
@@ -90,16 +90,17 @@ book once genesis exists.
 
 | File | What it is |
 |---|---|
-| `apps/web/src/net/settings.ts` | the board URL and the factory URL, in the cupboard the identity already uses |
+| `apps/web/src/net/settings.ts` | the board URL and the factory URL, in the cupboard the identity already uses — **and both halves of the mixed-content rule** |
 | `apps/web/src/view/Games.ts` | the third section: rows from the board, and what each row offers |
-| `apps/web/src/view/Duration.ts` | the length control — a list, a free-entry field, one step count out |
+| ~~`apps/web/src/view/Duration.ts`~~ | **not built.** 0002 shipped the control in `main.ts`; the free-entry field was declined |
+| `packages/net/src/lobby.ts` | **`revive()`** — play a record you did not compose, which nothing could do before |
 | `apps/web/src/net/announce.ts` | the tab as a door: announce, heartbeat, withdraw, and the cases where it is none of those |
 | `apps/web/src/replay/engine.ts` | a worker that owns a `Sim` and a ladder of snapshots |
 | `apps/web/src/view/Replay.ts` | the scrubber, which is a `Renderer` and a range input |
 | `apps/web/src/main.ts` | `expect` on a row-join, the duration on the plan, the transport line |
 | `apps/web/src/view/Controls.ts` | the clock, which today counts the wrong way |
-| `apps/web/index.html`, `styles/main.scss` | one full-width section, not a third column |
-| `apps/web/vitest.config.ts` | the browser project stops being one file |
+| `apps/web/index.html`, `styles/main.scss` | one more card in a single column — see below; the two-column grid is gone |
+| `apps/web/vitest.config.ts` | a third project, `ui`, for views whose output is markup |
 
 Four things the body asserts that nothing in the tree can do yet, each with a
 section below:
@@ -124,6 +125,63 @@ section below:
   previous plan spent a section on.
 
 Everything else in the body survives contact with the code.
+
+## What had already changed by the time this was built
+
+The appendix above audits the body against the tree as it stood when 0007 was
+still draft. Six of its claims went stale between then and building it, and the
+sections below have been corrected in place; they are collected here because the
+pattern is the point — **an appendix is only as current as the plan that landed
+last**, and 0010 and 0014 both read this one.
+
+- **The duration control already exists.** 0002 shipped `COMMON_DURATIONS`, the
+  filled `<select>` and `duration()` feeding `HostPlan.duration` — the right
+  field, so the warning below was answered before it was read. Only the
+  free-entry minutes field was ever outstanding, and it was **declined**: the
+  picker runs 15 minutes to 10 days, and the argument in `main.ts` against
+  open-ended entry is most of the argument against a custom box beside it.
+- **The menu screen is one column, not two.** 0001's "one setup, one button"
+  replaced the Host and Join cards with a single `.card.setup` driven by
+  `view/Setup.ts`, inside a 720px `.screen-inner`. There is no `1fr 1fr` grid
+  left to avoid becoming a third of; `.card-wide` was never needed. The
+  *reasoning* in that section survives untouched and is why `Games` owns its own
+  root.
+- **There is no default board.** The body says "default public board". 0007 as
+  built says the opposite and `docs/mesh/address-book.md` states it outright: no
+  board ships with this client and no URL is assumed. Empty is the normal state,
+  and the card says so in a sentence rather than showing a broken fetch.
+- **Announcing is signed.** `announce(identity, listing)`,
+  `present(identity, listing)` and `withdraw(identity, gameId, refs)` all take an
+  identity and sign the write; `verifyWrite` is exported for board authors. The
+  body's "the board takes a POST from anyone" and the `announce.ts` sketch below
+  both predate it. `doorOf` is unaffected.
+- **Backend 2's guard is one string comparison.** `GET /room/:code` answers
+  `gameId: ""` before a game is sealed, so the check is against the empty string
+  and not an absent field. "No other peer has announced a draft" has no signal in
+  the tree at all — that is 0009's — so the race is wider than the section below
+  admits.
+- **Every `file:line` citation had moved.** They are corrected inline. The
+  standing instruction from 0007 applies to this plan too: re-check them before
+  trusting one.
+
+And three things building it turned up that no reading would have:
+
+- **`Lobby` could not adopt a record it had not composed.** `host()` composes and
+  seals; `adopt()` is private; there was no public path from "a verified resume
+  point for a game that exists" to "a lobby playing it". So the rejoin branch is
+  not UI work alone, and `Lobby.revive(genesis)` was added — four lines, through
+  the same `adopt` every joiner uses, granting nothing.
+- **A revived game's archive marks itself a fragment, for free.**
+  `Archive.attach` wires `driver.onAdopted` to `gap()`, so resuming before
+  `start()` records the jump and `toJSON` carries `from`. The honest behaviour
+  was already built; it just had to be ordered correctly.
+- **The browser project earns its place for markup, not for enforcement.** The
+  verification table below wants the mixed-content refusals tested "in the engine
+  that actually enforces them". Nothing is: these are *our* checks, run before the
+  browser would block anything, and they are pure functions best pinned under
+  Node. What only a browser can answer is whether a view's concatenated strings
+  parse into the DOM they were written for — so that is what `*.browser.test.ts`
+  holds, on chromium alone.
 
 ## Three limits a browser has that the rest of the series never had to have
 
@@ -169,32 +227,34 @@ tab closing is a property of the board, not of the unload handler.
 
 ## The third card is not a third column
 
-`index.html:114` is a two-column grid (`main.scss:601`, `1fr 1fr`), and the two
-things in it are forms — a solo setup and the lobby. A third `1fr` gives a list
-of games a third of the width, and gives the row that matters most on the page
-the least room on it.
-
-The directory is a full-width section above the two cards:
+**Corrected: there is no second column any more.** When this was written
+`index.html` held a two-column grid whose two cells were a solo setup and the
+lobby, and the section below argued against making it three. 0001's
+"one setup, one button" removed that grid: the menu is now a single
+`.screen-inner` at 720px holding one `.card.setup`, and `view/Setup.ts` drives
+the whole flow inside it. So `.card-wide` and `grid-column: 1 / -1` are
+unnecessary and were not added. The directory is simply another `.card`, above
+the one that starts a game, because finding a game is the first question now
+that there is somewhere to find one:
 
 ```html
-<section class="card card-wide" data-games>
-  <h2>Games</h2>
-  <p class="card-tag">Games other people are running. Anyone can list one; your
-  browser checks every game it is shown.</p>
-  <div data-games-list></div>
-</section>
+<section class="card games" data-games></section>
 ```
 
-with `.card-wide { grid-column: 1 / -1; }` and nothing else in the stylesheet —
-the single-column breakpoint at `main.scss:1053` already collapses it correctly.
+Its empty state is a sentence rather than an absence — with no board configured,
+which is the default, it says so and points at Settings. A card that vanished
+would be a feature nobody discovers.
+
+The half of the original argument that still stands, and is the reason the card
+is where it is:
 
 It is a sibling of the lobby panel, not a child of it. `LobbyPanel.render`
-(`LobbyPanel.ts:150`) replaces its own `innerHTML` wholesale, and `main.ts:398`
-calls `setStatus` on every render tick; a directory list inside that root would
+(`LobbyPanel.ts:167`) replaces its own `innerHTML` wholesale, and `main.ts`'s
+frame loop calls `setStatus` on every render tick; a directory list inside that root would
 have its rows rebuilt under the player's cursor several times a second, and its
 `<input>` cleared with them. The panel is right to work that way — it has three
 short phases and no text to preserve — and it is precisely why this does not
-go in it. `Games` follows `Rivals` (`view/Rivals.ts:30`) instead: its own root,
+go in it. `Games` follows `Rivals` (`view/Rivals.ts`) instead: its own root,
 its own listener, `render()` when its own data changes.
 
 ## Announcing publishes a game, so the tab has to ask first
@@ -234,7 +294,12 @@ cases, and only the first has a door in it:
 | My own host peer | the host process | nothing — 0006 announces its own room | nothing |
 | Managed | the instance the factory made | nothing — same reason | nothing |
 
-`announce.ts` is therefore about forty lines and one guard:
+`announce.ts` is therefore about forty lines and one guard. **Corrected:** every
+write is signed now — `announce(identity, listing)`, `present(identity, listing)`
+and `withdraw(identity, gameId, refs)` — because a board that cannot tell a
+heartbeat from a hijack lets anyone clear it. That is access control over rows
+and says nothing about whether a row is true; `read()` never looks at the
+signer. The guard below is unchanged by it:
 
 ```ts
 /** A door, or nothing at all.
@@ -250,7 +315,7 @@ export function doorOf(lobby: Lobby): ConnectionRef | undefined {
 ```
 
 Presence is `present()` on a timer while the tab holds a door, and the timer is
-cleared in `leaveMesh` (`main.ts:321`) beside the rest of the teardown. It does
+cleared in `leaveMesh` beside the rest of the teardown. It does
 not run in a backgrounded tab — browsers clamp timers, and a phone in a pocket
 may not run it for an hour — which is another way of saying the TTL is the
 mechanism.
@@ -260,7 +325,7 @@ mechanism.
 Two things separate a row from the join box, and the current entry point can
 express neither.
 
-`begin(code?)` opens with `if (lobby) return;` (`main.ts:474`). Clicking a
+`begin(code?)` opened with `if (lobby) return;`. Clicking a
 directory row while a lobby is open — which is the normal state of the menu
 screen once you have hosted anything — does nothing at all, silently. The games
 card is the first place a join can be *clicked* rather than typed, so this stops
@@ -279,9 +344,25 @@ for exactly this: a ref from a board is a claim that *this* game is behind that
 door, and arriving in a different one is the failure that looking a game up
 introduces. So a row-join passes `expect: listing.gameId` to `Lobby.open`; a
 typed ref passes nothing, because the person typing it was told what it was by
-someone they know. `LobbyHandlers.join` (`LobbyPanel.ts:15`) keeps taking a
+someone they know. `LobbyHandlers.join` keeps taking a
 plain string — the panel stays free of network types — and the games card gets
 its own handler that does not go through the panel at all.
+
+**What this section missed.** `resolve`'s `resume` route ends at a verified point
+for a game whose doors have all closed, and there was no way to sit down in it:
+`Lobby.host` *composes* a record, `adopt` is private, and nothing public took a
+genesis that already existed. So the rejoin branch is not UI work alone.
+`Lobby.revive(genesis)` is the missing four lines — broadcast, then the same
+`adopt` every joiner runs, with the same `inspectGenesis`, the same `expect`
+comparison and the same seat lookup. It grants nothing: reviving a game you
+invented gets you a room with you in it, which is what hosting already was. The
+state that follows is `Lockstep.resume`'s to check, and it counts the witnesses
+and hashes the bytes before it keeps anything.
+
+Order matters once, and the tree already had it right: attach the `Archive`
+*before* resuming, and `driver.onAdopted` fires `archive.gap()`, so the log this
+tab keeps carries `from` and every reader refuses to replay it from the start.
+A revived game's archive is a fragment, and says so without being asked.
 
 `resolve()` (0007) is what turns a row into one of those: `dial` gives a ref to
 open with `expect`, `resume` gives a verified point and a tally to render as
@@ -290,7 +371,23 @@ the problems to print. The card renders all three; it decides none of them.
 
 ## The duration control
 
-`MAP_SIZES` / `mapSize()` (`main.ts:71-80`) is the pattern, as 0002 says: a
+**Corrected: 0002 built this, and the free-entry field was declined.**
+`COMMON_DURATIONS`, the `<select>` filled from it, and `duration()` reading it at
+start time are all in `main.ts` already, and they feed `HostPlan.duration` — the
+right field, so the warning at the top of this appendix was answered before
+anyone read it. Nine lengths from 15 minutes to 10 days ship today.
+
+What was left was the custom-minutes box below, and it is not being added: the
+comment beside `COMMON_DURATIONS` argues that a game's end date is what makes a
+version's sunset derivable rather than a judgement call, and most of that
+argument tells against a free-entry field beside the list too. A host who wants
+45 minutes is one line in the table away, which is exactly what the table is for.
+
+The sketch is kept because it is the shape any later custom field should take —
+and because the `duration`/`rules` correction under it is the one part of this
+section that was load-bearing and is still right.
+
+`MAP_SIZES` / `mapSize()` is the pattern, as 0002 says: a
 table beside the picker, read when the game starts rather than cached. The
 free-entry field is the only part that is not a copy of it, and it is the part
 worth writing down:
@@ -310,13 +407,13 @@ const duration = (): DurationRules => {
 };
 ```
 
-and `main.ts:429`:
+and in `main.ts`, which today reads:
 
 ```ts
-start: (plan) => void lobby?.host({ ...plan, ...mapSize(), duration: duration() }),
+void lobby?.host({ empires: panel.seating.empires, simbots: rivals.list, ...mapSize(), duration: duration() });
 ```
 
-`duration`, not `rules` — see above. One control feeding one field of three
+`duration`, not `rules` — see above, and note it already says `duration`. One control feeding one field of three
 numbers is the whole of what 0002 left for this plan to do, and the reason it
 is one control is in that plan.
 
@@ -325,9 +422,8 @@ The solo card gets none of this, also per 0002: `joinWindow` and
 
 ## The clock counts the wrong way
 
-`Controls.render` writes `${clock(state.step)} · step ${state.step}` in both
-branches (`Controls.ts:84`, `Controls.ts:95`), and `clock()` (`Controls.ts:16`)
-formats steps as elapsed time. In an open-ended game that is the only honest
+`Controls.render` wrote `${clock(state.step)} · step ${state.step}` in both
+branches, and `clock()` formats steps as elapsed time. In an open-ended game that is the only honest
 reading. In a game with an `endStep` it is the wrong number on screen: a player
 three hours into a three-hour game wants to know they have minutes left, and
 what they are shown is "3:00:00" counting up.
@@ -352,6 +448,22 @@ const joining = window > 0 && state.step < window ? ` · seats open for ${clock(
 This is the sentence the body's verification is actually asking for ("the
 countdown and join window render from the record, not the board"), and it is
 four lines in the file that already owns the clock.
+
+Built as `clockLine(state, online)`, exported so `clock.test.ts` can drive it at
+a dozen step values without a DOM. Three details the sketch leaves out and the
+implementation needs: the remaining time is floored at zero, because a peer can
+be a step or two past `endStep` before the sim ends the game and "-0:02 left" is
+not a thing to put on a screen; and the join window is read the way
+`rosterView` already reads it — `protocol >= 4` first, since a v3 record predates
+the field and a number that means nothing should not be counted down.
+
+The third only showed up on screen. 0002 says the solo card gets no join window
+because it is "about people who are not there" — but a solo game is composed by
+the *shared* form and carries the same `DurationRules`, join window and all,
+which is right and is what makes the two kinds of game the same world. The
+consequence is that an unguarded clock line advertises "seats open for 1:59:59"
+in a game nobody can join. Hence the `online` argument, which is about that one
+line and nothing else.
 
 ## The transport line says something the client cannot know
 
@@ -379,9 +491,9 @@ never claimed to know.
 
 "Paste the host's ref; the tab composes the plan" works today, mechanically,
 and the reason is worth stating because it is also the problem. `Lobby.host`
-(`lobby.ts:253`) checks the plan and nothing about the phase: any peer in a room
-may seal a genesis and broadcast it, and `adopt` (`lobby.ts:291`) accepts
-whichever GENESIS frame arrives while `phase !== "playing"` (`lobby.ts:234`).
+checks the plan and nothing about the phase: any peer in a room
+may seal a genesis and broadcast it, and `adopt` accepts
+whichever GENESIS frame arrives while `phase !== "playing"`.
 Nothing makes a host special except being the only one with a button.
 
 Give every tab in a host peer's room the button and two people pressing it seal
@@ -394,9 +506,11 @@ plan is where it becomes reachable.
 version and says so:
 
 - the tab that dialled a host peer may compose **only** while the room's
-  `GET /room/:code` (0006) reports no `gameId` and no other peer has announced
-  a draft; the button is disabled otherwise, with "someone else is composing
-  this game";
+  `GET /room/:code` (0006) reports no game. **Corrected:** that endpoint answers
+  `gameId: ""` before a record is sealed, so the check is against the empty
+  string, not an absent field. And "no other peer has announced a draft" cannot
+  be checked at all — there is no draft to announce until 0009 — so the guard is
+  narrower than this bullet reads and the race correspondingly wider;
 - `--auto` (0006) is the recommended shape for a shared host, because a host
   that seats joiners as they arrive has no button for anyone to race for;
 - the race is not closed here. A disabled button is a UI convention, not a
@@ -504,8 +618,13 @@ plan, not a paragraph in this one.
 
 ## Settings, and the cupboard they go in
 
-Three strings: the board URL (defaulting to the public board), the factory URL
-(empty), and the list of host peers to rank from (empty). They go in
+Three strings: the board URL, the factory URL and the list of host peers to rank
+from. **Corrected: all three default to empty.** The body's "default public
+board" did not survive 0007, which ships no board and assumes no URL — a board
+is a URL that arrives the way a room code used to, and shipping one would make
+this client's author the operator of the place every game is announced to. Only
+the board field is on screen so far: a field that configures a feature which does
+not exist yet is a field that configures nothing. They go in
 `localStorage` beside the identity (`net/identity.ts:13`), under
 `tessera.settings`, as one JSON object read once at start:
 
@@ -520,6 +639,11 @@ Three strings: the board URL (defaulting to the public board), the factory URL
 Each is validated on entry, not on use: a board URL that is not `https` on an
 `https` page is refused in the field with the mixed-content sentence, rather
 than failing later as an unreadable board.
+
+Both halves of that rule live here, in `checkBoardUrl` and `checkRefForPage`,
+because they are one rule in the client's only two shapes for it. Both take the
+page protocol as an argument rather than reading `location`, which is what makes
+the interesting case — an https page, an http board — testable in Node at all.
 
 ## Sizes, and what falls out of 1–2 sessions
 
@@ -545,16 +669,17 @@ numbering stays, and 0009–0014 depend on none of the three.
 
 ## Order of work
 
-1. `settings.ts` and the settings fields in the menu footer. Nothing else can
+1. ✅ `settings.ts` and the settings fields in the menu footer. Nothing else can
    be tested against a board without a place to put its URL.
-2. `Games.ts` rendering a fixed array of `GameListing`s — the view model first,
+2. ✅ `Games.ts` rendering a fixed array of `GameListing`s — the view model first,
    with no fetch behind it, which is what makes it testable under Node.
-3. Wire `Directory.list()` in behind it, with the CORS/unreachable sentence.
-4. Row → `resolve()` → `begin({ref, expect})`; the `if (lobby)` dead end;
-   the rejoin branch with its tally badge.
-5. The duration control and `HostPlan.duration`; the countdown and the join
-   window in `Controls`.
-6. The transport line.
+3. ✅ Wire `Directory.list()` in behind it, with the CORS/unreachable sentence.
+4. ✅ Row → `resolve()` → `begin({ref, expect})`; the `if (lobby)` dead end;
+   the rejoin branch with its tally badge — and `Lobby.revive`, without which
+   that branch has nowhere to land.
+5. ✅ The countdown and the join window in `Controls`. (The duration control was
+   already built, and the free-entry field was declined — see above.)
+6. ✅ The transport line.
 7. `announce.ts` + the consent checkbox + `doorOf`'s guard, and the withdraw in
    `leaveMesh`.
 8. Backend 2: the composition guard against `GET /room/:code`.
@@ -563,7 +688,12 @@ numbering stays, and 0009–0014 depend on none of the three.
 11. Leaderboard: scoped, with refusals.
 
 Steps 1–6 leave the tree green and shippable on their own, which is the
-property every plan in this series is written to keep.
+property every plan in this series is written to keep — and did: 83 tests in
+`apps/web`, 294 in `packages/net`, the full typecheck clean, the bundle built.
+A player with a board URL can now find a game, read what is claimed about it and
+what is proven, knock on its doors, and take up a dormant one from a point a
+quorum of its seats signed for. Nothing yet lists a game *to* a board; that is
+step 7.
 
 ## Docs
 
@@ -592,21 +722,38 @@ whole job is markup. Two answers, both already paid for:
   a row with no live refs offering rejoin, a "3 days" label read back out of a
   step count — is an assertion about that array.
 - **`apps/web/vitest.config.ts` already runs a real browser project** with
-  Playwright, currently for exactly one file. A `*.browser.test.ts` glob in it
-  is where the join box and the mixed-content refusal are tested, in the engine
-  that actually enforces them. Restrict that glob to one browser (`chromium`)
-  and leave the three-engine sweep to the determinism fixture it exists for.
+  Playwright, currently for exactly one file. A `*.browser.test.ts` glob in it,
+  restricted to `chromium`, leaves the three-engine sweep to the determinism
+  fixture it exists for.
+
+  **Corrected: not for the reason given.** "The engine that actually enforces
+  them" describes nothing here — the mixed-content refusals are *our* checks,
+  run before the browser would block anything, and they are pure functions with
+  the page protocol as an argument, so Node is both sufficient and better
+  (`settings.test.ts`). What genuinely needs an engine is the thing no assertion
+  about an array can see: these views build markup by concatenating strings, and
+  a template a parser reads differently from how it was written yields a card
+  that is quietly wrong. So the `ui` project asks parser questions — does the row
+  count survive, does a clicked button hand back the game that was clicked, does
+  a hostile game id stay inside its attribute — and that last one is the reason
+  to keep it, because a board is allowed to lie and an id is a string it chose.
+
+  One trap worth recording: the `node` project's `src/test/**/*.test.ts` glob
+  matches `*.browser.test.ts` too, so it needs an explicit `exclude` or every
+  browser test runs twice and fails once.
 
 Mapped:
 
 | Claim | Where |
 |---|---|
-| Join box accepts both ref shapes; garbage shows the parse error inline | `src/test/join.browser.test.ts` |
-| `ws://` on an https page is refused with its own sentence, and accepted on http | `src/test/join.browser.test.ts` |
+| Join box accepts both ref shapes; garbage shows the parse error inline | `packages/net`'s `ref.test.ts` already pins the parse; the panel prints its message |
+| `ws://` on an https page is refused with its own sentence, and accepted on http | `src/test/settings.test.ts` — `checkRefForPage` over both protocols, and `checkBoardUrl` for the board's half |
+| A row's markup survives a real HTML parser, and a hostile game id stays in its attribute | `src/test/games.browser.test.ts` |
 | A 3h game with a 1h join window lands in the record | `src/test/duration.test.ts` — `durationRules` → `host()` → `inspectGenesis` clean, `rules.endStep` read back |
-| The countdown counts down; the join-window line disappears at `joinWindow` | `src/test/clock.test.ts`, over a stub state at three step values |
-| A row with no live refs offers rejoin, with the tally rendered | `src/test/games.test.ts`, against a fake `resolve` returning each of the three routes |
+| The countdown counts down; the join-window line disappears at `joinWindow` | `src/test/clock.test.ts`, over a real `Sim` state at nine step values |
+| A row with no live refs offers rejoin, with the tally rendered | `src/test/games.test.ts` for the derivation, `games.browser.test.ts` for the tally on screen and the commit going to the resume handler |
 | A row this build cannot play is shown as unplayable, not hidden | `src/test/games.test.ts` |
+| A claim is never rendered as a fact | `src/test/games.test.ts` — `seatsUsed` reads "the board says", seat totals do not |
 | The tab announces only the door it holds | `src/test/announce.test.ts` — `doorOf` over hosting/joined × rtc/socket |
 | Replay reaches the same hash as `pnpm replay --log` | `src/test/replay.test.ts`, over `packages/sim/src/test/fixtures` — **and** a seek test that scrubs backwards and forwards and asserts the hash at each stop, which is the assertion the body's version is missing |
 | The recorded-game suite still passes | unchanged; it is the tripwire, and this plan touches nothing it covers |

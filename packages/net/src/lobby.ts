@@ -411,6 +411,30 @@ export class Lobby {
     return true;
   }
 
+  /** Play a record that already exists, rather than composing one.
+   *
+   *  This is the other half of the rejoin flow (0007). `resolve` ends at a
+   *  verified resume point for a game whose doors have all closed, and the
+   *  caller then needs a lobby around *that game's* record — not a new one. Only
+   *  `host` could produce a playing lobby before this, and `host` composes, so a
+   *  tab that had a perfectly good genesis and a quorum of signatures for a
+   *  state had no way to sit down in it.
+   *
+   *  It grants nothing. The record goes through the same `adopt` every joiner's
+   *  does — `inspectGenesis`, the `expect` comparison, the seat lookup — and the
+   *  state that follows is checked by `Lockstep.resume`, which counts the
+   *  witnesses and hashes the bytes. Reviving a game you invented gets you a
+   *  room with you in it, which is what hosting already was.
+   *
+   *  Broadcast as well as adopted, because a reviver is a door: anyone who
+   *  dials this room while it is up is owed the record, exactly as they would
+   *  be by the peer that originally sealed it. */
+  async revive(genesis: Genesis): Promise<boolean> {
+    this.connection.broadcast({ t: FRAME.GENESIS, genesis });
+    await this.adopt(genesis);
+    return this.phase === "playing";
+  }
+
   /** Check the record before agreeing to play it, then find our own seat. An
    *  unkeyed peer, or one whose key is not in the roster, is an observer —
    *  which needs no mechanism beyond not being listed. */

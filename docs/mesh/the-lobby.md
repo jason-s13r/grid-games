@@ -46,7 +46,7 @@ seat it holds. Nothing after that needs a host at all.
 
 ## Hosting: compose, seal, broadcast, then no authority
 
-[`host(plan: HostPlan)`](../../packages/net/src/lobby.ts#L253):
+[`host(plan: HostPlan)`](../../packages/net/src/lobby.ts):
 
 1. [`checkPlan`](#checkplan) — refuse a bad plan while the host can still fix it.
 2. Build `EmpireSpec[]` — human empires are the people who are here (one seat per
@@ -62,9 +62,51 @@ once it is sealed and broadcast, every peer verifies it for itself and the host
 has no further authority over anything. The host can leave; a peer that kept
 `sealed` re-sends `GENESIS` to a later joiner.
 
+## Reviving: play a record you did not compose
+
+[`revive(genesis)`](../../packages/net/src/lobby.ts) is the other way into a
+playing lobby, and it exists for one caller: somebody holding a game that is
+real, dormant, and nobody's room any more.
+
+`resolve` ([address book](address-book.md)) ends at a verified
+[resume point](../continuity/resume-points.md) when every door into a game has
+closed — the record, and a state a majority of that game's own seats signed for.
+Until this, there was nothing to do with it. `host` *composes*, so it could only
+produce a different game; `adopt` is private; and no public path took a genesis
+that already existed. A peer could verify a game completely and still not sit
+down in it.
+
+```ts
+await lobby.revive(genesis);   // broadcast, then the ordinary adopt
+```
+
+**It grants nothing**, which is the only reason it can be public. The record goes
+through the same `adopt` as every joiner's — `inspectGenesis`, the `expect`
+comparison, the seat scan — and the *state* is checked separately by
+[`Lockstep.resume`](../continuity/resume.md), which counts the witnesses and
+rehashes the bytes before keeping either. Reviving a game you invented yourself
+gets you a room with you alone in it, which is what hosting already was.
+
+It broadcasts as well as adopting, because a reviver **is a door**: anyone who
+dials that room while it is up is owed the record, exactly as they would be by
+the peer that first sealed it.
+
+Two consequences worth stating:
+
+- **The archive that follows is a fragment, and says so.** Attach the
+  [`Archive`](../trust-and-verification/archive-format.md) before resuming and
+  `onAdopted` fires `gap()`, so the log carries `from` and every reader refuses
+  to replay it from the start. That is correct: the moves before the resume point
+  happened in somebody else's tab.
+- **Two peers can revive the same point and each become a door.** They are
+  identical while neither acts, and diverge the moment one does; when the rooms
+  meet, [the comparison](../continuity/desync.md) catches it and the minority
+  rebuilds. A property of resuming without a quorum, not a bug — and
+  [noted in 0007](address-book.md) as unresolved.
+
 ## adopt — check, then find your seat
 
-[`adopt(genesis)`](../../packages/net/src/lobby.ts#L291): run
+[`adopt(genesis)`](../../packages/net/src/lobby.ts): run
 [`inspectGenesis`](../protocol/genesis.md) (fail on any problem), then scan the
 roster for one of this identity's keys → `Seat | undefined`.
 
@@ -75,6 +117,10 @@ game it asked for, and passes it: arriving somewhere else fails the lobby with
 "that room is running a different game" rather than starting one. Unset for every
 caller whose ref came from a person, which until the address book was every
 caller there was.
+
+In the [web client](../clients/finding-a-game.md) that split is exactly the two
+entry points: a code typed into the join box passes nothing, and a click on a row
+from a board passes `expect: listing.gameId`.
 
 **No seat is not a failure.** An unkeyed or unlisted peer is an
 [observer by construction](../concepts/peers-and-roles.md) — it validates and
