@@ -10,11 +10,17 @@ import type { Move } from "@tessera/sim";
 import { toBase64Url } from "../bytes.js";
 import {
   CHANNEL,
+  encodeApplication,
+  encodeClaim,
   encodeMessage,
   encodeMove,
+  signApplication,
+  signClaim,
   signMessage,
   signMove,
   signReady,
+  verifyApplication,
+  verifyClaim,
   verifyMessage,
   verifyMove,
   verifyReady,
@@ -150,5 +156,73 @@ describe("readiness", () => {
     const ready = await signReady(f.alice, f.gameId, { upTo: 300, empire: 1, member: 0 });
     const moved = { ...ready, ready: { ...ready.ready, member: 1 } };
     await expect(verifyReady(f.roster, f.gameId, moved)).resolves.toBe(false);
+  });
+});
+
+// The two records that name their own key.
+//
+// Everything else in this file is signed *by a seat*: attribution runs through
+// `roster.keyOf`, and a signature says "the key sitting at empire 1 member 0
+// meant this". A claim and an application cannot work that way, because the
+// whole point of them is that the signer holds no seat yet — so they carry the
+// key and are signed by it.
+//
+// That buys one specific thing: they can be verified by a peer that has never
+// heard of the signer, with no roster lookup anywhere in it. And it costs one
+// specific thing, which is why the domain tag matters more here than anywhere
+// else: the two records are the same bytes with a different tag, and they mean
+// completely different things — one seats immediately, one seats nothing at all.
+describe("records that name their own key", () => {
+  it("verify without a roster, which is the property they exist for", async () => {
+    const one = await signClaim(f.mallory, f.gameId, { empire: 3, step: 240 });
+    const two = await signApplication(f.mallory, f.gameId, { empire: 3, step: 240 });
+    // `f.mallory` is on no roster anywhere.
+    expect(await verifyClaim(f.gameId, one)).toBe(true);
+    expect(await verifyApplication(f.gameId, two)).toBe(true);
+  });
+
+  it("cannot be swapped for one another, however identical the fields", async () => {
+    // A claim seats an empire nobody has taken, immediately. An application
+    // seats nothing and asks the people already there. If a signature over one
+    // verified as the other, asking for a seat would *be* taking one.
+    const asking = await signApplication(f.mallory, f.gameId, { empire: 3, step: 240 });
+    const taking = { claim: asking.application, sig: asking.sig };
+    expect(await verifyClaim(f.gameId, taking)).toBe(false);
+
+    const claimed = await signClaim(f.mallory, f.gameId, { empire: 3, step: 240 });
+    const applied = { application: claimed.claim, sig: claimed.sig };
+    expect(await verifyApplication(f.gameId, applied)).toBe(false);
+  });
+
+  it("cannot be replayed into another game", async () => {
+    const asking = await signApplication(f.mallory, f.gameId, { empire: 3, step: 240 });
+    expect(await verifyApplication(f.otherGame.gameId!, asking)).toBe(false);
+  });
+
+  it("refuse a field the encoder could not have carried", async () => {
+    // Out of range throws out of the encoder, and a record nobody could have
+    // signed is a record that does not verify — never an exception thrown at
+    // whoever was unlucky enough to receive it.
+    const asking = await signApplication(f.mallory, f.gameId, { empire: 3, step: 240 });
+    for (const broken of [
+      { ...asking, application: { ...asking.application, empire: 0 } },
+      { ...asking, application: { ...asking.application, empire: 999 } },
+      { ...asking, application: { ...asking.application, step: -1 } },
+      { ...asking, application: { ...asking.application, key: "" } },
+    ]) {
+      expect(await verifyApplication(f.gameId, broken)).toBe(false);
+    }
+  });
+
+  it("are bytes, not objects: the same fields encode identically every time", async () => {
+    const application = { empire: 3, key: f.mallory.key, step: 240 };
+    expect(toBase64Url(encodeApplication(f.gameId, application))).toBe(
+      toBase64Url(encodeApplication(f.gameId, { ...application })),
+    );
+    // And differ from the claim over the same fields, which is the tag doing
+    // its job.
+    expect(toBase64Url(encodeApplication(f.gameId, application))).not.toBe(
+      toBase64Url(encodeClaim(f.gameId, application)),
+    );
   });
 });

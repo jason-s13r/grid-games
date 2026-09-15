@@ -15,9 +15,31 @@ the same [`Amendment`](../protocol/signed-records.md) record, or one compromised
 key could walk an accomplice into a team that shares territory — which is the
 whole game. A single-seat empire is its own quorum.
 
+## Who may start one
+
+Two things can, and the quorum rule is the same for both — which is the point
+worth making rather than a footnote.
+
+- **A member of the empire**, with `amend(key)`. The original path: somebody
+  inside thinks of you.
+- **The empire's own decision on an [application](joining.md)**, with
+  `admit(empire, key)`. A seatless peer asked, and a member agreed. `admit` is a
+  dispatcher, not a second mechanism: the first member to agree calls `amend`,
+  everybody after them calls `endorse` on the record that exists.
+
+Nothing about the quorum, the merge, the gossip or the seating changes between
+them. The difference is entirely in who is allowed to put the first signature on
+a record.
+
+`amend` reads the empire off the caller's own seat and has no parameter for it,
+which is why `admit` checks `seat.empire === empire` before forwarding: a member
+of empire 2 clicking a row in a list of every empire's applicants would otherwise
+seat that person onto empire 2 — silently, signed, and correct as far as every
+other peer is concerned.
+
 ## The flow
 
-[`Lockstep.amend(key, kind)`](../../packages/net/src/lockstep.ts#L897) proposes
+[`Lockstep.amend(key, kind)`](../../packages/net/src/lockstep.ts) proposes
 `{ empire, step: sim.step + AMENDMENT_DELAY, key, kind }`.
 `AMENDMENT_DELAY = 3 s` (36 steps) — it must outlast the gossip that collects
 signatures, because a roster append is hashed state and **every peer must know

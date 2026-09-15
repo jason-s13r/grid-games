@@ -1,6 +1,6 @@
 # Plan index
 
-Status of the series: 0001–0008 and 0010 built; 0009 and 0011–0014 draft. Built in the order
+Status of the series: 0001–0008, 0010 and 0011 built; 0009 and 0012–0014 draft. Built in the order
 below; each plan leaves the tree green and is useful on its own. No plan adds authority anywhere — the
 sim, the hash contract, quorum signatures and archive verification are
 untouched, and everything stored anywhere is checked by whoever reads it.
@@ -17,7 +17,7 @@ untouched, and everything stored anywhere is checked by whoever reads it.
 | 0008 ✅ | The web client — join, create, watch | 0002, 0003, 0007 | 3 sessions, not 1–2 |
 | 0009 | Composing a game together — the co-signed proposal | 0002, 0006 | 1–2 sessions |
 | 0010 ✅ | Vacant empires — arriving at a game that has already started | 0002 | 1–2 sessions, hardest here |
-| 0011 | Applications — asking an empire for a seat | — | 1 session |
+| 0011 ✅ | Applications — asking an empire for a seat | — | 1 session |
 | 0012 | Names and direct messages — the social layer | — | 1–2 sessions |
 | 0013 | Banners — an empire you can play as again | 0009 | 1 session |
 | 0014 | The lobby rejig and the game log | 0009–0013 | 2 sessions |

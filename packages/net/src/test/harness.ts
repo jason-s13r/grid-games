@@ -110,6 +110,12 @@ export interface TableOptions {
    *  seats, so a claimant has to hold a key, and it seats an empty empire, so
    *  it must not already hold a seat. */
   claimants?: number;
+  /** Peers with a key and no seat, named `a1`, `a2`, … — the same shape as a
+   *  claimant, and the same shape as every browser observer, since the lobby
+   *  always supplies an identity. Declared here rather than built by hand at
+   *  each call site because a peer outside `t.peers` is one `pumpAll` never
+   *  pumps, and every test then has to remember to pump it itself. */
+  applicants?: number;
   loopback?: LoopbackOptions;
   stallTimeout?: number;
   checkpointInterval?: number;
@@ -295,6 +301,9 @@ export async function table(options: TableOptions): Promise<Table> {
   }
   for (let i = 0; i < (options.claimants ?? 0); i++) {
     await build(`c${i + 1}`, await Identity.generate());
+  }
+  for (let i = 0; i < (options.applicants ?? 0); i++) {
+    await build(`a${i + 1}`, await Identity.generate());
   }
   if (options.observer) await build("observer");
 

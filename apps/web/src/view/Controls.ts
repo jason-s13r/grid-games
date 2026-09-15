@@ -239,6 +239,9 @@ export class Controls {
     // needs no rule of its own.
     const window =
       state.genesis.protocol >= 4 ? (state.genesis.rules.joinWindow ?? 0) : 0;
+    // The same condition serves both buttons, and deliberately: taking an empire
+    // nobody has and asking one that somebody does are the two doors into a
+    // running game, and the join window closes both on the same line.
     const claimable =
       this.game.online &&
       this.game.empire === 0 &&
@@ -261,7 +264,9 @@ export class Controls {
               ? `<button class="btn btn-small" type="button" data-claim="${e.id}">Take it</button>`
               : vacant
                 ? "unclaimed"
-                : e.tilesOwned
+                : claimable && e.alive
+                  ? `<button class="btn btn-small" type="button" data-ask="${e.id}">Ask</button>`
+                  : e.tilesOwned
           }</span>
           <span class="standing-meta">${e.largestCascade.tiles ? `${e.largestCascade.tiles}&#9733;` : ""}</span>
         </div>`;

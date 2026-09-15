@@ -6,7 +6,14 @@
 
 import { beforeAll, describe, expect, it } from "vitest";
 import { Sim } from "@tessera/sim";
-import { proveHello, signClaim, signMove, verifyHello, verifyMove } from "../records.js";
+import {
+  proveHello,
+  signApplication,
+  signClaim,
+  signMove,
+  verifyHello,
+  verifyMove,
+} from "../records.js";
 import type { SignedMove } from "../records.js";
 import { randomBytes } from "../identity.js";
 import { FRAME, decodeFrame, encodeFrame } from "../wire.js";
@@ -126,6 +133,26 @@ describe("a claim on the wire", () => {
     expect(decodeFrame('{"t":"claim"}')).toBeNull();
     expect(decodeFrame('{"t":"claim","signed":"not an object"}')).toBeNull();
     expect(decodeFrame('{"t":"claim","signed":{}}')?.t).toBe(FRAME.CLAIM);
+  });
+});
+
+describe("an application on the wire", () => {
+  it("round-trips", async () => {
+    const signed = await signApplication(f.mallory, f.gameId, { empire: 1, step: 240 });
+    expect(decodeFrame(encodeFrame({ t: FRAME.APPLICATION, signed }))?.t).toBe(FRAME.APPLICATION);
+  });
+
+  it("is null rather than a throw when there is nothing to verify", () => {
+    expect(decodeFrame('{"t":"application"}')).toBeNull();
+    expect(decodeFrame('{"t":"application","signed":7}')).toBeNull();
+  });
+
+  it("is simply not heard by a build that does not know the frame", () => {
+    // The additive-frame rule, from the other side. `decodeFrame` answers null
+    // for an unrecognised `t`, and both carriers drop a null frame without
+    // complaint — so an older peer never sees this, never counts it as a
+    // violation, and behaves exactly as it does today.
+    expect(decodeFrame('{"t":"something-from-next-year","signed":{}}')).toBeNull();
   });
 });
 

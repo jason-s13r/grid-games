@@ -808,6 +808,36 @@ window.addEventListener("pagehide", (event) => {
   if (!event.persisted) announcer?.stop();
 });
 
+// --- getting into a game already running -------------------------------------
+//
+// Two doors, and the standings list is where both of them are: an empire nobody
+// has claimed offers **Take it**, and one somebody is playing offers **Ask**.
+// Delegated here rather than handed to `Controls`, which redraws itself several
+// times a second and holds no opinion about the mesh — the rows are markup and
+// the decision is the driver's.
+
+pick<HTMLElement>("[data-standings]").addEventListener("click", (event) => {
+  const button = (event.target as HTMLElement).closest<HTMLElement>("[data-claim], [data-ask]");
+  if (!button || !mesh) return;
+  const taking = button.dataset.claim;
+  if (taking) {
+    // Nothing to report on success: the seat arrives on every peer at once,
+    // when the step the claim named comes round, and `onSeated` is what says so.
+    void mesh.claim(Number(taking)).then((sent) => {
+      if (!sent) panel.setStatus("That empire cannot be taken.");
+    });
+    return;
+  }
+  const asking = Number(button.dataset.ask);
+  void mesh.apply(asking).then((sent) => {
+    panel.setStatus(
+      sent
+        ? `Asked ${empireTheme(asking).name} for a seat. They decide.`
+        : `${empireTheme(asking).name} cannot seat anybody — full, gone, or the door is closed.`,
+    );
+  });
+});
+
 // --- watching a saved game ---------------------------------------------------
 //
 // The other end of the Save log button. Everything expensive is in a worker
@@ -1119,6 +1149,7 @@ const panel = new LobbyPanel(lobbyEl, {
   seated: (empires) => rivals.seat(empires + 1),
   invite: (key) => void mesh?.amend(key),
   endorse: (empire, key) => void mesh?.endorse(empire, key),
+  admit: (empire, key) => void mesh?.admit(empire, key),
 });
 
 /** The flow: which kind of game, then the one form that configures it, then
@@ -1224,6 +1255,18 @@ function rosterView(driver: Lockstep): RosterView {
         label: here.find((who) => who.key === record.amendment.key)?.label ?? "someone",
         endorsed: record.signatures.length,
         needed: driver.roster.quorum(record.amendment.empire),
+      })),
+    // Requests nobody has proposed yet. The two lists are the same people at
+    // different stages, and a row moves from one to the other the moment a
+    // member agrees — so anything already in flight is filtered out here rather
+    // than appearing twice.
+    applications: driver
+      .applications()
+      .filter((record) => !driver.invitation(record.application.empire, record.application.key))
+      .map((record) => ({
+        key: record.application.key,
+        empire: record.application.empire,
+        label: here.find((who) => who.key === record.application.key)?.label ?? "someone",
       })),
   };
 }

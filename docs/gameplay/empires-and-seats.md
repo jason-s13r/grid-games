@@ -74,6 +74,19 @@ from when they joined. There is no "pass the turn" — see
 cover while everyone sleeps seats a [bot](bots.md) in a spare slot, at the cost
 of that slot.
 
+## Applying for a seat
+
+An empire can be joined by invitation — a member proposes and a quorum agrees —
+and, since applications, by **asking**: a peer with a key and no seat puts a
+standing signed request in front of that empire's seats, and one of them agreeing
+turns it into the same amendment. See [joining](../continuity/joining.md).
+
+The seat cap below is therefore a thing applicants run into and not only
+inviters. A request to an empire already holding `maxSeats` is refused when it is
+made, rather than left waiting on a quorum that could never pass it: an applicant
+told no can ask somebody else, and one left waiting cannot tell the difference
+between patience and a rule.
+
 ## The seat cap is the whole of team-size fairness
 
 An empire that could add seats freely would simply out-accrue everyone else — and

@@ -18,7 +18,7 @@ recognise. A peer can send whatever it likes; none of it should raise an
 exception on the receiving side. `decodeFrame` checks only *shape* — field-level
 checking belongs to the verifier, which re-derives the payload anyway.
 
-## The fourteen frame types
+## The sixteen frame types
 
 `FRAME` ([`wire.ts:25`](../../packages/protocol/src/wire.ts#L25)). Only `move`
 carries a move; the rest are how peers agree about moves, and none can change
@@ -36,10 +36,29 @@ state on its own.
 | `message` | `SignedMessage` | chat |
 | `checkpoint` | `SignedCheckpoint` | a signed state hash |
 | `amendment` | `SignedAmendment` | rebroadcast as it gains endorsements |
+| `claim` | `SignedClaim` | somebody taking an empire nobody has claimed; one signature, no tally |
+| `application` | `SignedApplication` | somebody asking an empire for a seat; **re-sent on a slow timer**, because it never grows and so cannot be gossiped by growth |
 | `equivocation` | `EquivocationProof` | a self-contained proof of cheating |
 | `snapshot?` | `step` | a request — the step is advisory |
-| `snapshot` | `step`, `hash`, `data` (base64url), `amendments?`, `drops?` | the world at a step |
+| `snapshot` | `step`, `hash`, `data` (base64url), `amendments?`, `claims?`, `drops?` | the world at a step |
 | `bye` | `reason?` | a peer leaving |
+
+## Adding a frame is additive, and that is checked in three places
+
+A new member of `FRAME` costs an older build nothing. `decodeFrame` returns
+`null` for an unrecognised `t`, and both carriers drop a null frame without
+complaint — the mesh ("a peer can send whatever it likes; anything unrecognised
+is simply not heard, and never reaches the driver") and the local hub. An old
+build never sees the frame, never counts it as a violation, and behaves exactly
+as it does today: a mixed mesh degrades to the older feature set rather than
+desyncing.
+
+One caveat, because it is easy to over-claim. That graceful degradation only
+matters while builds can meet at all, and the lobby's protocol check is a strict
+equality — a peer whose `PROTOCOL_VERSION` differs is refused before any frame
+is exchanged. So the degradation path exists for builds that share a protocol
+number and differ in features, which is exactly the case an additive frame is
+for, and not for the window after a version bump.
 
 ## The snapshot frame carries more than the snapshot
 

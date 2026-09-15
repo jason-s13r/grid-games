@@ -1,13 +1,24 @@
 # Joining
 
-Three ways a peer arrives, all through the same [`Lobby`](../mesh/the-lobby.md):
+Five ways a peer arrives, all through the same [`Lobby`](../mesh/the-lobby.md):
 
 1. **At the start**, from the host's setup screen — the host composes and seals
    the [genesis](../protocol/genesis.md).
 2. **Mid-game, as a reloading tab** — same identity, same seat, from
    `localStorage`.
-3. **Mid-game, as a newcomer** — an [observer](../concepts/peers-and-roles.md)
-   until an empire votes it a seat by [`ROSTER_AMEND`](roster-amendments.md).
+3. **Mid-game, invited** — an [observer](../concepts/peers-and-roles.md) until an
+   empire votes it a seat by [`ROSTER_AMEND`](roster-amendments.md). Somebody
+   inside has to think of you.
+4. **Mid-game, by asking** — an observer *applies* to an empire, and the seats
+   already there decide. Same `ROSTER_AMEND` and the same quorum; what is new is
+   who may start one. See below.
+5. **Mid-game, by taking an empire nobody has** — a
+   [vacancy](../gameplay/empires-and-seats.md), which needs nobody's permission
+   because there is nobody to ask.
+
+Three and four reach the same place by different doors, and the difference is
+worth stating: an invitation needs a member to think of you, an application needs
+one to agree with you.
 
 ## The handshake
 
@@ -62,3 +73,54 @@ detection keys on the step, not just the seq.
 A reloading tab that kept its seat rejoins with move numbering restarted and
 nobody accused — [`resume.test.ts`](../../packages/net/src/test/resume.test.ts)
 holds it.
+
+## Asking for one
+
+Before applications, a peer with a key and no seat had **no channel to the game
+at all**: `amend` needs a seat to propose from, and `say` needs one to attribute
+a message to. Watching a game you would like to play, there was nothing you could
+do about it.
+
+An application is a record signed by the person asking — the same self-signed
+shape a [claim](../gameplay/empires-and-seats.md) uses, and verifiable by a peer
+that has never heard of the signer. `Lockstep.apply(empire)` sends it;
+`applications()` is the list a member decides from; `admit(empire, key)` is a
+member agreeing. Everything downstream — the quorum, the merge, the gossip, the
+seating — is the amendment machinery that already existed. **This adds a way to
+ask; it changes nothing about how the answer is reached.**
+
+Three properties are load-bearing.
+
+**It carries no scheduling weight.** The tempting implementation is an amendment
+with no signatures on it yet, and that record is refused on purpose: it would
+both spread junk and hold the pipeline open at a step nobody was going to vote
+on, which is a free denial of service. An application names no step the pipeline
+must reach, and only the amendment it becomes does.
+
+**It is repeated, not remembered.** An amendment is gossiped by *growth* — a peer
+rebroadcasts one whose signature count went up — and an application never grows:
+one signature, from one key, forever. Broadcast once it reaches whoever happened
+to be connected in that instant, and a mesh takes a second hop to form. So it is
+re-signed on a slow timer and sent again, exactly as a readiness promise is. Its
+`step` therefore means *still asking, as of*, expiry is a comparison rather than
+a deadline somebody chose, and an applicant who closed their tab withdraws
+themselves within a minute.
+
+**A driver stores only what is addressed to its own empire.** Key generation is
+free, so a single shared list would let a handful of throwaway identities evict
+every real applicant to every empire. Holding only your own list means somebody
+else's flood costs you nothing, and your own is a list your own members can
+ignore. It is capped at 32, oldest out.
+
+Saying yes is two calls, not one, and only one of them is `amend`. The first
+member of an empire to agree starts a proposal; everybody after them signs the
+one that exists. Without that split a three-seat empire fails with no error
+anywhere — two records at two steps, each one signature short, both drivers
+having spent the single endorsement they are allowed for that key. `admit` is
+where the split lives, along with the guard that stops a member of one empire
+admitting another's applicant onto their own team.
+
+Refusal needs no record. An application nobody endorses expires, and "we did not
+seat you" is the absence of an amendment rather than a signed rejection — a
+signed refusal would be a rule about who may ask, which is a different and much
+worse feature.

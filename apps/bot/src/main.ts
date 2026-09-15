@@ -46,11 +46,17 @@ const USAGE = `tessera-bot — hold a seat in a Tessera game while its player is
 
   tessera-bot <room> [options]
 
-It joins as an observer and waits to be voted a seat. Give the key it prints to
-whoever is hosting: they invite it, the empire endorses, and it starts playing.
+With --apply it asks an empire for a seat and starts playing as soon as that
+empire's seats agree. Without it, it joins as an observer and waits to be voted
+one — the older path, which needs somebody to paste the key it prints.
+
+Either way the empire decides: a bot holds a seat the same way a person does, by
+a quorum of the seats already there saying yes. There is no bot-shaped mechanism
+anywhere in the protocol, and there should not be.
 
 Options:
   --key <path>    identity file (default ./bot.jwk) — the key IS the seat
+  --apply <n>     ask empire n for a seat, and keep asking while it is open
   --as <id>       claim this peer id rather than one the broker invents
                   (wss only: the room bus stamps the sender, so this is ignored)
   --ice <urls>    comma-separated STUN/TURN urls, replacing PeerJS's own
@@ -103,6 +109,7 @@ const { values, positionals } = parseArgs({
   options: {
     key: { type: "string", default: "bot.jwk" },
     as: { type: "string" },
+    apply: { type: "string" },
     ice: { type: "string" },
     play: { type: "string", default: "defend" },
     level: { type: "string", default: "steady" },
@@ -147,6 +154,16 @@ function target(): Target {
   if (!Number.isInteger(empire) || empire < 1) {
     fail("--target must be nearest, random, rotate, or an empire number");
   }
+  return empire;
+}
+
+/** The empire to ask, if we are asking. Refused rather than clamped: a bot that
+ *  quietly asked a different empire than the one it was told to would be worse
+ *  than one that would not start. */
+function applying(): number | undefined {
+  if (values.apply === undefined) return undefined;
+  const empire = Number(values.apply);
+  if (!Number.isInteger(empire) || empire < 1) fail("--apply wants an empire number");
   return empire;
 }
 
@@ -236,6 +253,19 @@ async function run(ref: string): Promise<void> {
       driver.onSeated = (given, key) => {
         if (key === identity.key) start(given);
       };
+
+      // Knock, if we were told to. The request stands — it is re-signed on a
+      // slow timer, so it reaches members who connect later and withdraws
+      // itself if this process dies — and the empire's own seats decide. A
+      // refusal is the absence of an answer rather than a record, which is why
+      // there is nothing here to handle.
+      const asking = applying();
+      if (asking !== undefined && !seat) {
+        void driver.apply(asking).then((sent) => {
+          if (sent) say(`asking   empire ${asking} for a seat`);
+          else say(`warning: empire ${asking} cannot seat anybody — full, gone, or closed`);
+        });
+      }
       driver.onEjection = (who, atStep, reason) => {
         if (who.empire !== driver.seat?.empire || who.member !== driver.seat?.member) return;
         say(`dropped at step ${atStep}: ${reason}`);

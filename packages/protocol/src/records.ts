@@ -27,6 +27,7 @@ const TAG_HELLO = "tessera/hello/1";
 const TAG_READY = "tessera/ready/1";
 const TAG_DROP = "tessera/drop/1";
 const TAG_CLAIM = "tessera/claim/1";
+const TAG_APPLICATION = "tessera/application/1";
 
 export const NONCE_BYTES = 16;
 
@@ -621,6 +622,88 @@ export function claimMove(claim: Claim, seq: number): Move {
     x: MEMBER.HUMAN,
     y: 0,
   };
+}
+
+// --- asking an empire for a seat ---------------------------------------------
+
+/** Knocking. The sibling of a claim, and the difference is the whole of it:
+ *  **a claim seats immediately because there is nobody to ask; an application
+ *  seats when the people already there agree.**
+ *
+ *  Same construction as a claim — a record that names its own key, so a peer
+ *  that has never heard of the signer can verify it — and for the same reason.
+ *  What it is *not* is an amendment with no signatures on it yet. That record
+ *  is refused on purpose: it stops junk being gossiped, and it stops an unsigned
+ *  record holding the pipeline open at a step nobody is going to vote on, which
+ *  is a free denial of service. An application arriving as an unsigned amendment
+ *  would be indistinguishable from that attack, and it should be.
+ *
+ *  An application carries **no scheduling weight**. It names no step the
+ *  pipeline must reach and nothing holds a ceiling for it; only the amendment it
+ *  turns into does. That is the whole of the answer above.
+ *
+ *  `step` is "still asking, as of" rather than "first asked at". An application
+ *  is re-signed on a slow timer and rebroadcast, exactly as a readiness promise
+ *  is, because an application never *grows*: it carries one signature from one
+ *  key forever, so a single broadcast reaches whoever happened to be connected
+ *  in that instant and a mesh does not form in an instant. Re-signing buys three
+ *  things at once — the step stays honest, expiry is a comparison rather than a
+ *  deadline somebody chose, and an applicant who closed their tab withdraws
+ *  themselves within a minute. */
+export interface Application {
+  empire: number;
+  key: MemberKey;
+  step: number;
+}
+
+export interface SignedApplication {
+  application: Application;
+  /** By `application.key`. There is nothing to collect: the record says who is
+   *  asking and says nothing about the answer. */
+  sig: string;
+}
+
+export function encodeApplication(gameId: string, application: Application): Uint8Array {
+  const key = utf8(application.key);
+  if (!u8(application.empire) || application.empire < 1 || !u32(application.step)) {
+    throw new Error("application field out of range");
+  }
+  if (!u16(key.length) || key.length === 0) throw new Error("application key is absurd");
+
+  const record = new Writer(9 + key.length)
+    .u32(application.step)
+    .u8(application.empire)
+    .u32(key.length)
+    .raw(key)
+    .finish();
+  return concat(preamble(TAG_APPLICATION, gameId), record);
+}
+
+export async function signApplication(
+  identity: Identity,
+  gameId: string,
+  application: Omit<Application, "key">,
+): Promise<SignedApplication> {
+  const whole: Application = { ...application, key: identity.key };
+  return { application: whole, sig: await identity.sign(encodeApplication(gameId, whole)) };
+}
+
+/** Whether an application was signed by the key that is asking, and nothing
+ *  else. Whether the empire has room, whether the step is plausible, whether
+ *  anybody wants to say yes — all questions about the game rather than about the
+ *  record, and all the driver's. */
+export async function verifyApplication(
+  gameId: string,
+  signed: SignedApplication,
+): Promise<boolean> {
+  if (!signed || typeof signed !== "object" || typeof signed.sig !== "string") return false;
+  const application = signed.application;
+  if (!application || typeof application.key !== "string" || !application.key) return false;
+  try {
+    return await verify(application.key, signed.sig, encodeApplication(gameId, application));
+  } catch {
+    return false;
+  }
 }
 
 // --- handshake ---------------------------------------------------------------

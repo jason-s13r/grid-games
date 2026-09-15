@@ -22,6 +22,10 @@ export interface LobbyHandlers {
   invite: (key: MemberKey) => void;
   /** Add our signature to somebody else's proposal. */
   endorse: (empire: number, key: MemberKey) => void;
+  /** Agree to somebody who asked. The first member to press this starts a
+   *  proposal, everybody after them signs the one that exists — which is the
+   *  driver's distinction, not this panel's. */
+  admit: (empire: number, key: MemberKey) => void;
   /** How many human empires the picker has composed, so the bot rows on the
    *  shared form can be coloured with the empires they will actually hold. */
   seated?: (empires: number) => void;
@@ -36,6 +40,11 @@ export interface RosterView {
   waiting: Array<{ key: MemberKey; label: string }>;
   /** Proposals our empire has been asked to endorse and has not yet. */
   asks: Array<{ key: MemberKey; label: string; empire: number; endorsed: number; needed: number }>;
+  /** People who have asked our empire for a seat and whom nobody has proposed
+   *  yet. No tally: the count belongs to the amendment in flight, not to the
+   *  request, and it resets when that record expires. A row with a number on it
+   *  would be claiming the request had progress of its own. */
+  applications: Array<{ key: MemberKey; label: string; empire: number }>;
   /** True once the join window has closed. The panel says so instead of
    *  offering a vote that would be refused — the people are still here and
    *  still watching, so the list stays; only the button goes. */
@@ -86,6 +95,10 @@ export class LobbyPanel {
       if (!button) return;
       const action = button.dataset.lobbyAction;
       if (action === "invite" && button.dataset.key) this.handlers.invite(button.dataset.key);
+      if (action === "admit" && button.dataset.key) {
+        this.handlers.admit(Number(button.dataset.empire), button.dataset.key);
+        return;
+      }
       if (action === "endorse" && button.dataset.key) {
         this.handlers.endorse(Number(button.dataset.empire), button.dataset.key);
       }
@@ -266,6 +279,26 @@ export class LobbyPanel {
       )
       .join("");
 
+    // Somebody who asked, and whom nobody has proposed yet. Once a member
+    // agrees, the row moves to `asks` above with a tally on it — because from
+    // that point there is a record in flight and a count that means something.
+    const asked = view.watching
+      ? ""
+      : view.applications
+          .map(
+            (who) => `
+        <li class="lobby-seat">
+          <span class="lobby-who">${escape(who.label)}</span>
+          ${
+            view.joinsClosed
+              ? `<span class="lobby-tally">the door is closed</span>`
+              : `<button class="btn btn-small" data-lobby-action="admit"
+            data-key="${escape(who.key)}" data-empire="${who.empire}">Let them in</button>`
+          }
+        </li>`,
+          )
+          .join("");
+
     // An observer cannot invite anyone: it holds no seat, so it is not part of
     // any empire's quorum and has nothing to offer. Past the join window
     // nobody can, so the button goes and the list stays: these people are
@@ -291,10 +324,11 @@ export class LobbyPanel {
       ${
         view.watching
           ? `<p class="hint">You are watching this game. Your browser is checking
-             every move like everyone else's — you just hold no seat. Ask a
-             player to offer you one.</p>`
+             every move like everyone else's — you just hold no seat. Ask an
+             empire for one below, or wait for somebody to offer.</p>`
           : ""
       }
+      ${asked ? `<p class="hint">Asking for a seat on your empire:</p><ul class="lobby-teams">${asked}</ul>` : ""}
       ${asks ? `<p class="hint">Asked to join your empire:</p><ul class="lobby-teams">${asks}</ul>` : ""}
       ${waiting ? `<p class="hint">Watching, and not playing:</p><ul class="lobby-teams">${waiting}</ul>` : ""}`;
   }

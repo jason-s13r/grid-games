@@ -13,10 +13,21 @@ around a [`Lockstep`](../continuity/lockstep.md) built by
 
 ## Seated like any substitute
 
-It joins as an [observer](observer.md), prints the key it holds, and an empire
-votes it in with [`ROSTER_AMEND`](../continuity/roster-amendments.md). **There is
-no bot-shaped mechanism in the protocol** — and it costs the empire a seat, which
-is the whole price ([empires-and-seats.md](../gameplay/empires-and-seats.md)).
+With `--apply <empire>` it asks that empire for a seat and starts playing as soon
+as the seats already there agree. Without it, it joins as an
+[observer](observer.md), prints the key it holds, and waits for somebody to paste
+that key into an invitation — the older path, and the reason `--apply` exists.
+
+Either way the empire decides, by a quorum of the seats already there, and
+**there is no bot-shaped mechanism in the protocol**. It costs the empire a seat,
+which is the whole price
+([empires-and-seats.md](../gameplay/empires-and-seats.md)).
+
+The request stands rather than fires once: it is re-signed on a slow timer, so it
+reaches members who connect later, and it withdraws itself within a minute if the
+process dies ([applications](../continuity/joining.md)). A refusal is the absence
+of an answer rather than a record, so there is nothing for the bot to handle and
+nothing for it to retry — it keeps asking while the empire has room.
 
 ## What is not configurable
 
@@ -44,6 +55,7 @@ limit.
 ```
 tessera-bot <room> [options]
   --key <path>     identity file, default ./bot.jwk — the key IS the seat
+  --apply <n>      ask empire n for a seat, and keep asking while it is open
   --as <id>        claim a specific peer id (ignored on a socket ref)
   --ice <urls>     STUN/TURN, replacing PeerJS's own
   --quiet

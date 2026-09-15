@@ -68,6 +68,17 @@ mechanism to switch off and nothing to lock down. An observer can later be voted
 a real seat by [`ROSTER_AMEND`](../continuity/roster-amendments.md) — which is
 exactly how a [PeerBot](../gameplay/bots.md) is seated.
 
+It no longer has to wait to be thought of. An observer holding a key can **ask**:
+`apply(empire)` puts a standing, signed request in front of that empire's seats,
+and one of them agreeing turns it into the same amendment an invitation would
+have produced ([joining](../continuity/joining.md)). It can also **take** an
+empire nobody has claimed, which needs nobody's agreement because there is
+nobody to ask ([vacancies](../gameplay/empires-and-seats.md)).
+
+Both need a key, and that is the line worth drawing: an observer *with* a key can
+ask for things and archive them; an observer *without* one can only watch and
+verify. A browser observer always has a key, because the lobby supplies one.
+
 ## SimBot
 
 Not a peer at all. A SimBot empire is driven *inside every peer's simulation*

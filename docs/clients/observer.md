@@ -11,6 +11,17 @@ It holds no seat, its checkpoint vote counts like anyone's, and every frame it
 forwards was signed by somebody else. It **cannot cheat, because it has nothing
 to cheat with**.
 
+
+## It asks for nothing
+
+An observer holding a key *could* apply for a seat — that is what the
+[application](../continuity/joining.md) record is for — and an archiving observer
+should not. Its value is that it holds no seat: nobody waits for it, it blocks
+nothing, and the archive it writes is the one artefact in the game nobody had a
+stake in. A keeper that played would be a player with a filing cabinet.
+
+`--apply` is the [bot](bot.md)'s flag for that reason, not this one.
+
 ## The stable address
 
 Room codes are [peer ids](../mesh/webrtc-mesh.md), so a game whose host has

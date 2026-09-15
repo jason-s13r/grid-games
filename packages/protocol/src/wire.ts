@@ -14,6 +14,7 @@ import type { Genesis } from "@tessera/sim";
 import type {
   EquivocationProof,
   SignedAmendment,
+  SignedApplication,
   SignedClaim,
   SignedCheckpoint,
   SignedMessage,
@@ -35,6 +36,7 @@ export const FRAME = {
   CHECKPOINT: "checkpoint",
   AMENDMENT: "amendment",
   CLAIM: "claim",
+  APPLICATION: "application",
   EQUIVOCATION: "equivocation",
   SNAPSHOT_REQUEST: "snapshot?",
   SNAPSHOT: "snapshot",
@@ -119,6 +121,13 @@ export interface ClaimFrame {
   signed: SignedClaim;
 }
 
+/** Somebody asking an empire for a seat. One signature, and no scheduling
+ *  weight: it names no step the pipeline must reach. */
+export interface ApplicationFrame {
+  t: typeof FRAME.APPLICATION;
+  signed: SignedApplication;
+}
+
 export interface EquivocationFrame {
   t: typeof FRAME.EQUIVOCATION;
   proof: EquivocationProof;
@@ -175,6 +184,7 @@ export type Frame =
   | CheckpointFrame
   | AmendmentFrame
   | ClaimFrame
+  | ApplicationFrame
   | EquivocationFrame
   | SnapshotRequestFrame
   | SnapshotFrame
@@ -233,6 +243,7 @@ export function decodeFrame(text: string): Frame | null {
     case FRAME.CHECKPOINT:
     case FRAME.AMENDMENT:
     case FRAME.CLAIM:
+    case FRAME.APPLICATION:
       // Field-level checking belongs to the verifier, which has to re-derive
       // the payload anyway. Here it is enough that there is something to verify.
       return isObject(parsed.signed) ? (parsed as unknown as Frame) : null;

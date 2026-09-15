@@ -1,6 +1,6 @@
 # 0011 — Applications: asking an empire for a seat
 
-Status: draft
+Status: built (2026-09-16)
 Depends on: nothing (sibling of 0010; either may land first)
 Branch: `applications`
 
@@ -488,6 +488,43 @@ so.
 | the mesh degrades rather than desyncing | a peer whose `handle` has no `FRAME.APPLICATION` case still agrees at the end of the run — `agreed(t)` |
 | the amendment suite is untouched | `amendment.test.ts` unchanged, and this is the tripwire for the whole plan |
 | the sim suite is untouched | `packages/sim` has no diff |
+
+## What came out differently
+
+Written after building it. The appendix was right about the lead finding — `admit`
+dispatches, and a three-seat empire fails silently without it — and right about
+all ten of its smaller ones. Four things the plan did not have.
+
+**Finding 6 is correct and the body's sentence is worse than it knew.** "An
+observer has no move available except saying so in chat" — `say` returns false
+without a seat, and a `Message` carries `empire` and `member` fields there is
+nothing to fill in. A peer with a key and no seat had **no channel to the game at
+all**. That is the argument for the feature and it is now the sentence in
+`docs/continuity/joining.md`.
+
+**The refresh has to run from `pump`, not from `apply`.** Written the obvious way
+— sign and broadcast once when the request is made, and again "on a timer" — the
+request expires: the holder's floor advances with the step and nothing renews the
+record. It belongs beside `announceReady` in the pump, rate-limited on the step
+count, which is what "the driver holds no timer" means in practice. Caught by the
+test that asks whether a request made 900 steps ago still seats.
+
+**The accept side had to ship in the browser, or the feature is half of one.** The
+plan makes `apps/bot --apply` the reachable path and leaves the UI to 0014, and
+that leaves nobody able to say yes: a bot can ask, but the seats that answer are
+in browsers. So `LobbyPanel` grew an **Asking for a seat on your empire** list
+beside the invitations it already showed — one row per request, no tally, because
+the count belongs to the amendment in flight and resets when that record expires,
+exactly as the plan's UI contract says. The standings panel grew the other half:
+an observer sees **Ask** beside an empire somebody is playing and **Take it**
+beside one nobody has, which are the two doors into a running game, gated on the
+same join-window line.
+
+**0010 shipped a button nobody had wired.** The **Take it** row from the vacancy
+plan was rendered and had no listener — found by adding its sibling, which is
+what a second instance of a pattern is for. Both are delegated from `main.ts`
+now rather than from `Controls`, which redraws several times a second and holds
+no opinion about the mesh.
 
 ## What this plan does not settle
 

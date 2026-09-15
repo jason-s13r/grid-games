@@ -18,14 +18,16 @@
 // browser, a loop in a test — which is what makes six peers in one process a
 // deterministic experiment rather than a race.
 
-import { MEMBER, MOVE, STEPS_PER_SECOND, isVacant } from "@tessera/sim";
+import { MEMBER, MOVE, SEAT_CEILING, STEPS_PER_SECOND, isVacant } from "@tessera/sim";
 import type { Genesis, MemberKind, Move, Sim } from "@tessera/sim";
 import {
   CHANNEL,
   EquivocationWatch,
   FRAME,
   amendmentMove,
+  signApplication,
   signClaim,
+  verifyApplication,
   verifyClaim,
   endorseAmendment,
   endorseDrop,
@@ -48,6 +50,7 @@ import {
 } from "@tessera/protocol";
 import type {
   Amendment,
+  Application,
   Channel,
   Claim,
   EquivocationProof,
@@ -57,6 +60,7 @@ import type {
   Message,
   Roster,
   SignedAmendment,
+  SignedApplication,
   SignedCheckpoint,
   SignedClaim,
   SignedDrop,
@@ -80,8 +84,13 @@ export interface LockstepOptions {
   sim: Sim;
   roster: Roster;
   transport: Transport;
-  /** Absent means observer: it follows, verifies and archives, but holds no
-   *  seat, so no other peer ever waits for it. */
+  /** A key, which is not the same thing as a seat.
+   *
+   *  What makes a peer an observer is an absent `seat`, and every test in this
+   *  file is written that way — a browser observer already holds a key, because
+   *  the lobby always supplies one. Absent `identity` is the narrower case: a
+   *  peer that can verify and archive but cannot sign, and therefore cannot ask
+   *  for anything either. `apply` needs a key and no seat; `amend` needs both. */
   identity?: Identity;
   seat?: Seat;
   inputDelay?: number;
@@ -152,6 +161,27 @@ const RESUME_PATIENCE_MS = 45_000;
  *  wait on each other for a promise that was broadcast before either could
  *  hear it, and no stopwatch but the stall timer ever breaks it. */
 const READY_REPEAT_MS = 1000;
+
+/** How often an applicant re-signs its standing request, in steps.
+ *
+ *  An application never grows — one signature from one key, forever — so it
+ *  cannot be gossiped the way an amendment is, which rebroadcasts only when its
+ *  signature count increases. Broadcast once and it reaches whoever happened to
+ *  be connected in that instant, and a mesh takes a second hop to form. So it is
+ *  repeated, exactly as a readiness promise is, and the repetition is what makes
+ *  the step field honest and the expiry below a comparison rather than a
+ *  deadline somebody had to choose. */
+const APPLY_REFRESH = STEPS_PER_SECOND * 30;
+
+/** One live application per key, and at most this many per empire.
+ *
+ *  Per empire, not in total, and that is the point: key generation is free, so a
+ *  single global map would let thirty-two throwaway identities evict every real
+ *  applicant to every empire for the price of thirty-two signatures. A driver
+ *  stores only what is addressed to its own empire, so a flood at somebody else
+ *  costs us nothing — we never held their list — and a flood at us is one list
+ *  our own members can ignore. */
+const MAX_ASKED = 32;
 
 /** How far ahead a proposed amendment is dated.
  *
@@ -241,6 +271,9 @@ export class Lockstep {
    *  `onAmended`: the ROSTER_AMEND move in the log carries no signature of its
    *  own and this record is the authority behind it. */
   onClaimed?: (claim: SignedClaim) => void;
+  /** Somebody is asking our empire for a seat. Mirrors `onInvitation`, and fires
+   *  only on the empire being asked — nobody else holds the list. */
+  onApplication?: (application: Application) => void;
   /** The simulation was moved to a state rather than advanced into it, so
    *  anything writing the inputs down has a hole between the step it last saw and
    *  this one. Nothing in the driver needs to know; an archive does, and an
@@ -319,6 +352,13 @@ export class Lockstep {
    *  separate number from readyCeiling because the two overlap freely: a peer
    *  can be signing a claim while an invitation is being counted. */
   private amendCeiling = Number.MAX_SAFE_INTEGER;
+  /** Outstanding applications, keyed `empire:key`, and **only ever addressed to
+   *  our own empire**. An observer keeps its own standing request here too, so
+   *  there is one thing to refresh and one thing to expire. */
+  private readonly asked = new Map<string, SignedApplication>();
+  /** Our own standing request, while we are asking for one. */
+  private asking?: Application;
+  private askedAt = -Infinity;
   private lastBeat = -Infinity;
   private lastReadyAt = -Infinity;
   private halted: string | null = null;
@@ -443,6 +483,18 @@ export class Lockstep {
     this.unlisten = undefined;
   }
 
+  /** The last step this peer may promise, once every outstanding proposal is
+   *  accounted for.
+   *
+   *  Exposed because the central claim about applications is that they do not
+   *  move it — an application carries no scheduling weight and names no step the
+   *  pipeline must reach — and a claim about a private field is a claim nothing
+   *  can check. A step-count comparison would prove nothing here: the harness
+   *  advances on a fake clock either way. */
+  get ceiling(): number {
+    return this.amendCeiling;
+  }
+
   /** The step the world should be at. Derived from genesis rather than from
    *  when this peer opened the page: the world turns whether or not anyone is
    *  watching, and two peers that started hours apart must agree on what time
@@ -464,11 +516,19 @@ export class Lockstep {
     const dirty = new Set<number>();
     if (this.halted || this.sim.ended || this.resuming()) return dirty;
 
+    // The standing request, if we are asking for a seat. Beside readiness
+    // because it is the same idea: a promise nobody heard is a promise nobody
+    // has, and the only way a peer that was not connected when we last spoke
+    // ever learns about it is that we say it again. Once per pump rather than
+    // once per step — it is rate-limited on the step count inside.
+    void this.refreshApplication();
+
     const target = this.targetStep();
     let budget = MAX_STEPS_PER_PUMP;
 
     while (this.sim.step < target && budget-- > 0) {
       this.expireAmendments();
+      this.expireApplications();
       const step = this.sim.step;
       // A move of ours is signed asynchronously, and `blocked` deliberately
       // never waits for our own seat — nobody can be waiting on themselves. So
@@ -698,6 +758,8 @@ export class Lockstep {
         return this.onAmendment(frame.signed);
       case FRAME.CLAIM:
         return void this.onClaim(frame.signed);
+      case FRAME.APPLICATION:
+        return void this.onApplicationFrame(frame.signed);
       case FRAME.EQUIVOCATION:
         return this.onEquivocation(frame.proof);
       case FRAME.SNAPSHOT_REQUEST:
@@ -963,7 +1025,16 @@ export class Lockstep {
    *  seat, by the people already holding them.
    *
    *  A single-seat empire is its own quorum, which is what lets a solo player
-   *  recruit a first teammate without needing one already. */
+   *  recruit a first teammate without needing one already.
+   *
+   *  **The empire is ours, not the caller's.** It is read off our own seat and
+   *  there is no parameter for it, which is what `admit` guards: a public
+   *  method forwarding here from a list of every empire's applicants would seat
+   *  that person on *this* team.
+   *
+   *  The boolean says only that a record went out, not that anything carried —
+   *  a proposal short of a quorum returns true and so does one that will expire
+   *  unanswered. `admit` returns a real answer; this never has. */
   async amend(key: MemberKey, kind: MemberKind = MEMBER.HUMAN): Promise<boolean> {
     const seat = this.options.seat;
     if (!seat || !this.options.identity || this.halted) return false;
@@ -1064,12 +1135,165 @@ export class Lockstep {
     // are still checking the signature on it.
     if (step <= this.sim.step || this.roster.has(key)) return;
 
-    this.accept(incoming);
+    this.book(incoming);
     this.transport.broadcast({ t: FRAME.CLAIM, signed: incoming });
     if (mine && this.options.identity?.key === key) {
       // Nothing to do but wait for the step. The seat is taken in
       // `seatArrivals`, on every peer at once, including this one.
       this.onClaimBooked?.(incoming.claim);
+    }
+  }
+
+  /** Ask an empire for a seat.
+   *
+   *  The only move a seatless peer has ever had in a running game, and before
+   *  this it had none at all: `amend` needs a seat to propose from, and `say`
+   *  needs one to attribute a message to, so a peer with a key and no seat had
+   *  no channel to the game whatsoever.
+   *
+   *  Refused where the request could never carry rather than left to wait
+   *  forever on it. A dead empire cannot seat anybody and a full one has no room,
+   *  and both are the same answer `tallyAmendment` gives about a record no quorum
+   *  could pass: no. An applicant told no can ask something else; an applicant
+   *  left waiting cannot tell the difference between patience and a rule. */
+  async apply(empire: number): Promise<boolean> {
+    const identity = this.options.identity;
+    // `identity && !seat` is the whole definition of an applicant. An observer
+    // is a peer with a key and no seat — which is what every browser observer
+    // already is, since the lobby always supplies an identity.
+    if (!identity || this.options.seat) return false;
+    if (this.roster.has(identity.key)) return false;
+
+    const held = this.sim.state.empires[empire - 1];
+    if (!held || !held.alive) return false;
+    const cap = Math.min(this.options.genesis.rules.maxSeats, SEAT_CEILING);
+    if (held.members.length >= cap) return false;
+
+    // Same window expression the sim and the amendment path use, read off the
+    // record rather than off this build's constant. A seat that cannot be added
+    // is a request that cannot be answered.
+    const genesis = this.sim.state.genesis;
+    const window = genesis.protocol >= 4 ? (genesis.rules.joinWindow ?? 0) : 0;
+    if (window > 0 && this.sim.step >= window) return false;
+
+    this.asking = { empire, key: identity.key, step: this.sim.step };
+    this.askedAt = -Infinity; // send on the next pump
+    await this.refreshApplication();
+    return true;
+  }
+
+  /** Stop asking. The row disappears from every empire's list within a refresh
+   *  interval, because nothing withdraws it — it simply stops being renewed. */
+  withdraw(): void {
+    this.asking = undefined;
+  }
+
+  /** Applications outstanding against our own empire, newest first. Drives the
+   *  list a member is deciding from. */
+  applications(): SignedApplication[] {
+    return [...this.asked.values()].sort(
+      (a, b) => b.application.step - a.application.step,
+    );
+  }
+
+  /** Agree to an applicant. The first member of the empire to call this starts a
+   *  proposal; everyone after them signs the one that exists.
+   *
+   *  The split is not a new mechanism — it is the one `endorsedAmend` has always
+   *  required, and that `amend` has no way to discover for itself. Without it a
+   *  three-seat empire fails silently: Alice's accept proposes step S and signs
+   *  it, Bob's accept proposes step S′ and signs *that*, and now there are two
+   *  live records for one person at two steps, each carrying one signature of
+   *  the two it needs, with both drivers having spent the single endorsement
+   *  they are ever allowed for that key. Neither can carry. Both expire. The
+   *  applicant is not seated and the two people who said yes are told nothing.
+   *
+   *  Returning false is a real answer here, which is not true of `amend`. */
+  async admit(empire: number, key: MemberKey): Promise<boolean> {
+    const seat = this.options.seat;
+    // `amend` reads the empire off our own seat and ignores what it is told, so
+    // an unguarded forward from a list showing every empire's applicants would
+    // let a member of empire 2 invite empire 1's applicant onto their own team —
+    // silently, signed, and correct as far as every peer is concerned.
+    if (!seat || seat.empire !== empire) return false;
+    if (this.roster.has(key)) return false;
+    if (!this.asked.has(`${empire}:${key}`)) return false;
+    // Our endorsement for this person is already spent. Refused here rather than
+    // dropped at the tally, where it is the same silent no-op as a stranger's
+    // forgery: correct for the forgery, useless to the member who clicked.
+    if (this.endorsedAmend.has(`${empire}:${key}`)) return false;
+    return this.invitation(empire, key) ? this.endorse(empire, key) : this.amend(key);
+  }
+
+  private async onApplicationFrame(signed: SignedApplication): Promise<void> {
+    if (!signed?.application) return;
+    const { empire, key, step } = signed.application;
+    // Ours only. Everything about the flood is this line: an opponent's
+    // applicants are a list we never hold.
+    const ours = this.options.seat?.empire;
+    if (ours === undefined || ours !== empire) return;
+    if (this.roster.has(key)) return;
+
+    // A step the applicant chose, bounded against our own. Strict in both
+    // directions, which it can be because a live application is re-signed: one
+    // naming the far future would never expire, and one from an hour ago is a
+    // record nobody is standing behind any more.
+    if (step > this.sim.step + APPLY_REFRESH) return;
+    if (step < this.sim.step - APPLY_REFRESH * 2) return;
+
+    if (!(await verifyApplication(this.gameId, signed))) return;
+
+    const slot = `${empire}:${key}`;
+    const known = this.asked.get(slot);
+    this.asked.set(slot, signed);
+    // Oldest out. A cap rather than a judgement about who deserves a seat, and
+    // per empire, so the blast radius of a flood is the list its own members can
+    // ignore.
+    if (this.asked.size > MAX_ASKED) {
+      let oldest: string | undefined;
+      let at = Infinity;
+      for (const [held, record] of this.asked) {
+        if (record.application.step < at) {
+          at = record.application.step;
+          oldest = held;
+        }
+      }
+      if (oldest !== undefined) this.asked.delete(oldest);
+    }
+    if (!known) this.onApplication?.(signed.application);
+  }
+
+  /** Re-sign the standing request and send it again, on a slow timer.
+   *
+   *  Pump-driven rather than on a `setInterval`, because the driver holds no
+   *  timer: the caller pumps it, and everything periodic here is a comparison
+   *  against the step. */
+  private async refreshApplication(): Promise<void> {
+    const asking = this.asking;
+    const identity = this.options.identity;
+    if (!asking || !identity || this.options.seat) return;
+    if (this.sim.step - this.askedAt < APPLY_REFRESH) return;
+    this.askedAt = this.sim.step;
+    const signed = await signApplication(identity, this.gameId, {
+      empire: asking.empire,
+      step: this.sim.step,
+    });
+    this.asking = signed.application;
+    this.transport.broadcast({ t: FRAME.APPLICATION, signed });
+  }
+
+  /** Drop anything nobody is standing behind any more.
+   *
+   *  No deadline to choose and no rule to explain: a live application is being
+   *  re-signed, so one that has fallen a couple of intervals behind belongs to
+   *  somebody who closed their tab. */
+  private expireApplications(): void {
+    if (this.asked.size === 0) return;
+    const floor = this.sim.step - APPLY_REFRESH * 2;
+    for (const [slot, record] of this.asked) {
+      if (record.application.step < floor || this.roster.has(record.application.key)) {
+        this.asked.delete(slot);
+      }
     }
   }
 
@@ -1154,7 +1378,7 @@ export class Lockstep {
     if (grew) this.transport.broadcast({ t: FRAME.AMENDMENT, signed: record });
 
     if (tally.endorsed >= tally.needed) {
-      this.accept(record);
+      this.book(record);
       return;
     }
     // Still short, and it is our empire being asked. Whoever is watching this
@@ -1164,8 +1388,13 @@ export class Lockstep {
     }
   }
 
-  /** Book a carried seating onto the step it names. */
-  private accept(signed: Seating): void {
+  /** Book a carried seating onto the step it names.
+   *
+   *  Named for what it does rather than for the answer it represents, because
+   *  "accept" is the word the public side of this wants: an empire's member
+   *  accepting an applicant is a decision, and this is the bookkeeping that
+   *  follows one. */
+  private book(signed: Seating): void {
     const { empire, key, step } = seatingOf(signed);
     const booked = this.seating.get(step) ?? [];
     if (booked.some((held) => seatingOf(held).key === key)) return;
