@@ -1,6 +1,6 @@
 # 0007 — The address book: listings and the rejoin flow
 
-Status: draft
+Status: built
 Depends on: 0003 (refs), 0006 (the host peers that announce)
 Branch: `address-book`
 

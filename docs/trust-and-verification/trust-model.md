@@ -19,6 +19,8 @@ is no mechanism to configure and nothing to switch off.
 | Vouch for its own [resume point](../continuity/resume-points.md) | a host holds no seat, so it signs no checkpoints and can never be a witness. It stores and serves an artifact only the players could have produced |
 | Vote themselves a bigger team | the [seat cap](../gameplay/empires-and-seats.md) is in the genesis **and** re-checked on every amendment |
 | Assert readiness on another seat's behalf | [`Ready`](../protocol/signed-records.md) is signed; doing so and then submitting a move is provable equivocation |
+| Fill an [address book](../mesh/address-book.md) with games that do not exist | it cannot be stopped, only priced: a row is only believable to the extent it carries [witnesses](../continuity/resume-points.md), and a majority of a game's seats signing *(step, hash)* is a thing only that game's players could have produced. Well-formed fiction is *returned and marked unproven*, because a game composed five minutes ago has no witnesses either |
+| Point a board row at a room running a different game | the row's genesis is re-hashed before it is shown, and the client dials with `expect: gameId` — a room that answers with another record is [refused by the lobby](../mesh/the-lobby.md) rather than played |
 | Exhaust another peer's memory | moves beyond `moveHorizon` are discarded; snapshot partials are bounded ([chunking](../mesh/webrtc-mesh.md)) |
 
 [`forgery.test.ts`](../../packages/net/src/test/forgery.test.ts): "a forged move
@@ -35,6 +37,20 @@ observer".
   [TURN](../mesh/webrtc-mesh.md) is a *bandwidth* dependency and never an
   *authority* one — a relay can stall a connection but cannot forge or alter a
   single move.
+
+## The board
+
+An [address book](../mesh/address-book.md) is a bulletin board of connection
+parameters, and it is trusted with none of them. It can flicker rows (bounded by
+the TTL — the next heartbeat restores them), show fiction (returned, and marked as
+carrying no proof), refuse to answer, and learn which games a reader asks about.
+What it cannot do is forge a game, because the binding `refs → gameId` is only as
+good as the genesis the reader hashes — and since `expect`, it cannot misroute one
+either. Its worst honest power is to waste your time.
+
+The write rule is access control and not adjudication: a row is owned by the key
+that announced it, so `present` and `withdraw` need that key's signature. The
+signature says who posted a row, never that the row is true.
 
 ## The broker
 

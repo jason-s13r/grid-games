@@ -11,6 +11,7 @@ tessera-host [--plan <file> | --auto <n>] [--wait <secs>]
              [--transport wss|rtc] [--room <name>] [--as <id>]
              [--bind 127.0.0.1] [--port 8080] [--ref <wss://…|tsr-…>]
              [--dir ./archives] [--key <path>] [--ice <urls>] [--quiet]
+             [--announce <board-url>] [--ttl <secs>] [--reachable <base-url>]
 tessera-host import <url> [dir]
 ```
 
@@ -152,8 +153,33 @@ the one archive failure this codebase has been careful never to allow.
 
 **Replacement is not transparent.** The game id is stable and a room name can be
 re-claimed, but a room on a relay is `wss://host/room` and a new host is a new host
-— so players holding the old ref have to be told the new one. Until there is an
-address book, that is a manual re-share.
+— so players holding the old ref have to be told the new one. `--announce` is how
+that happens without a message to everybody: the replacement posts its own door
+for the same game id, the client [merges the rows](../mesh/address-book.md), and a
+player who looks the game up is handed whichever door is alive.
+
+## Announcing the door
+
+`--announce <board-url>` posts this game to an [address book](../mesh/address-book.md)
+and keeps the row alive with a heartbeat at half the `--ttl` (default 180 s). On
+SIGTERM it withdraws, so a board is only wrong for as long as it takes a process
+to die badly — and a host that is killed, unplugged or segfaulted withdraws
+nothing, which is what the TTL is for.
+
+Each heartbeat rebuilds the row, so its witnesses keep up with the game: the
+resume point's signatures, carried without its snapshot. **This host signed none
+of them and could not have** — it holds no seat — which is exactly why the proof
+on the row is worth something.
+
+Nothing claims `seatsUsed`. A host knows how many peers are connected, not how
+many seats are held, and announcing the first as the second would be precisely the
+claim a client is right not to trust.
+
+`--reachable <base-url>` is the difference between what this process bound to and
+what the outside reaches. A certificate, a tunnel or a proxy means the room is at
+one URL and the socket at another, and a row carrying a loopback address is a row
+nobody can use. One flag covers both the `wss://` door and the `https://` read,
+because one port carries both.
 
 ## N hosts is redundancy for more than the door
 

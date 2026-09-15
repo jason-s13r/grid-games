@@ -19,6 +19,18 @@ The string a player joins with, and the whole of how a transport is chosen: a
 peer id is a WebRTC mesh, a `wss://` URL is a room on a relay. An address, never
 an authority. See [mesh/connection-refs.md](mesh/connection-refs.md).
 
+### address book / board
+A bulletin board of connection parameters — a game id, the sealed genesis, and
+the refs it can be reached at. It verifies nothing and is allowed to lie; every
+row is re-derived by whoever reads it, and the only part of one a stranger cannot
+manufacture is the **witnesses**. See
+[mesh/address-book.md](mesh/address-book.md).
+
+### listing / row
+One door on a board, keyed by (game id, ref) so a host dying removes its own door
+and not the game. A client merges the rows for a game into one `GameListing`,
+deriving everything derivable from the record and marking the rest as claims.
+
 ### observer
 A peer with no key in the roster. It connects, validates, hashes and archives
 like everyone else, and its checkpoint vote counts — it simply cannot produce an

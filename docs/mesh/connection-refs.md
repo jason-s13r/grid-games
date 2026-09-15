@@ -103,8 +103,14 @@ Two things are genuinely new, and both are worth naming:
 ## A ref names a room, not a game
 
 `tsr-abc234` is a peer and `wss://h/tessera/abc234` is a room. Either can outlive
-the game that was in it, and either can hold a different one tomorrow. A
-rejoining peer that already knows a `gameId` has no way to say so and takes
-whatever genesis the room sends it — checked by `inspectGenesis`, certainly, but
-not necessarily the game it meant to rejoin. Pairing a ref with a game id is the
-address book's job; until then, "rejoin" honestly means "reconnect and see".
+the game that was in it, and either can hold a different one tomorrow. A peer that
+knows which `gameId` it is looking for says so with
+[`Lobby.open`'s `expect`](the-lobby.md), and `adopt` refuses a record that is not
+that game — `inspectGenesis` only ever established that a record is consistent
+with *itself*.
+
+That check is unset for a ref a person typed, because a person who just read a
+code aloud has already done it. It is always set for a ref that came out of an
+[address book](address-book.md), which is the case that made the difference
+real: a row can carry somebody's genuine game id beside a ref pointing anywhere
+at all.

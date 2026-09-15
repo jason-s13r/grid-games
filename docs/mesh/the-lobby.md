@@ -18,8 +18,8 @@ seat it holds. Nothing after that needs a host at all.
 
 `LobbyPhase` = `connecting | hosting | waiting | playing | failed`.
 
-- `Lobby.open(identity, ref?, { id?, iceServers?, connect? })` — static async; a
-  transport arrives here on demand, and which one is decided by the
+- `Lobby.open(identity, ref?, { id?, iceServers?, connect?, hosting?, expect? })` —
+  static async; a transport arrives here on demand, and which one is decided by the
   [ref](connection-refs.md).
 - **`undefined` means host.** A ref is a string somebody typed and nobody types
   "host", so absent a ref we are the room. `connect` replaces the opener, which
@@ -67,6 +67,14 @@ has no further authority over anything. The host can leave; a peer that kept
 [`adopt(genesis)`](../../packages/net/src/lobby.ts#L291): run
 [`inspectGenesis`](../protocol/genesis.md) (fail on any problem), then scan the
 roster for one of this identity's keys → `Seat | undefined`.
+
+**`expect` refuses the wrong game.** A ref names a room, not a game, and
+`inspectGenesis` only asks whether a record hashes to *its own* claimed id. A
+caller that looked the ref up in an [address book](address-book.md) knows which
+game it asked for, and passes it: arriving somewhere else fails the lobby with
+"that room is running a different game" rather than starting one. Unset for every
+caller whose ref came from a person, which until the address book was every
+caller there was.
 
 **No seat is not a failure.** An unkeyed or unlisted peer is an
 [observer by construction](../concepts/peers-and-roles.md) — it validates and

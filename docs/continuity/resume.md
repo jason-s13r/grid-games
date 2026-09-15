@@ -91,6 +91,19 @@ three hours ago rejoin from whoever happens to be online.
 After a successful adopt, pending moves and seatings for spent steps are cleared,
 checkpoint history is dropped, and a fresh checkpoint + readiness go out.
 
+## The same tally answers a second question
+
+A [resume point](resume-points.md)'s witnesses are checked by
+`verifyResumePoint(genesis, claim)`, and the claim is a point **with the bytes
+taken off** — the function never reads `data`. It rebuilds the roster, subtracts
+the verified drops, and counts agreeing signatures.
+
+That is what lets an [address-book row](../mesh/address-book.md) carry a proof of
+life in a couple of hundred bytes instead of a snapshot: a majority of a game's
+own seats signing *(step, hash)* is a statement only that game's players could
+have produced. The bytes answer a different question, and `Lockstep.resume` is
+the only thing that asks both, in the only order that is safe.
+
 [`resume.test.ts`](../../packages/net/src/test/resume.test.ts): "wrong hash
 refused, state left alone; real one accepted, lands on its step"; "a late peer
 resumes without being told"; "an unanswered resume request eventually plays from

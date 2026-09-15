@@ -15,6 +15,7 @@ agreed world is large enough that it and the recovery paths around it live in
 | [room-bus.md](room-bus.md) | The relay's wire contract: the envelope, the rules, the limits |
 | [local-hub.md](local-hub.md) | `LocalHub` — running several drivers (a seated bot) in one page |
 | [the-lobby.md](the-lobby.md) | `Lobby` — from "two peers connected" to "one agreed genesis" |
+| [address-book.md](address-book.md) | `Directory` — finding a game on a board that is allowed to lie |
 
 ## The shape
 
@@ -38,6 +39,11 @@ Both shapes carry the same frames, and neither carries any authority.
 
 Which transport a peer opens is decided by the [ref](connection-refs.md) it was
 given, in one place, once.
+
+Where that ref comes from is the [address book](address-book.md), which is a
+**directory and never a server**: it holds connection parameters, it is allowed
+to lie about all of them, and every row a client returns has been re-derived from
+the sealed genesis inside it.
 
 The driver never mentions PeerJS, WebRTC or a socket — it speaks only the
 [`Transport`](transport-interface.md) interface. That is not tidiness: it is what
