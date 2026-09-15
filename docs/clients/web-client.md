@@ -27,14 +27,24 @@ interface Driver {
 }
 ```
 
-Two implementations, and `Controls` / `main.ts` never learn which one they hold:
+Three implementations, and `Controls` / `main.ts` never learn which one they
+hold:
 
-| | [`LocalGame`](../../apps/web/src/game/Local.ts) | [`OnlineGame`](../../apps/web/src/game/Online.ts) |
-|---|---|---|
-| Moves come from | one human seat + [SimBot](../gameplay/bots.md) empires | [`Lockstep`](../continuity/lockstep.md) — signed moves from every seat |
-| `tick()` | queue due moves → `sim.advance` on a wall-clock target | `lockstep.pump()` |
-| `empire` / `member` | fixed (1, 0) | read live from `lockstep.seat` (0 = observer) |
-| pause | stops the clock | no-op — the world turns regardless |
+| | [`LocalGame`](../../apps/web/src/game/Local.ts) | [`OnlineGame`](../../apps/web/src/game/Online.ts) | [`ReplayDriver`](../../apps/web/src/game/Replay.ts) |
+|---|---|---|---|
+| Moves come from | one human seat + [SimBot](../gameplay/bots.md) empires | [`Lockstep`](../continuity/lockstep.md) — signed moves from every seat | a signed log, already played |
+| `tick()` | queue due moves → `sim.advance` on a wall-clock target | `lockstep.pump()` | nothing — the scrubber sets the step |
+| `empire` / `member` | fixed (1, 0) | read live from `lockstep.seat` (0 = observer) | (0, 0) — watched from outside |
+| pause | stops the clock | no-op — the world turns regardless | no clock to stop |
+| `claim` / `act` | validated, queued | validated, signed, broadcast | refused |
+
+The third one is the evidence the boundary was worth having. A replay arrived
+with a worker, a snapshot ladder and a timeline, and cost `mount`, `Controls` and
+the frame loop nothing at all — the only thing they knew about it is that
+`tick()` had nothing to say. `claim` and `act` **refuse** rather than being
+absent: a replay is a real game object with a real `Sim` in it and the board's
+click handler is the same handler, so returning `false` is what makes a click on
+somebody's finished game do nothing.
 
 `LocalGame` is deliberately shaped like the lockstep driver: input is queued as
 moves for a future step and applied by `advance()`, never written straight into
@@ -151,11 +161,67 @@ knowing is a no**, because a host that did not answer might be running a game an
 a second record in a room that has one splits it with no error anywhere. That
 guard closes the common case and not the race; the race is 0009's.
 
+## Replay, and the two things that make it not a `for` loop
+
+Twelve steps a second: an hour is 43,200 steps, three days is 3,110,400, ten days
+is 10,368,000. Two consequences, one answer.
+
+**It cannot run on the thread that paints.** So
+[`work/worker.ts`](../../apps/web/src/work/worker.ts) owns the `Sim` and the
+page talks to it in one message each way. There is one worker *entry* doing two
+jobs, and the reason is a bundler one worth writing down: both jobs need
+`@tessera/net`, Parcel factors that into a bundle shared between two workers and
+loads it with `importScripts`, and a module worker cannot call that — the second
+worker dies with `Cannot find module`. One entry has no second worker to share
+with, and the two sessions still get an instance each.
+
+**Backwards is the whole game again.** `Sim` has no undo, by design: a step is a
+hash, not a diff, and an undo would be the rules implemented a second time in
+reverse. So [`ladder.ts`](../../apps/web/src/replay/ladder.ts) keeps a snapshot
+every `ladder` steps and a seek is `restore(nearest below)` plus at most `ladder`
+advances. The spacing is derived from a fixed budget of 256 rungs rather than
+fixed itself, because a snapshot is ~320KB on a large map and a fixed spacing
+over a ten-day game would be most of a gigabyte. The honest consequence is that a
+long game has coarse rungs — ~40,000 steps apiece over ten days, about three
+seconds to seek — which is why the strip shows progress instead of pretending.
+
+Order is **verify, then build**: spending a minute building a timeline for a log
+whose signatures turn out to be forged is a minute spent on a lie. That costs a
+second full pass, because `verifyArchive` owns its own replay loop, and the strip
+names which phase it is in rather than showing one bar that stalls halfway.
+
+Cancelling is `worker.terminate()`. A worker in a tight simulation loop cannot
+read its own message queue, and there is nothing to unwind when it dies
+mid-build.
+
+## The leaderboard, and what it is scoped to
+
+`rankArchives` takes archives and an [address book](../mesh/address-book.md)
+holds none: 0007's row is the doors into a *live* game, and its TTL removes it
+shortly after the last door closes — which is exactly the moment a game becomes
+rankable. There is no index of finished games anywhere in Tessera, and adding one
+means giving a board a second job (holding megabytes, indefinitely) that it was
+written to refuse.
+
+So the table is over archive URLs the player configured plus files they opened,
+and [`view/Leaderboard.ts`](../../apps/web/src/view/Leaderboard.ts) says so on
+screen rather than letting a heading imply an index exists. The refusals are
+rendered beside the table and named by **file**, not by game:
+`rankArchives` refuses by position precisely because two archives of one game
+share a game id, and which of them was the duplicate is the whole point of saying
+so. `tessera-observe rank` prints its refusals for the same reason.
+
+**Corrected against plan 0008**, which has settings hold "a list of host peers to
+read from". A host peer serves `GET /room/:code/archive` and has no endpoint that
+enumerates its rooms, so a base URL alone cannot be fetched from. What is stored
+is the archive URL itself — which is also what a person actually has, because it
+is what they were sent.
+
 ## Settings
 
-`src/net/settings.ts` — three strings in `localStorage["tessera.settings"]`,
-beside the identity, **all empty by default**: the address book, a host factory,
-and the host peers a leaderboard would read. Read once at start and written on
+`src/net/settings.ts` — three entries in `localStorage["tessera.settings"]`,
+beside the identity, **all empty by default**: the address book, a host service,
+and the archive URLs a leaderboard reads. Read once at start and written on
 change; a settings object that can change under a render is a bug waiting for a
 screenshot. Empty means *absent*, not *broken*: with no factory URL the third
 create button is not on the screen at all.

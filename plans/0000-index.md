@@ -1,6 +1,6 @@
 # Plan index
 
-Status of the series: 0001–0007 built; 0008 built to step 9 of 11; 0009–0014 draft. Built in the order
+Status of the series: 0001–0008 built; 0009–0014 draft. Built in the order
 below; each plan leaves the tree green and is useful on its own. No plan adds authority anywhere — the
 sim, the hash contract, quorum signatures and archive verification are
 untouched, and everything stored anywhere is checked by whoever reads it.
@@ -14,7 +14,7 @@ untouched, and everything stored anywhere is checked by whoever reads it.
 | 0005 ✅ | Resume points a stranger can check | — | 1 session, hardest |
 | 0006 ✅ | The host peer — doorman, relay, archiver | 0004, 0005 | 1–2 sessions |
 | 0007 ✅ | The address book — listings and the rejoin flow | 0003, 0006 | 1 session |
-| 0008 ◐ | The web client — join, create, watch | 0002, 0003, 0007 | 3 sessions, not 1–2 |
+| 0008 ✅ | The web client — join, create, watch | 0002, 0003, 0007 | 3 sessions, not 1–2 |
 | 0009 | Composing a game together — the co-signed proposal | 0002, 0006 | 1–2 sessions |
 | 0010 | Vacant empires — arriving at a game that has already started | 0002 | 1–2 sessions, hardest here |
 | 0011 | Applications — asking an empire for a seat | — | 1 session |
@@ -40,10 +40,11 @@ untouched, and everything stored anywhere is checked by whoever reads it.
 0008 is the first plan to be split rather than built whole. Its own appendix
 recommended it — the replay scrubber is a worker and a snapshot ladder, and the
 leaderboard is blocked on an index of finished games that nothing builds — and
-what shipped first is the half the title promises: **steps 1–6, finding a game
-and joining it**, then **7–9, listing one and the two other create backends**.
-Steps 10–11 (replay, the scoped leaderboard) are still ahead, and 0009–0014
-depend on neither.
+what shipped first was the half the title promises — **steps 1–6, finding a game
+and joining it** — then **7–9, listing one and the two other create backends**,
+then **10–11, replay and the scoped leaderboard**. Three sittings, as its own
+appendix predicted, and each left the tree green. 0009–0014 depend on none of
+them.
 
 Each plan carries its own argument. The two that span the series are written
 where they bite hardest: which changes owe a version bump, in 0001; what the

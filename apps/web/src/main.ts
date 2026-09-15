@@ -16,9 +16,10 @@ import {
 } from "@tessera/sim";
 import { Roster } from "@tessera/protocol";
 import { Archive, Directory, Lobby, Lockstep, MAX_SEATS, parseRef, resolve } from "@tessera/net";
-import type { ConnectionRef, ResumePoint } from "@tessera/net";
+import type { ArchivedGame, ConnectionRef, ResumePoint } from "@tessera/net";
 import pkg from "../package.json";
 import { LocalGame } from "./game/Local";
+import { ReplayDriver } from "./game/Replay";
 import { boardClick } from "./game/input";
 import { OnlineGame } from "./game/Online";
 import type { Driver } from "./game/Driver";
@@ -26,6 +27,9 @@ import { myIdentity } from "./net/identity";
 import { Announcer, doorOf } from "./net/announce";
 import { mayCompose, roomStatus } from "./net/compose";
 import { askForRoom } from "./net/factory";
+import { ReplaySession } from "./replay/session";
+import { rankInWorker } from "./work/rank";
+import { fetchArchive, isArchive, urlsFrom } from "./net/archives";
 import {
   checkBoardUrl,
   checkFactoryUrl,
@@ -37,6 +41,9 @@ import {
 import { LobbyPanel } from "./view/LobbyPanel";
 import { Setup } from "./view/Setup";
 import { Games } from "./view/Games";
+import { Scrubber } from "./view/Scrubber";
+import { LeaderboardCard } from "./view/Leaderboard";
+import type { Refusal } from "./view/Leaderboard";
 import type { GameRow } from "./view/Games";
 import { Rivals } from "./view/Rivals";
 import type { RosterView } from "./view/LobbyPanel";
@@ -216,6 +223,25 @@ factoryEl.addEventListener("change", () => {
 
   if (text === settings().factory) return;
   saveSettings({ factory: text });
+});
+
+const rankEl = pick<HTMLTextAreaElement>('[data-cfg="rank"]');
+const rankProblemEl = pick<HTMLElement>('[data-cfg="rank-problem"]');
+rankEl.value = settings().rankFrom.join("\n");
+
+rankEl.addEventListener("change", () => {
+  const urls = urlsFrom(rankEl.value);
+  // The same mixed-content rule again, in the shape this field has: an archive
+  // is read exactly as a board is, and an http one from a page on https fails
+  // opaquely a long way from here.
+  const problem = urls.map((url) => checkBoardUrl(url)).find((said) => said !== "") ?? "";
+
+  rankProblemEl.textContent = problem;
+  rankProblemEl.hidden = !problem;
+  rankProblemEl.classList.toggle("lobby-problem", !!problem);
+  if (problem) return;
+
+  saveSettings({ rankFrom: urls });
 });
 
 // --- the address book --------------------------------------------------------
@@ -490,7 +516,9 @@ function mount(driver: Driver): void {
   // nothing in a mesh game to pause. Derived from the driver rather than
   // switched off at the mesh call site, which left it stuck off for the next
   // solo game you started.
-  pick<HTMLButtonElement>('[data-action="pause"]').disabled = driver.online;
+  // A replay has no clock either, and for the same reason: its step is set by
+  // the scrubber. Derived from the driver rather than from which kind it is.
+  pick<HTMLButtonElement>('[data-action="pause"]').disabled = driver.online || !driver.running;
   pick<HTMLButtonElement>('[data-action="pause"]').textContent = "Pause";
 
   mapImage.paintAll(game.sim.state);
@@ -725,6 +753,7 @@ archiveBtn.addEventListener("click", () => {
 // game: it puts down the mesh session, if there is one, and goes back to the
 // lobby — so it says so, and it actually leaves rather than pretending to.
 pick<HTMLButtonElement>('[data-action="leave"]').addEventListener("click", () => {
+  if (replay) return stopReplay();
   leaveMesh();
   // Back to the first question. Leaving in the middle of a hosted game and
   // finding its start button still on screen is how you start a second one by
@@ -746,6 +775,261 @@ pick<HTMLButtonElement>('[data-action="resume"]').addEventListener("click", () =
 window.addEventListener("pagehide", (event) => {
   if (!event.persisted) announcer?.stop();
 });
+
+// --- watching a saved game ---------------------------------------------------
+//
+// The other end of the Save log button. Everything expensive is in a worker
+// (replay/Engine.ts) because a three-day game is three million steps and a page
+// that replays one on its own thread simply stops answering, with no way out.
+//
+// What is here is the part that has to be on this thread: reading the file,
+// mounting a `ReplayDriver` so `mount`, `Controls` and the frame loop take it
+// exactly as they take the other two, repainting after a seek, and making sure
+// the worker is never asked two questions at once.
+
+const scrubberEl = pick<HTMLElement>("[data-scrubber]");
+const watchFileEl = pick<HTMLInputElement>("[data-watch-file]");
+const watchProblemEl = pick<HTMLElement>("[data-watch-problem]");
+
+let replay: ReplaySession | undefined;
+let watching: ReplayDriver | undefined;
+/** The last step the player asked for while a seek was already in flight.
+ *
+ *  A range input fires on every pixel of a drag and each seek costs the worker a
+ *  restore plus up to a ladder of advances; sending all of them would queue a
+ *  minute of work behind a gesture that lasted a second. So one question at a
+ *  time and the newest answer wins — which is what makes dragging across a long
+ *  game land on the frame you stopped on rather than one from halfway. */
+let wanted: number | undefined;
+let seeking = false;
+let reached = 0;
+
+const scrubber = new Scrubber(scrubberEl, {
+  seek: (step) => askFor(step),
+  close: () => stopReplay(),
+});
+
+function askFor(step: number): void {
+  if (!replay) return;
+  if (seeking) {
+    wanted = step;
+    return;
+  }
+  seeking = true;
+  scrubber.set({ kind: "seeking", step, total: reached });
+  replay.seek(step);
+}
+
+watchFileEl.addEventListener("change", () => {
+  const file = watchFileEl.files?.[0];
+  // Cleared immediately so choosing the same file twice is two events. A file
+  // input that remembers its value silently ignores the second attempt, which
+  // looks exactly like a page that has stopped working.
+  watchFileEl.value = "";
+  if (file) void openSaved(file);
+});
+
+async function openSaved(file: File): Promise<void> {
+  const say = (problem: string): void => {
+    watchProblemEl.textContent = problem;
+    watchProblemEl.hidden = !problem;
+    watchProblemEl.classList.toggle("lobby-problem", !!problem);
+  };
+  say("");
+
+  let game: ArchivedGame;
+  try {
+    game = JSON.parse(await file.text()) as ArchivedGame;
+  } catch {
+    return say(`${file.name} is not a saved game — it is not even JSON.`);
+  }
+  if (!game || typeof game !== "object" || !game.genesis || !Array.isArray(game.moveLog)) {
+    return say(`${file.name} is not a saved game.`);
+  }
+
+  startReplay(game);
+}
+
+/** Put a saved game on screen, and start checking it.
+ *
+ *  The board appears before the verdict does, and deliberately: what is drawn
+ *  from an unchecked file is the map its genesis record generates, which is a
+ *  picture and not a claim. Every claim — who played, what they did, who won —
+ *  waits on the verdict, and until it arrives the strip above the board says in
+ *  words that the log is still being checked. A refusal then lists everything
+ *  wrong with the file and the timeline never becomes scrubbable. */
+function startReplay(game: ArchivedGame): void {
+  leaveMesh();
+  stopReplay(true);
+
+  watching = new ReplayDriver(game.genesis);
+  reached = 0;
+  seeking = false;
+  wanted = undefined;
+  scrubberEl.hidden = false;
+  scrubber.set({ kind: "checking" });
+
+  replay = new ReplaySession(game, {
+    checked: (verdict) => {
+      if (verdict.ok) return;
+      // Everything wrong with it, never the first line. A fragment says so here
+      // too: a log that begins in the middle cannot be replayed from the start,
+      // which is a fact about the file rather than a failure of this page.
+      scrubber.set({ kind: "refused", problems: verdict.problems });
+    },
+    building: (step, total) => scrubber.set({ kind: "building", step, total }),
+    ready: (total, frame) => {
+      reached = total;
+      show(frame.data);
+      scrubber.set({ kind: "ready", step: 0, total });
+    },
+    at: (frame) => {
+      show(frame.data);
+      seeking = false;
+      scrubber.set({ kind: "ready", step: frame.step, total: reached });
+      // Whatever the player asked for while that was in flight.
+      if (wanted !== undefined) {
+        const next = wanted;
+        wanted = undefined;
+        askFor(next);
+      }
+    },
+    failed: (problem) => scrubber.set({ kind: "refused", problems: [problem] }),
+  });
+
+  mount(watching);
+  setup.reset();
+  shell.show("game");
+}
+
+/** The state the worker computed, painted whole.
+ *
+ *  A seek changes every tile on the map, so there is no dirty set worth
+ *  computing — `ReplayDriver.tick` returns an empty one on purpose and this is
+ *  the repaint instead. */
+function show(data: ArrayBuffer): void {
+  if (!watching) return;
+  watching.show(data);
+  mapImage.paintAll(watching.sim.state);
+  renderer.render(watching.sim.state, null);
+  minimap.render(watching.sim.state);
+  controls.render(watching.sim.state);
+}
+
+/** Stop watching. Cancelling a build and closing a finished replay are the same
+ *  action from the player's side, and the same one here: the worker is
+ *  terminated, because one in a tight simulation loop cannot answer a message
+ *  and there is nothing outside it to unwind. */
+function stopReplay(quietly = false): void {
+  replay?.close();
+  replay = undefined;
+  watching = undefined;
+  wanted = undefined;
+  seeking = false;
+  scrubberEl.hidden = true;
+  if (quietly) return;
+  // Something has to be under the menu, and it is what was there at boot: a
+  // solo game nobody is playing.
+  start(seedFrom(String(Date.now())));
+  setup.reset();
+  shell.left();
+}
+
+// --- the leaderboard ---------------------------------------------------------
+//
+// Scoped, and it says what it is scoped to. `rankArchives` takes archives and an
+// address book holds none — 0007's row is the doors into a *live* game and its
+// TTL removes it shortly after the last door closes, which is exactly when a
+// game becomes rankable. So the table is over the archive URLs this player
+// configured plus the files they opened, and the card's own heading says so.
+//
+// Nothing here decides anything. Reading is here, the deciding is
+// `rankArchives`'s, and it happens in a worker because verifying a game means
+// replaying it and five three-day games is five full replays.
+
+const rankFilesEl = pick<HTMLInputElement>("[data-rank-files]");
+
+/** Files the player has opened this session. Kept as parsed archives rather than
+ *  as `File`s, so opening a file that is not a saved game is refused where it
+ *  was opened rather than in the middle of a two-minute ranking. */
+const dropped: Array<{ source: string; game: ArchivedGame }> = [];
+
+const leaderboard = new LeaderboardCard(pick<HTMLElement>("[data-rank]"), {
+  build: () => void buildTable(),
+});
+
+function sayRankable(): void {
+  const sources = settings().rankFrom.length + dropped.length;
+  leaderboard.set(sources > 0 ? { kind: "idle", sources } : { kind: "unset" });
+}
+
+onSettingsChange(sayRankable);
+sayRankable();
+
+rankFilesEl.addEventListener("change", () => {
+  const files = [...(rankFilesEl.files ?? [])];
+  rankFilesEl.value = "";
+  void addFiles(files);
+});
+
+async function addFiles(files: File[]): Promise<void> {
+  const refused: Refusal[] = [];
+  for (const file of files) {
+    try {
+      const game: unknown = JSON.parse(await file.text());
+      if (!isArchive(game)) throw new Error("that is not a saved game");
+      dropped.push({ source: file.name, game });
+    } catch (error) {
+      refused.push({ source: file.name, problems: [(error as Error).message] });
+    }
+  }
+  sayRankable();
+  // A file that could not even be parsed is refused here and named here. It
+  // never reaches the ranking, so this is the only place it can be said.
+  if (refused.length > 0) {
+    leaderboard.set({
+      kind: "table",
+      table: { standings: [], counted: [], unfinished: 0, refused: [] },
+      names: [],
+      unreadable: refused,
+    });
+  }
+}
+
+async function buildTable(): Promise<void> {
+  const urls = settings().rankFrom;
+  const sources: Array<{ source: string; game: ArchivedGame }> = [...dropped];
+  const unreadable: Refusal[] = [];
+
+  // One at a time rather than all at once: these are the largest fetches this
+  // client makes, and a player who listed six hosts did not ask to open six
+  // multi-megabyte downloads simultaneously.
+  let done = 0;
+  for (const url of urls) {
+    leaderboard.set({ kind: "reading", done: done++, total: urls.length });
+    try {
+      sources.push({ source: url, game: await fetchArchive(url) });
+    } catch (error) {
+      unreadable.push({ source: url, problems: [(error as Error).message] });
+    }
+  }
+
+  leaderboard.set({ kind: "checking", games: sources.length });
+  try {
+    const table = await rankInWorker(sources.map((one) => one.game));
+    leaderboard.set({
+      kind: "table",
+      table,
+      // `rankArchives` refuses by position, because two archives of one game
+      // share a game id and which *file* was the duplicate is the whole point of
+      // saying so. This is that position turned back into a name.
+      names: sources.map((one) => one.source),
+      unreadable,
+    });
+  } catch (error) {
+    leaderboard.set({ kind: "problem", message: (error as Error).message });
+  }
+}
 
 // --- loop --------------------------------------------------------------------
 

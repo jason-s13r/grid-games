@@ -113,6 +113,12 @@ invented one, a deleted one and a simply-asserted outcome are four distinct
 failures and all four are caught. That is what makes a leaderboard checkable
 rather than reported. The browser client hands you the same file: **Save log**.
 
+The browser does both. **Watch a saved game** replays a log after checking it,
+with a scrubber that goes backwards — the simulation has no undo, so backwards is
+forwards from a snapshot kept on the way through, in a worker so a ten-day game
+does not freeze the page. The leaderboard beside it is built out of whichever
+logs you hand it, with everything it refused listed by filename.
+
 `rank` is that leaderboard. It verifies every archive in a directory and builds
 the table out of the replays — so no figure in it was ever reported by anybody,
 and anyone holding the same files computes the same table. The refusals are

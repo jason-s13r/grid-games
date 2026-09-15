@@ -41,6 +41,11 @@
         </div>
       </header>
 
+      <!-- Only ever on screen while a saved game is being watched. A row of its
+           own in the app grid, which collapses to nothing when hidden. See
+           view/Scrubber.ts. -->
+      <div class="scrubber" data-scrubber hidden></div>
+
       <!-- Collapsible so a phone can shut what it is not reading. Native
            <details> rather than a bespoke toggle: it is keyboard-operable and
            remembers its own state without a line of script. -->
@@ -185,6 +190,46 @@
             <div class="setup-foot" data-setup-foot></div>
           </section>
 
+          <!-- A file, not a service. The Save log button hands the player their
+               own copy of a game; this is the other end of it, and it checks
+               every signature and replays to the claimed hash before it shows
+               anything. See replay/Engine.ts. -->
+          <section class="card watch" data-watch>
+            <h2>Watch a saved game</h2>
+            <p class="card-tag">
+              Open a log saved with <strong>Save log</strong> &mdash; yours, or
+              one somebody sent you. Your browser checks every signature in it
+              and replays the whole game to see whether it reaches the state the
+              file claims, so nothing here is taken on anyone&rsquo;s word.
+            </p>
+            <div class="field field-stacked">
+              <label for="cfg-watch">Saved game</label>
+              <input id="cfg-watch" type="file" data-watch-file accept="application/json,.json" />
+            </div>
+            <p class="hint" data-watch-problem hidden></p>
+          </section>
+
+          <!-- Derived, never reported. Every figure in the table comes out of
+               hashed state after replaying a signed log, which is why the
+               refusals are on screen beside it: a leaderboard that silently
+               drops what it could not check is one nobody can audit. See
+               view/Leaderboard.ts. -->
+          <section class="card rank-card">
+            <div data-rank></div>
+            <!-- Outside the card's own root, which is replaced on every render:
+                 a file input that is rebuilt forgets what was chosen. -->
+            <div class="field field-stacked">
+              <label for="cfg-rank-files">Add saved games</label>
+              <input
+                id="cfg-rank-files"
+                type="file"
+                multiple
+                data-rank-files
+                accept="application/json,.json"
+              />
+            </div>
+          </section>
+
           <!-- Folded away, because the normal state of these is "never touched".
                A board is a URL that arrives the way a room code used to: there
                is no default, and nothing here breaks while it is empty. See
@@ -226,6 +271,26 @@
                 />
                 <p class="hint" data-cfg="factory-problem" hidden></p>
               </div>
+              <div class="field field-stacked">
+                <label for="cfg-rank">Archive URLs</label>
+                <textarea
+                  id="cfg-rank"
+                  class="lobby-code"
+                  data-cfg="rank"
+                  rows="3"
+                  spellcheck="false"
+                  placeholder="https://host.example/room/blue-fox/archive"
+                ></textarea>
+                <p class="hint" data-cfg="rank-problem" hidden></p>
+              </div>
+              <p class="hint">
+                One per line. A host peer serves the log of a game it kept at
+                <code>/room/&lt;room&gt;/archive</code>, and the
+                leaderboard above is built out of whichever of those you list,
+                plus any file you open. There is no index of finished games
+                anywhere, so a table here is over what you have and says so.
+              </p>
+
               <p class="hint">
                 A service that starts a room for you and keeps it open while you
                 are asleep, so a long game does not end when you close the tab.

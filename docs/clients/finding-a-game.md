@@ -181,9 +181,43 @@ read-only board.
 A [host peer](host-peer.md) announces itself with `--announce <url>` and keeps
 its own row alive.
 
+## Watching one that already happened
+
+**Save log** in a running game hands you the whole thing: the genesis record,
+every signed move, and the hash they produce. **Watch a saved game** on the menu
+is the other end of it, for your own logs or somebody else's.
+
+Your browser checks the file before it shows you anything — every signature
+against the roster the genesis record builds, and the whole log replayed to see
+whether it reaches the state the file claims. A log that fails says everything
+that was wrong with it and never becomes scrubbable. A log that begins in the
+middle (a peer who joined an hour in holds a fragment) says that too, because it
+cannot be replayed from the start.
+
+Scrubbing backwards works, which is less obvious than it sounds: the simulation
+has no undo, so going back is going forward from a snapshot kept on the way
+through. A long game has coarse snapshots and a seek across one takes a moment —
+the strip says so rather than pretending.
+
+## The leaderboard
+
+Built the same way and from the same files: **Add saved games**, or list archive
+URLs in Settings — a [host peer](host-peer.md) serves the log of a game it kept
+at `/room/<room>/archive`. Every figure is read out of hashed state after the log
+has been replayed here, so nothing in the table was reported by anybody.
+
+What did not get counted is printed beside it, named by the file it came from. A
+leaderboard that silently drops what it could not check is one nobody can audit,
+which would give back exactly what the signatures were for.
+
+It is scoped to what you have, and says so. There is no index of finished games
+anywhere in Tessera — a board holds live doors and drops the row when the last
+one closes — so a public, cross-host table is a plan and not a setting.
+
 ## What is not here yet
 
-- **Replay and the leaderboard.** Both are in plan 0008 and neither is built.
 - **A game composed together.** Until plan 0009, whoever presses start seals the
   record alone, which is why the paragraph above asks two people in one room to
   agree between themselves.
+- **An index of finished games**, which is what a leaderboard covering more than
+  your own files would need.

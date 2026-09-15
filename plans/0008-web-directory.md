@@ -1,6 +1,6 @@
 # 0008 — The web client: join, create, watch
 
-Status: steps 1–9 built (2026-09-15); 10–11 draft
+Status: built (2026-09-16)
 Depends on: 0002, 0003, 0007 (uses them all)
 Branch: `web-directory-ui`
 
@@ -684,8 +684,8 @@ numbering stays, and 0009–0014 depend on none of the three.
    in `leaveMesh`.
 8. ✅ Backend 2: the composition guard against `GET /room/:code`.
 9. ✅ Backend 3: the POST shape, hidden while the factory URL is empty.
-10. Replay: worker, ladder, `ReplayDriver`, scrubber.
-11. Leaderboard: scoped, with refusals.
+10. ✅ Replay: worker, ladder, `ReplayDriver`, scrubber.
+11. ✅ Leaderboard: scoped, with refusals.
 
 Steps 1–6 leave the tree green and shippable on their own, which is the
 property every plan in this series is written to keep — and did: 83 tests in
@@ -723,6 +723,34 @@ composition offer that step 8 built appears by itself a moment later, and
 `useFactory` is twenty lines with no composing logic of its own. That is the
 seam working: a factory is a convenience and never an authority, and nothing
 downstream of the join can tell where the ref came from.
+
+Steps 10–11 finished it. 180 tests in `apps/web`, 790 across the repo, and the
+built bundle verified in Chromium: a saved game checked, its timeline built, and
+its state at four steps — including two reached by scrubbing *backwards* —
+bit-identical to a fresh simulation's. Three more things came out differently
+from the body.
+
+**One worker entry, not two.** The obvious shape is a worker per job and it does
+not build. Both jobs need `@tessera/net`, so Parcel factors it into a bundle
+shared between the two workers and loads that bundle with `importScripts`, which
+a module worker cannot call — the second worker dies with `Cannot find module`,
+at runtime, in the built bundle only. One entry point has no second worker to
+share with, and the two sessions still get an instance each, which is what keeps
+a ranking from being able to kill a replay on its way out.
+
+**Verify and build are two passes, not one.** The body has `verifyArchive`
+client-side and the ladder built beside it, as though they were the same walk.
+They are not: `verifyArchive` owns its own replay loop and there is no way to
+keep snapshots out of it. Doing it in one pass would mean reimplementing the
+verification rules here, which is a second place for them to drift — so it is two
+passes, verify first, and the strip names the phase it is in rather than showing
+one bar that stalls halfway. Building a timeline for a log whose signatures turn
+out to be forged is a minute spent on a lie.
+
+**"Host peers to read from" cannot be fetched.** A host peer serves
+`GET /room/:code/archive` and has no endpoint that enumerates its rooms, so a
+base URL is not enough to read an archive from. Settings hold the archive URL
+itself, which is also what a person actually has — it is what they were sent.
 
 ## Docs
 

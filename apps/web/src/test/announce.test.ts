@@ -73,9 +73,16 @@ function board(): { directory: Directory; writes: Array<SignedListing | SignedWi
 /** Everything posted is posted from a `void`ed promise — announcing must never
  *  be something a player waits on — and signing a write is real WebCrypto, which
  *  resolves on a turn of the actual event loop rather than on the microtask
- *  queue. So a test that wants to see a write has to yield a real one, which is
- *  why the fake clock below fakes the interval and nothing else. */
-const settle = (): Promise<void> => new Promise((resolve) => setTimeout(resolve, 1));
+ *  queue. So a test that wants to see a write has to yield real ones, which is
+ *  why the fake clock below fakes the interval and nothing else.
+ *
+ *  Waited for rather than slept through. A fixed delay long enough on an idle
+ *  machine is a flake on a loaded one, and how long a keypair takes to sign is
+ *  not a thing this suite has any business asserting. */
+const settle = async (until: () => boolean = () => true): Promise<void> => {
+  for (let i = 0; i < 200 && !until(); i++) await new Promise((r) => setTimeout(r, 1));
+  await new Promise((r) => setTimeout(r, 1));
+};
 
 describe("which door a tab may announce", () => {
   it("announces its own WebRTC room, whose peer id is the room", () => {
@@ -149,7 +156,7 @@ describe("keeping the row alive, and taking it down", () => {
     const identity = await Identity.generate();
     const { directory, writes } = board();
     new Announcer(directory, identity).start(genesis, { kind: "rtc", code: "tsr-abc234" }, () => undefined);
-    await settle();
+    await settle(() => writes.length > 0);
     expect(writes).toHaveLength(1);
     expect(writes[0]!.by).toBe(identity.key);
   });
@@ -160,11 +167,11 @@ describe("keeping the row alive, and taking it down", () => {
     let step = 0;
     const announcer = new Announcer(directory, await Identity.generate());
     announcer.start(genesis, { kind: "rtc", code: "tsr-abc234" }, () => (step ? point(step) : undefined));
-    await settle();
+    await settle(() => writes.length > 0);
 
     step = 900;
     await vi.advanceTimersByTimeAsync(BEAT_MS);
-    await settle();
+    await settle(() => writes.length > 1);
 
     expect(writes).toHaveLength(2);
     expect((writes[0] as SignedListing).listing.step).toBeUndefined();
@@ -177,10 +184,10 @@ describe("keeping the row alive, and taking it down", () => {
     const { directory, writes, urls } = board();
     const announcer = new Announcer(directory, await Identity.generate());
     announcer.start(genesis, { kind: "rtc", code: "tsr-abc234" }, () => undefined);
-    await settle();
+    await settle(() => writes.length > 0);
 
     announcer.stop();
-    await settle();
+    await settle(() => writes.length > 1);
     expect(urls.at(-1)).toBe(`${BOARD}/withdraw`);
     expect((writes.at(-1) as SignedWithdrawal).refs).toEqual(["tsr-abc234"]);
 
@@ -209,7 +216,7 @@ describe("keeping the row alive, and taking it down", () => {
       onProblem: (message) => problems.push(message),
     });
     announcer.start(genesis, { kind: "rtc", code: "tsr-abc234" }, () => undefined);
-    await settle();
+    await settle(() => problems.length > 0);
     expect(problems.join(" ")).toMatch(/read-only/);
     expect(announcer.listed).toBe(true);
     announcer.stop();

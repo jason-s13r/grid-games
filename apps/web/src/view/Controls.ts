@@ -13,7 +13,9 @@ import { MOVE, PHASE, WIN, STEPS_PER_SECOND, isProtected, summarise } from "@tes
 import { empireTheme } from "./palette";
 import type { Driver } from "../game/Driver";
 
-const clock = (steps: number): string => {
+/** A step count as a wall clock. Exported because the scrubber counts in the
+ *  same units and a second formatter would drift from this one. */
+export const clock = (steps: number): string => {
   const total = Math.floor(steps / STEPS_PER_SECOND);
   const h = Math.floor(total / 3600);
   const m = Math.floor((total % 3600) / 60);
