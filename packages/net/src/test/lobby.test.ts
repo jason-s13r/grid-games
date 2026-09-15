@@ -161,6 +161,68 @@ describe("two lobbies over a loopback", () => {
     expect(await watching).toBeUndefined();
   });
 
+  it("refuses a room that is running a different game than the one looked up", async () => {
+    const room = new LoopbackRoom();
+    const connect = room.opener();
+
+    const hostId = await Identity.generate();
+    const host = await Lobby.open(hostId, undefined, { connect });
+    // A ref that arrived from a person needs no `expect`: they were just told
+    // what was behind it. A ref that arrived from an address book names a game,
+    // and the record the room hands back is well formed either way — composed
+    // correctly, hashing to its own id, refused by nothing in `inspectGenesis`.
+    // Without this comparison a board could point a lookup at any room it liked
+    // and the joiner would play whatever it found there.
+    const guestId = await Identity.generate();
+    const guest = await Lobby.open(
+      guestId,
+      { kind: "rtc", code: host.code },
+      { connect, expect: "a".repeat(64) },
+    );
+    await room.run();
+
+    await host.host({ empires: [[hostId.key], [guestId.key]], simbots: [], width: 24, height: 24 });
+    await room.run();
+
+    expect(host.phase).toBe("playing");
+    expect(guest.phase).toBe("failed");
+    expect(guest.problem).toMatch(/different game/);
+  });
+
+  it("joins normally when the game it was promised is the game it found", async () => {
+    const room = new LoopbackRoom();
+    const connect = room.opener();
+
+    const hostId = await Identity.generate();
+    const host = await Lobby.open(hostId, undefined, { connect });
+    let listed = "";
+    host.onStart = (genesis) => {
+      listed = genesis.gameId ?? "";
+    };
+    const guestId = await Identity.generate();
+    await Lobby.open(guestId, { kind: "rtc", code: host.code }, { connect });
+    await room.run();
+
+    await host.host({ empires: [[hostId.key], [guestId.key]], simbots: [], width: 24, height: 24 });
+    await room.run();
+    expect(listed).not.toBe("");
+
+    // The arrival a board makes possible: somebody who was told an id, dialling
+    // a ref they were told alongside it. The id known in advance is the whole
+    // difference from every other join in this file.
+    const later = await Identity.generate();
+    const arriving = await Lobby.open(
+      later,
+      { kind: "rtc", code: host.code },
+      { connect, expect: listed },
+    );
+    const seat = seatOf(arriving);
+    await room.run();
+
+    expect(arriving.phase, arriving.problem).toBe("playing");
+    expect(await seat).toBeUndefined();
+  });
+
   it("tells a joiner which room went unanswered", async () => {
     const room = new LoopbackRoom();
     const connect = room.opener();

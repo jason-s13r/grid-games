@@ -41,6 +41,16 @@ export interface ResumePoint {
   witnesses: SignedCheckpoint[];
 }
 
+/** A resume point with the bytes taken off.
+ *
+ *  `verifyResumePoint` never reads `data` — it rebuilds the roster, subtracts
+ *  the verified drops and counts agreeing signatures — so the claim is the whole
+ *  of its input, and saying so in the type is what lets an address book carry a
+ *  proof of life in a couple of hundred bytes instead of a snapshot. The bytes
+ *  answer a different question, and `Lockstep.resume` is the only thing that
+ *  asks both. */
+export type ResumeClaim = Omit<ResumePoint, "data">;
+
 /** Reported rather than reduced to a boolean, because "endorsed by 2 of 4" is
  *  something a player should be shown before they commit to a state, and
  *  "endorsed by 2 of 4, one of whom is not in this game" is a different
@@ -93,10 +103,15 @@ export async function rosterAt(
  *  run, and they are separate functions because a client wants to show the tally
  *  before it commits to a state and a keeper wants to check a point it is only
  *  storing. `Lockstep.resume` is the only thing that runs both, in the only order
- *  that is safe. */
+ *  that is safe.
+ *
+ *  It takes a `ResumeClaim` rather than a `ResumePoint` — a `ResumePoint` is one,
+ *  so every existing caller is unchanged — because an address-book row carries
+ *  the witnesses without the snapshot, and the question "is this game real" is
+ *  answered by exactly this arithmetic over exactly those fields. */
 export async function verifyResumePoint(
   genesis: Genesis,
-  point: ResumePoint,
+  point: ResumeClaim,
 ): Promise<ResumeTally> {
   const problems: string[] = [];
   const none: ResumeTally = { ok: false, endorsed: 0, needed: 0, problems };

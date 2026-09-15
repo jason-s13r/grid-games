@@ -144,6 +144,12 @@ export function explain(genesis: Genesis, problems: readonly string[]): string {
   return ` — the game is v${genesis.protocol}, this build plays v${SUPPORTED_PROTOCOLS.join(", v")}; ${side}`;
 }
 
+/** A game id is 64 hex characters and no player reads all of them. Twelve is
+ *  enough to see that two ids differ, which is the only thing this message is
+ *  asking anyone to do. */
+const short = (gameId: string | undefined): string =>
+  gameId ? `${gameId.slice(0, 12)}\u2026` : "an unsealed record";
+
 export class Lobby {
   phase: LobbyPhase = "connecting";
   problem = "";
@@ -178,6 +184,8 @@ export class Lobby {
      *  somebody is going to send us a genesis record. Not `!!ref`: a host has a
      *  ref too — the one the broker just gave it, or the room it is serving. */
     private readonly joined: boolean,
+    /** The game we came here for, if we were told one. */
+    private readonly expect?: string,
   ) {
     this.phase = joined ? "waiting" : "hosting";
     this.connection.listen((from, frame) => this.route(from, frame));
@@ -220,11 +228,18 @@ export class Lobby {
    *  send me a genesis record": no watchdog, phase `hosting`, and the ref kept as
    *  given so `code` and `shareable` stay right. Without it a host peer running
    *  its own bus would be killed by the joiner's watchdog fifteen seconds into
-   *  waiting for the players it exists to wait for. */
+   *  waiting for the players it exists to wait for.
+   *
+   *  `expect` is the game we came here for. Until the address book there was
+   *  nothing to say: a ref arrived from a person who had just been told what was
+   *  behind it, so "the record checks out" and "the record is the one I was
+   *  promised" were the same sentence. A ref looked up in a directory splits
+   *  them, and only the caller that did the lookup knows which game it asked
+   *  for. */
   static async open(
     identity: Identity,
     ref?: ConnectionRef,
-    options: ConnectOptions & { connect?: Opener; hosting?: boolean } = {},
+    options: ConnectOptions & { connect?: Opener; hosting?: boolean; expect?: string } = {},
   ): Promise<Lobby> {
     let lobby: Lobby | undefined;
     const connection = await (options.connect ?? openConnection)(ref, {
@@ -241,7 +256,7 @@ export class Lobby {
     });
     const here: ConnectionRef = ref ?? { kind: "rtc", code: connection.id };
     const hosting = options.hosting ?? ref === undefined;
-    lobby = new Lobby(identity, connection, here, !hosting);
+    lobby = new Lobby(identity, connection, here, !hosting, options.expect);
 
     // Anybody already in the room, greeted now rather than waited for.
     //
@@ -403,6 +418,20 @@ export class Lobby {
     const problems = await inspectGenesis(genesis);
     if (problems.length > 0) {
       this.fail(`refused the game: ${problems.join(", ")}${explain(genesis, problems)}`);
+      return;
+    }
+
+    // `inspectGenesis` asks whether a record is *self*-consistent: it hashes to
+    // the id it carries. That is the whole question when a human typed the code,
+    // and half of it when a directory supplied one. A room that hands us a
+    // different game has done nothing malformed — it composed its record
+    // correctly — and the only thing that catches it is this comparison against
+    // what we looked up.
+    if (this.expect && genesis.gameId !== this.expect) {
+      this.fail(
+        `that room is running a different game — ${this.shareable} was listed as ` +
+          `${short(this.expect)} and answered with ${short(genesis.gameId)}`,
+      );
       return;
     }
 

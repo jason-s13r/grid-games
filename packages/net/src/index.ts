@@ -7,7 +7,17 @@ export type { ArchivedGame, ArchiveOptions, ArchiveRecord, ArchiveSource, Verdic
 export { rankArchives } from "./rankings.js";
 export type { Leaderboard, Standing } from "./rankings.js";
 export { rosterAt, verifyResumePoint } from "./resume.js";
-export type { ResumePoint, ResumeTally } from "./resume.js";
+export { Directory, verifyWrite, BOARD_TIMEOUT_MS, CAPS, DEFAULT_LIMIT } from "./directory.js";
+export type {
+  DirectoryOptions,
+  GameListing,
+  Listing,
+  SignedListing,
+  SignedWithdrawal,
+} from "./directory.js";
+export { resolve, PROBE_TIMEOUT_MS } from "./resolve.js";
+export type { ResolveOptions, Route } from "./resolve.js";
+export type { ResumeClaim, ResumePoint, ResumeTally } from "./resume.js";
 export { Lockstep } from "./lockstep.js";
 export type { LockstepOptions, Seat, EjectionReason } from "./lockstep.js";
 export { PeerBot } from "./peerbot.js";
