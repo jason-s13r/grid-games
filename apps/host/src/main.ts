@@ -30,8 +30,17 @@ import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { parseArgs } from "node:util";
 import { fingerprint } from "@tessera/protocol";
-import { RoomBus, SocketTransport, formatRef, isRoomName, localPair, mintName, parseRef } from "@tessera/net";
-import type { ConnectionRef, Opener } from "@tessera/net";
+import {
+  Directory,
+  RoomBus,
+  SocketTransport,
+  formatRef,
+  isRoomName,
+  localPair,
+  mintName,
+  parseRef,
+} from "@tessera/net";
+import type { ConnectionRef, Listing, Opener } from "@tessera/net";
 import { FileArchive, hostGame, identityAt, readArchive, readResumePoint } from "@tessera/headless";
 import type { HostedGame } from "@tessera/headless";
 import { fromAuto, fromPlan, sealWith } from "./compose.js";
@@ -51,6 +60,10 @@ Options:
   --bind <addr>        where the relay and the reads listen (default 127.0.0.1)
   --port <n>           one port for both (default 8080)
   --ref <room>         join somebody else's room instead of serving one
+  --announce <url>     post this game to an address book, and keep the row alive
+  --ttl <secs>         how long a posted row lives between heartbeats (default 180)
+  --reachable <base>   the URL the outside world reaches this host at, if it is
+                       not --bind:--port — a proxy, a tunnel, a certificate
   --plan <file>        a fixed roster: empires of member keys, bots, map, duration
   --auto <n>           seal as soon as n players are here, one empire each
   --wait <secs>        seal early at this deadline with whoever is present
@@ -74,6 +87,9 @@ const { values, positionals } = parseArgs({
     bind: { type: "string", default: "127.0.0.1" },
     port: { type: "string", default: "8080" },
     ref: { type: "string" },
+    announce: { type: "string" },
+    ttl: { type: "string" },
+    reachable: { type: "string" },
     plan: { type: "string" },
     auto: { type: "string" },
     wait: { type: "string" },
@@ -299,6 +315,74 @@ async function run(): Promise<void> {
   say(`playing  ${hosted.genesis.gameId} as ${hosted.lobby.connection.id}`);
   say(`join     ${hosted.shareable}`);
 
+  // The door, posted where somebody can find it.
+  //
+  // What is announced is what the *outside* reaches, which is not always what
+  // this process bound to: a certificate, a tunnel or a proxy in front means the
+  // room is at one URL and the socket is at another, and a row carrying the
+  // loopback address is a row nobody can use. `--reachable` is that difference
+  // and nothing more — the ws door and the https read are the same origin here,
+  // because one port carries both.
+  const reachable = (values.reachable ?? `http://${values.bind}:${port}`).replace(/\/+$/, "");
+  const door =
+    values.reachable && ref?.kind === "socket"
+      ? `${reachable.replace(/^http/, "ws")}/${ref.room}`
+      : hosted.shareable;
+  const ttl = number(values.ttl, "--ttl") ?? 180;
+  const board = values.announce ? new Directory(values.announce) : undefined;
+
+  /** The row, rebuilt each heartbeat so its proof keeps up with the game.
+   *
+   *  The witnesses are the resume point's, with the snapshot left off: a
+   *  majority of the seats signing (step, hash) is the only field on a board a
+   *  reader can believe without dialling, and it costs a few hundred bytes.
+   *  This host signed none of them and could not have — it holds no seat — which
+   *  is exactly why the row is worth something.
+   *
+   *  Nothing claims `seatsUsed`. A host knows how many peers are connected, not
+   *  how many seats are held, and announcing the first as the second would be
+   *  precisely the claim the client is right not to trust. */
+  const listing = (): Listing => {
+    const point = hosted?.driver.resumePoint();
+    return {
+      gameId: hosted!.genesis.gameId!,
+      genesis: hosted!.genesis,
+      refs: [door],
+      ...(server ? { resume: `${reachable}/room/${code}/resume` } : {}),
+      ...(point
+        ? {
+            step: point.step,
+            hash: point.hash,
+            witnesses: point.witnesses,
+            amendments: point.amendments,
+            drops: point.drops,
+          }
+        : {}),
+      expiresAt: Date.now() + ttl * 1000,
+    };
+  };
+
+  // A row is a lease, not a registration: a host that is killed, unplugged or
+  // segfaulted withdraws nothing, and the TTL is what stops a board filling with
+  // doors into nothing. Which is also why a board's freshest possible answer is
+  // "as of one heartbeat ago", and why `resolve` dials rather than believing.
+  let beating: ReturnType<typeof setInterval> | undefined;
+  if (board) {
+    const post = async (): Promise<void> => {
+      try {
+        await board.present(identity, listing());
+      } catch (error) {
+        // Never fatal. A board being down is not a reason to stop holding a game
+        // open for the people already in it.
+        say(`warning: could not reach the address book — ${(error as Error).message}`);
+      }
+    };
+    await post();
+    say(`listed   ${door} at ${values.announce}`);
+    beating = setInterval(() => void post(), Math.max(ttl / 2, 15) * 1000);
+    beating.unref?.();
+  }
+
   // The resume point, kept on disk rather than derived on demand. `resumePoint()`
   // needs both the bytes and the witnesses, and the snapshot store rolls forward
   // every interval on every peer while witnesses only arrive with a checkpoint
@@ -312,6 +396,14 @@ async function run(): Promise<void> {
 
   const done = async (): Promise<void> => {
     clearInterval(keeping);
+    if (beating) clearInterval(beating);
+    // Said out loud on the way out, so a board is only ever wrong for as long as
+    // it takes a process to die badly.
+    if (board && hosted) {
+      await board
+        .withdraw(identity, hosted.genesis.gameId!, [door])
+        .catch((error: Error) => say(`warning: could not withdraw the row — ${error.message}`));
+    }
     if (deadline) clearTimeout(deadline);
     server?.close();
     await hosted?.stop();
