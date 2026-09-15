@@ -142,10 +142,16 @@ type Route =
    before concluding their game is gone.
 
 Announcing yourself as a door afterwards is not part of this flow. Over WebRTC
-any peer can be a door, including a browser tab; over a socket only a process
-running a [room bus](room-bus.md) can. So that step belongs to the
-[host peer](../clients/host-peer.md), and a browser that resumed a dormant game
-is holding a state, not holding a door.
+any peer can be a door, including a browser tab — the
+[web client](../clients/finding-a-game.md) announces one when the player ticks
+the box that says so — but over a socket only a process running a
+[room bus](room-bus.md) can, which is why the
+[host peer](../clients/host-peer.md) is the one that announces those.
+
+A browser that took up a dormant game announces nothing regardless. It is
+holding a state rather than offering a door: nobody asked it to be the place
+that game now lives, and a row under a TTL its tab keeps alive is a promise it
+is in no position to make.
 
 **Two peers can each resume the same dormant point and each announce a door.**
 They stay identical while nobody acts — the simulation is deterministic and

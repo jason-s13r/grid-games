@@ -23,8 +23,12 @@ import { boardClick } from "./game/input";
 import { OnlineGame } from "./game/Online";
 import type { Driver } from "./game/Driver";
 import { myIdentity } from "./net/identity";
+import { Announcer, doorOf } from "./net/announce";
+import { mayCompose, roomStatus } from "./net/compose";
+import { askForRoom } from "./net/factory";
 import {
   checkBoardUrl,
+  checkFactoryUrl,
   checkRefForPage,
   onSettingsChange,
   saveSettings,
@@ -36,7 +40,7 @@ import { Games } from "./view/Games";
 import type { GameRow } from "./view/Games";
 import { Rivals } from "./view/Rivals";
 import type { RosterView } from "./view/LobbyPanel";
-import type { SetupSummary } from "./view/Setup";
+import type { Composing, SetupMode, SetupSummary } from "./view/Setup";
 import { ChatPanel } from "./view/Chat";
 import { Camera, MIN_ZOOM, MAX_ZOOM, DOM_MIN_ZOOM } from "./view/Camera";
 import { MapImage } from "./view/MapImage";
@@ -197,6 +201,23 @@ boardEl.addEventListener("change", () => {
   saveSettings({ board: text });
 });
 
+const factoryEl = pick<HTMLInputElement>('[data-cfg="factory"]');
+const factoryProblemEl = pick<HTMLElement>('[data-cfg="factory-problem"]');
+factoryEl.value = settings().factory;
+
+factoryEl.addEventListener("change", () => {
+  const text = factoryEl.value.trim();
+  const problem = checkFactoryUrl(text);
+
+  factoryProblemEl.textContent = problem;
+  factoryProblemEl.hidden = !problem;
+  factoryProblemEl.classList.toggle("lobby-problem", !!problem);
+  if (problem) return;
+
+  if (text === settings().factory) return;
+  saveSettings({ factory: text });
+});
+
 // --- the address book --------------------------------------------------------
 //
 // One card, its own root, its own listener. What it shows is `Directory.list()`,
@@ -238,7 +259,51 @@ function refreshGames(): void {
 }
 
 onSettingsChange(refreshGames);
+onSettingsChange(() => {
+  sayListable(setup.current);
+  // The third way of starting a game is a setting, and the screen it appears on
+  // is the screen the setting is changed on.
+  if (setup.current === "choose") setup.render();
+});
 refreshGames();
+
+// --- listing a game of our own ----------------------------------------------
+//
+// The checkbox is a consent control, not a mode. Nothing about the game differs
+// between checked and unchecked — same record, same room, same checks by every
+// peer — and what differs is who is told: announcing posts the sealed record,
+// which carries every player's key. So it is off, it says what it sends, and it
+// is not on screen at all unless there is somewhere to send it to.
+
+const listFieldEl = pick<HTMLLabelElement>('[data-cfg="list-field"]');
+const listEl = pick<HTMLInputElement>('[data-cfg="list"]');
+const boardHostEl = pick<HTMLElement>('[data-cfg="board-host"]');
+
+/** Our own row, while this tab is holding a door open. */
+let announcer: Announcer | undefined;
+
+/** Show the checkbox where it means something, and nowhere else.
+ *
+ *  A solo game has no door and a joined game's door is somebody else's, so
+ *  `host` is the only mode this question has an answer in. Unchecked on the way
+ *  out rather than merely hidden: a box left ticked under a closed section is a
+ *  disclosure nobody can see they consented to. */
+function sayListable(mode: SetupMode): void {
+  const url = settings().board;
+  listFieldEl.hidden = mode !== "host" || !url;
+  if (listFieldEl.hidden) listEl.checked = false;
+  if (url) boardHostEl.textContent = hostOf(url);
+}
+
+/** The board's host, or the whole string if it will not parse — which it will,
+ *  because `checkBoardUrl` refused to save anything that would not. */
+function hostOf(url: string): string {
+  try {
+    return new URL(url).host;
+  } catch {
+    return url;
+  }
+}
 
 /** Knock on a row's doors, and do whatever the answer turns out to be.
  *
@@ -348,12 +413,15 @@ function startHosted(): void {
  *  empires will be in the world, and are there enough of them to play. A solo
  *  game holds exactly one of them and a hosted one holds however many the
  *  picker has composed, and that is the whole difference. */
-function summarise(mode: "solo" | "host"): SetupSummary {
+function summarise(mode: Composing): SetupSummary {
   const bots = rivals.count;
 
-  if (mode === "host") {
+  if (mode !== "solo") {
     if (panel.failed) return { note: "", problem: false, ready: false };
-    if (!panel.hosting) {
+    // Only a room of our own is one we are waiting on. A room somebody else is
+    // serving was open before we dialled it, which is how we were able to ask
+    // it whether a game was running in it.
+    if (mode === "host" && !panel.hosting) {
       return { note: "Waiting for a room…", problem: false, ready: false };
     }
   }
@@ -614,6 +682,11 @@ function sayTransport(ref?: ConnectionRef): void {
  *  off. A solo game has nothing to close. */
 function leaveMesh(): void {
   if (!lobby) return;
+  // Before the connection goes, so the withdrawal is about a door that was
+  // still open when we said we were closing it. Never waited on: leaving must
+  // not be slower than the slowest board somebody configured.
+  announcer?.stop();
+  announcer = undefined;
   lobby.close();
   lobby = undefined;
   mesh = undefined;
@@ -662,6 +735,16 @@ pick<HTMLButtonElement>('[data-action="leave"]').addEventListener("click", () =>
 
 pick<HTMLButtonElement>('[data-action="resume"]').addEventListener("click", () => {
   shell.show("game");
+});
+
+// A courtesy, and known to be one. Nothing a browser does on the way out is
+// guaranteed — a swiped-away phone, a crashed renderer and a closed lid all skip
+// this — and the withdrawal has to sign before it can post, which is a promise
+// that may well not resolve before the page is gone. The TTL is the mechanism.
+// `pagehide` rather than `beforeunload` because it fires on mobile, and
+// `persisted` because a page going into the back/forward cache is coming back.
+window.addEventListener("pagehide", (event) => {
+  if (!event.persisted) announcer?.stop();
 });
 
 // --- loop --------------------------------------------------------------------
@@ -739,8 +822,53 @@ const setup = new Setup(
     join: (input) => void begin(input),
     back: () => leaveMesh(),
     summary: (mode) => summarise(mode),
+    moved: (mode) => sayListable(mode),
+    managedHost: () => (settings().factory ? hostOf(settings().factory) : ""),
+    startManaged: () => void useFactory(),
   },
 );
+
+/** Backend 3: ask a service for a room, then join it exactly as if somebody had
+ *  sent us the link.
+ *
+ *  Everything after the refs come back is the ordinary join path, which is the
+ *  point — a factory is a convenience and never an authority. The room it hands
+ *  back will be empty, so `offerToCompose` puts the form up a moment later and
+ *  the game is sealed here, by this tab, and checked by every peer in it. A
+ *  service that hands back somebody else's room hands back a room that refuses
+ *  us. */
+async function useFactory(): Promise<void> {
+  const url = settings().factory;
+  if (!url) return;
+  if (lobby) return void panel.setStatus("Leave the game you are in first.");
+
+  // Moved off the chooser first, because that is the one mode whose panel is
+  // hidden — and the panel is where "asking the service…" and every way that
+  // can fail are going to be said.
+  setup.show("join");
+  panel.connecting();
+
+  let room;
+  try {
+    room = await askForRoom(url, { ...mapSize(), simbots: rivals.list, duration: duration() });
+  } catch (error) {
+    // Stays in `join` rather than returning to the chooser, because the panel
+    // that carries the reason is the one the chooser hides. The Leave button
+    // above it is the way back, and it is the same way back a failed dial has.
+    panel.detach((error as Error).message);
+    return;
+  }
+
+  // The first door this page can actually open, which is not always the first
+  // one offered: a service may list a ws:// room for a LAN alongside a wss://
+  // one, and both are good refs.
+  const ref = room.refs.find((candidate) => !checkRefForPage(candidate));
+  if (!ref) {
+    panel.detach(checkRefForPage(room.refs[0]!));
+    return;
+  }
+  await begin({ ref });
+}
 
 // Two things move the sentence above the start button and the button's own
 // state: the bot list, and the people in the room. Both say so.
@@ -802,6 +930,21 @@ interface JoinTarget {
   revive?: { genesis: Genesis; point: ResumePoint };
 }
 
+/** Offer the form for a room that has no game in it.
+ *
+ *  Everything about whether that is allowed is `mayCompose`'s, including its
+ *  refusal to treat silence as an empty room. What is left here is the race
+ *  against our own screen: the answer takes a moment, and in that moment the
+ *  host may have sealed a record, the player may have left, or they may have
+ *  gone somewhere else entirely. So the offer only lands on the room it was
+ *  asked about, still being joined, still waiting. */
+async function offerToCompose(opened: Lobby, ref: ConnectionRef): Promise<void> {
+  const status = await roomStatus(ref);
+  if (!mayCompose(status)) return;
+  if (lobby !== opened || opened.phase !== "waiting" || setup.current !== "join") return;
+  setup.show("compose");
+}
+
 async function begin(input?: string | JoinTarget): Promise<void> {
   // Leaving is the player's decision, so it is asked for rather than assumed.
   if (lobby) return void panel.setStatus("Leave the game you are in first.");
@@ -857,6 +1000,20 @@ async function begin(input?: string | JoinTarget): Promise<void> {
 
   lobby = opened;
   panel.attach(lobby);
+
+  // Backend 2: a host peer's room with nothing running in it yet. Asked rather
+  // than assumed, and asked over HTTP rather than over the bus — the room bus
+  // has no "what is running here" frame and inventing one would be a protocol
+  // change to answer a question 0006 already publishes. A ref that came from a
+  // board is excluded: that row names a game, so there is one.
+  if (ref?.kind === "socket" && !target.expect && !target.revive) {
+    void offerToCompose(opened, ref);
+  }
+  // Read here rather than when the game starts: by then the form has been
+  // replaced by the living roster, and the answer we want is the one the player
+  // gave while the box was in front of them.
+  const wanted = listEl.checked;
+
   lobby.onStart = (genesis, seat, transport) => {
     sayShelfLife(genesis);
     const driver = new Lockstep({
@@ -874,6 +1031,19 @@ async function begin(input?: string | JoinTarget): Promise<void> {
     archiveBtn.hidden = false;
 
     sayTransport(lobby!.ref);
+
+    // The door, if this tab is one. `doorOf` is the guard and it is the whole
+    // rule: a tab that joined somebody's room announces nothing, because the
+    // door is theirs, it is already on the board, and a row on our TTL would go
+    // down when this tab closed. The proof is read each beat rather than
+    // captured once, so the row's witnesses keep up with the game.
+    if (wanted && board) {
+      announcer = new Announcer(board, identity, {
+        onProblem: (message) =>
+          panel.setStatus(`could not reach the address book — ${message}`),
+      });
+      announcer.start(genesis, doorOf(lobby!), () => driver.resumePoint());
+    }
 
     driver.onMessage = (message, text) => chat.add(message, text);
     // Being voted a seat mid-game is the moment an observer becomes a player.

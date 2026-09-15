@@ -170,3 +170,40 @@ export function checkBoardUrl(
 
   return "";
 }
+
+/** The same rule again, for the host factory, and deliberately not the same
+ *  function with a noun passed in.
+ *
+ *  Three sentences differ and all three are the part that is worth reading: a
+ *  board is *read* and a factory is *posted to*, the example URLs are different
+ *  shapes, and the way out is different — a headless peer can use an http board,
+ *  and there is no headless anything that will use somebody's factory for you.
+ *  A shared helper with a nouns argument would produce one sentence that fits
+ *  neither. */
+export function checkFactoryUrl(
+  text: string,
+  pageProtocol = globalThis.location?.protocol ?? "http:",
+): string {
+  const trimmed = text.trim();
+  if (!trimmed) return ""; // empty is the default, and hides the option entirely
+
+  let url: URL;
+  try {
+    url = new URL(trimmed);
+  } catch {
+    return `"${trimmed}" is not a URL — a host service looks like https://hosts.example`;
+  }
+
+  if (url.protocol !== "http:" && url.protocol !== "https:") {
+    return `a host service is posted to over http or https, not ${url.protocol.replace(":", "")}`;
+  }
+
+  if (url.protocol === "http:" && pageProtocol === "https:") {
+    return (
+      `this page is served over https, so it can only post to an https:// host service. ` +
+      `A service on http is reachable from this client served over http — pnpm dev, for instance.`
+    );
+  }
+
+  return "";
+}

@@ -978,6 +978,26 @@ a.btn {
     font-weight: 600;
   }
 }
+// A consent control, not a labelled setting: the box leads and the sentence
+// follows it, because the sentence is the whole of what is being agreed to and
+// it runs to three lines. Deliberately not `justify-content: space-between` —
+// a tick box floated to the far right of its own explanation is a box people
+// tick without reading.
+.field-check {
+  display: flex;
+  align-items: flex-start;
+  justify-content: flex-start;
+  gap: 8px;
+  margin-top: 12px;
+  line-height: 1.45;
+  color: #6b6152;
+
+  input {
+    margin: 2px 0 0;
+    flex: none;
+  }
+}
+
 .rivals .lobby-teams {
   margin: 6px 0;
 }

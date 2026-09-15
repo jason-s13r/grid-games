@@ -110,6 +110,66 @@ So a row's TTL is the mechanism and any withdrawal is a courtesy. A board's
 freshest possible answer is "as of one heartbeat ago", which is why `resolve`
 dials instead of believing it.
 
+## Listing a game of your own
+
+The **List this game publicly** box on the create form, off by default, with a
+sentence saying what it sends rather than what it is called. It posts the room
+code and the sealed record to your configured board — and the sealed record
+carries every member key in the roster, which is every player's stable public
+identity. That is a disclosure about other people, not a display preference, so
+it is asked rather than assumed.
+
+Nothing else differs between a listed game and an unlisted one. Same record,
+same room, same checks by every peer. It is a checkbox and not a mode.
+
+**A tab may only list a door it is actually holding.** The box appears when you
+are hosting in this tab and nowhere else:
+
+| How you got here | What your tab lists |
+|---|---|
+| Hosting in this tab, over WebRTC | your room — your peer id *is* the room code |
+| Joined somebody's room | nothing. The door is theirs and already on the board |
+| A room a [host service](#starting-a-game-somewhere-else) made | nothing, same reason |
+| A solo game | nothing. There is no door |
+
+The row is refreshed every ninety seconds and carries whatever witnesses have
+accumulated since the last one, so a game that reaches its first checkpoint stops
+being a rumour without anybody doing anything. Leaving withdraws it. Closing the
+tab tries to, and the TTL is what actually removes it — see *A tab is not a
+process* above.
+
+## Starting a game somewhere else
+
+Three ways to start a multiplayer game, one artifact. Whichever you use, the
+record is composed in your browser and checked by everybody who plays it.
+
+1. **This tab.** Today's model, always available. Your browser is the room, and
+   the game ends when you close it.
+2. **A host peer's room.** Paste the ref a [host peer](host-peer.md) printed. If
+   that room has no game running in it yet, your tab offers to set one up; the
+   host keeps the door open and keeps writing the log down.
+3. **A host service.** Put a URL in **Host service** in Settings and a third
+   button appears on the create screen. It asks the service for a room and joins
+   it, and from there it is case 2.
+
+Cases 2 and 3 are the same path, and that is the design: a service is a doorman
+and never a referee. What it hands back is a set of refs, which is the same
+thing a friend sends you in a message, so a service that hands back the wrong
+room hands back a room that refuses you.
+
+**Two people in one empty room can each start a game.** Your tab offers to
+compose only while the room reports no game running — which closes the common
+case, arriving somewhere a game is already under way — but two people who arrive
+at an empty room in the same minute can still each seal a record, and each peer
+plays whichever one reached it first. A disabled button is a convention, not a
+rule. The rule is co-signed composition, which is plan 0009. Until then, if you
+are both looking at the same empty room, agree who presses it.
+
+There is no host service to point this at. Nothing in Tessera builds one: what
+ships is the request shape (`POST <service>/rooms`, `{protocol, plan}` in,
+`{refs}` back) so that anyone who wants to run one has something to implement
+against.
+
 ## Running a board
 
 Anything that serves JSON qualifies. The client does the verifying, so a board
@@ -123,7 +183,7 @@ its own row alive.
 
 ## What is not here yet
 
-- **Listing a game from the browser.** A tab can read a board; it cannot yet
-  announce one. Host a game from a [host peer](host-peer.md) with `--announce` to
-  put it on a board today.
 - **Replay and the leaderboard.** Both are in plan 0008 and neither is built.
+- **A game composed together.** Until plan 0009, whoever presses start seals the
+  record alone, which is why the paragraph above asks two people in one room to
+  agree between themselves.

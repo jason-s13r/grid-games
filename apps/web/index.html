@@ -165,6 +165,21 @@
                 <label>Bot empires</label>
                 <div class="rivals" data-cfg="rivals"></div>
               </div>
+
+              <!-- Off, and worded as what it sends rather than what it is
+                   called. Announcing posts the sealed record, and the sealed
+                   record carries every player's key — so this is a disclosure
+                   and not a display preference. Hidden entirely for a solo
+                   game, which has no door, and while no address book is
+                   configured, which is the default. See net/announce.ts. -->
+              <label class="field field-check" data-cfg="list-field" hidden>
+                <input type="checkbox" data-cfg="list" />
+                <span>
+                  List this game publicly &mdash; posts the room code and the
+                  sealed record (including every player&rsquo;s key) to
+                  <span data-cfg="board-host">the address book</span>.
+                </span>
+              </label>
             </div>
 
             <div class="setup-foot" data-setup-foot></div>
@@ -194,6 +209,29 @@
                 where it posts one of yours if you ask it to. Anyone can run a
                 board and anyone can list a game on one, so your browser checks
                 every game it is shown rather than believing the board.
+              </p>
+
+              <!-- Backend 3. Empty by default, and while it is empty the third
+                   way of starting a game is not on screen at all rather than on
+                   screen and broken. See net/factory.ts. -->
+              <div class="field field-stacked">
+                <label for="cfg-factory">Host service</label>
+                <input
+                  id="cfg-factory"
+                  class="lobby-code"
+                  data-cfg="factory"
+                  placeholder="https://hosts.example"
+                  spellcheck="false"
+                  autocomplete="off"
+                />
+                <p class="hint" data-cfg="factory-problem" hidden></p>
+              </div>
+              <p class="hint">
+                A service that starts a room for you and keeps it open while you
+                are asleep, so a long game does not end when you close the tab.
+                It is a doorman and never a referee: the game is still sealed by
+                this browser and checked by everybody in it, so a service that
+                hands back the wrong room is a room that refuses you.
               </p>
             </div>
           </details>

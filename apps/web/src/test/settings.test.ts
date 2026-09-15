@@ -13,6 +13,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { parseRef } from "@tessera/net";
 import {
   checkBoardUrl,
+  checkFactoryUrl,
   checkRefForPage,
   resetSettings,
   saveSettings,
@@ -102,5 +103,37 @@ describe("the join box refuses a room this page cannot open", () => {
     // This is why the rule is not in parseRef: the same client served from
     // http://localhost joins that room perfectly well.
     expect(checkRefForPage(parseRef("ws://192.168.1.10:8080/abc234"), "http:")).toBe("");
+  });
+});
+
+describe("the host service URL is checked the same way, and says different things", () => {
+  it("is fine while it is empty, which is the default and hides the option", () => {
+    expect(checkFactoryUrl("")).toBe("");
+  });
+
+  it("takes an https service from an https page", () => {
+    expect(checkFactoryUrl("https://hosts.example", "https:")).toBe("");
+  });
+
+  it("refuses an http service from an https page, and says posting is the problem", () => {
+    // Not the same sentence as the board's, and that is the point of it being a
+    // separate function: a board is read and a service is posted to, and the way
+    // out of each is different. There is no headless anything that will use
+    // somebody's factory on your behalf.
+    const problem = checkFactoryUrl("http://hosts.example", "https:");
+    expect(problem).toContain("can only post to an https:// host service");
+    expect(problem).not.toContain("address book");
+  });
+
+  it("takes the same http service from an http page, which is pnpm dev", () => {
+    expect(checkFactoryUrl("http://localhost:8787", "http:")).toBe("");
+  });
+
+  it("refuses a string that is not a URL, and shows what one looks like", () => {
+    expect(checkFactoryUrl("hosts.example")).toContain("https://hosts.example");
+  });
+
+  it("refuses a scheme nothing here could post to", () => {
+    expect(checkFactoryUrl("ftp://hosts.example")).toContain("not ftp");
   });
 });

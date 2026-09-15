@@ -1,6 +1,6 @@
 # Plan index
 
-Status of the series: 0001–0007 built; 0008 built to step 6 of 11; 0009–0014 draft. Built in the order
+Status of the series: 0001–0007 built; 0008 built to step 9 of 11; 0009–0014 draft. Built in the order
 below; each plan leaves the tree green and is useful on its own. No plan adds authority anywhere — the
 sim, the hash contract, quorum signatures and archive verification are
 untouched, and everything stored anywhere is checked by whoever reads it.
@@ -40,10 +40,10 @@ untouched, and everything stored anywhere is checked by whoever reads it.
 0008 is the first plan to be split rather than built whole. Its own appendix
 recommended it — the replay scrubber is a worker and a snapshot ladder, and the
 leaderboard is blocked on an index of finished games that nothing builds — and
-what shipped is the half the title promises: **steps 1–6, finding a game and
-joining it**. Steps 7–9 (announcing, the two other create backends) and 10–11
-(replay, the scoped leaderboard) are still ahead, and 0009–0014 depend on none
-of them.
+what shipped first is the half the title promises: **steps 1–6, finding a game
+and joining it**, then **7–9, listing one and the two other create backends**.
+Steps 10–11 (replay, the scoped leaderboard) are still ahead, and 0009–0014
+depend on neither.
 
 Each plan carries its own argument. The two that span the series are written
 where they bite hardest: which changes owe a version bump, in 0001; what the

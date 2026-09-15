@@ -98,7 +98,16 @@ One column, read top to bottom, and each part owns its own root.
    length, bot empires) and one button. A solo game and a hosted one are the same
    world with different seats in it, which is what lets them share a form;
    joining is a third answer rather than a mode of the second, because a joiner
-   configures nothing.
+   configures nothing. `compose` is the fourth mode and the odd one: somebody
+   else's room with no game in it yet, and this tab filling the form in. Not a
+   kind of `join` (a joiner configures nothing) and not a kind of `host` (the
+   door is not ours and we will not be announcing it).
+
+   Two controls in that shared form mean something in only one mode — the
+   consent checkbox, and the start button's readiness — so `SetupHandlers` has a
+   `moved(mode)` hook that fires on every render and lets `main.ts` hide what
+   does not apply. A control that is visibly present and silently ignored is
+   worse than one that is absent.
 3. **Settings** (`net/settings.ts`) — folded away, because the normal state of
    these is "never touched".
 
@@ -109,17 +118,55 @@ a real engine (below). Every judgement a row makes — a closed join window, a
 length read back out of a step count, a game this build cannot play — is an
 assertion about that array.
 
+## Announcing, and the three create backends
+
+`src/net/announce.ts` is the whole of what this client posts to a board, and
+`doorOf(lobby)` is the whole of its authority: a door is announced only when
+`lobby.hosting` and the ref is `rtc`. A tab hosting over WebRTC *is* the room —
+its peer id is the room code — so it can promise to keep the door open. A tab
+that joined somebody's bus cannot promise that about somebody else's room, and
+0006 has already announced it anyway. `Announcer` is a lease, not a
+registration: `present()` every ninety seconds carrying whatever
+`Lockstep.resumePoint()` has accumulated, `withdraw()` on leave, and a
+`pagehide` handler that is explicitly a courtesy — the TTL is the mechanism,
+because nothing a browser does on the way out is guaranteed.
+
+The consent checkbox is off and worded as what it sends. Announcing publishes
+the sealed record, which carries every player's key; that is a disclosure about
+other people rather than a display preference.
+
+Behind the create button there are three backends and one artifact.
+
+| Backend | Where the room is | What this client does |
+|---|---|---|
+| This tab | the browser | `Lobby.open()` with no ref |
+| A host peer | the host process | join its ref, then compose if the room is empty |
+| A host service | an instance the service made | `POST /rooms`, then the row above |
+
+The second and third are the same path, which is why `net/factory.ts` has no
+composing logic in it: a factory hands back refs, joining them is the ordinary
+join path, and `offerToCompose` puts the form up by itself. `net/compose.ts`
+holds the guard — `GET /room/:code` (0006) must answer `gameId: ""`, and **not
+knowing is a no**, because a host that did not answer might be running a game and
+a second record in a room that has one splits it with no error anywhere. That
+guard closes the common case and not the race; the race is 0009's.
+
 ## Settings
 
 `src/net/settings.ts` — three strings in `localStorage["tessera.settings"]`,
 beside the identity, **all empty by default**: the address book, a host factory,
 and the host peers a leaderboard would read. Read once at start and written on
 change; a settings object that can change under a render is a bug waiting for a
-screenshot.
+screenshot. Empty means *absent*, not *broken*: with no factory URL the third
+create button is not on the screen at all.
 
-It also holds both halves of the mixed-content rule — `checkRefForPage` for the
-join box and `checkBoardUrl` for the address-book field — because they are one
-rule in the only two shapes this client has for it. Neither belongs in `parseRef`
+It also holds every half of the mixed-content rule — `checkRefForPage` for the
+join box, `checkBoardUrl` for the address-book field, `checkFactoryUrl` for the
+host-service field — because they are one rule in the three shapes this client
+has for it. They are three functions rather than one with a noun passed in: a
+board is *read*, a service is *posted to*, and the way out of each is different
+(a headless peer will read an `http://` board for you; nothing will use
+somebody's factory on your behalf). Neither belongs in `parseRef`
 or in `Directory`: a `ws://` ref and an `http://` board are both perfectly good,
 and it is *this page*, once served over https, that cannot use them. Both take
 the page protocol as an argument rather than reading `location`, which is what

@@ -1,6 +1,6 @@
 # 0008 — The web client: join, create, watch
 
-Status: steps 1–6 built (2026-09-15); 7–11 draft
+Status: steps 1–9 built (2026-09-15); 10–11 draft
 Depends on: 0002, 0003, 0007 (uses them all)
 Branch: `web-directory-ui`
 
@@ -680,10 +680,10 @@ numbering stays, and 0009–0014 depend on none of the three.
 5. ✅ The countdown and the join window in `Controls`. (The duration control was
    already built, and the free-entry field was declined — see above.)
 6. ✅ The transport line.
-7. `announce.ts` + the consent checkbox + `doorOf`'s guard, and the withdraw in
-   `leaveMesh`.
-8. Backend 2: the composition guard against `GET /room/:code`.
-9. Backend 3: the POST shape, hidden while the factory URL is empty.
+7. ✅ `announce.ts` + the consent checkbox + `doorOf`'s guard, and the withdraw
+   in `leaveMesh`.
+8. ✅ Backend 2: the composition guard against `GET /room/:code`.
+9. ✅ Backend 3: the POST shape, hidden while the factory URL is empty.
 10. Replay: worker, ladder, `ReplayDriver`, scrubber.
 11. Leaderboard: scoped, with refusals.
 
@@ -692,8 +692,37 @@ property every plan in this series is written to keep — and did: 83 tests in
 `apps/web`, 294 in `packages/net`, the full typecheck clean, the bundle built.
 A player with a board URL can now find a game, read what is claimed about it and
 what is proven, knock on its doors, and take up a dormant one from a point a
-quorum of its seats signed for. Nothing yet lists a game *to* a board; that is
-step 7.
+quorum of its seats signed for.
+
+Steps 7–9 close the other direction: a tab can now put a game *on* a board, and
+the two create backends that are not "this tab" exist. 102 tests in `apps/web`,
+751 across the repo. Three things came out differently from the body above and
+are worth having written down.
+
+**`Lobby` had no way to say whether it was the room.** `doorOf` is written
+against `lobby.hosting` and there was no such getter: the fact lives in the
+constructor's private `joined`, `phase` says something else entirely (and
+becomes `playing` for everybody), and `ref` is set for a host too. So a
+four-line getter was added beside `code` and `shareable`. Additive, no hash
+movement — but worth noting that the plan asserted an API that did not exist.
+
+**Backend 2 needed a fourth setup mode, not a reuse of `host`.** `summarise`
+gates the start button on `panel.hosting`, which is `lobby.phase === "hosting"`
+and is false for a tab that dialled somebody's room — so reusing `host` would
+have produced a permanently disabled button under a heading that lied about
+whose room it was. `SetupMode` gained `compose`, `SetupHandlers.summary` and
+`start` widened to a `Composing` union of the three modes that put a form on
+screen, and `Setup` grew one hook (`moved`) so `main.ts` can hide a control that
+means something in only one mode. That hook is what the consent checkbox needed
+too, and having them arrive together is the argument for it: the shared form now
+has two controls that are not shared.
+
+**Backend 3 falls out of backend 2 for free.** A factory hands back a ref for a
+room with no game in it, and joining that ref is the ordinary join path — so the
+composition offer that step 8 built appears by itself a moment later, and
+`useFactory` is twenty lines with no composing logic of its own. That is the
+seam working: a factory is a convenience and never an authority, and nothing
+downstream of the join can tell where the ref came from.
 
 ## Docs
 
@@ -705,7 +734,8 @@ step 7.
 - A new `docs/clients/finding-a-game.md`: the board, the consent, the three
   create backends, and the three browser limits above. It is the page to hand
   someone who asks "how do I play with a stranger", and there is currently no
-  answer to that question anywhere in `docs/`.
+  answer to that question anywhere in `docs/`. **Written at step 6** with its
+  last section listing what was still missing; steps 7–9 filled it in.
 - `README.md`'s quick start still says host-and-send-a-code, which stays true
   and is no longer the only way in.
 

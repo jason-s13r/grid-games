@@ -20,9 +20,20 @@
 //
 // Pure view state — never in the sim, never hashed, never sent.
 
-/** Where the flow is. `live` is a mesh game already running: the panel below
- *  turns into the living roster, and there is nothing left to configure. */
-export type SetupMode = "choose" | "solo" | "host" | "join" | "live";
+/** Where the flow is.
+ *
+ *  `live` is a mesh game already running: the panel below turns into the living
+ *  roster, and there is nothing left to configure. `compose` is the odd one —
+ *  somebody else's room, with no game in it yet, and this tab is the one filling
+ *  the form in. It is not a kind of `join`, because a joiner configures nothing,
+ *  and not a kind of `host`, because the door is not ours and we will not be
+ *  announcing it. */
+export type SetupMode = "choose" | "solo" | "host" | "join" | "compose" | "live";
+
+/** The modes that put a form on screen and a start button under it. */
+export type Composing = "solo" | "host" | "compose";
+
+const COMPOSES = new Set<SetupMode>(["solo", "host", "compose"]);
 
 /** What the game as configured comes to, and whether it can be started.
  *
@@ -37,7 +48,7 @@ export interface SetupSummary {
 
 export interface SetupHandlers {
   /** Start the game the form describes. */
-  start: (mode: "solo" | "host") => void;
+  start: (mode: Composing) => void;
   /** Open a room of our own; the code arrives when the broker answers. */
   host: () => void;
   /** Dial somebody else's code. */
@@ -47,7 +58,20 @@ export interface SetupHandlers {
   /** Asked at render time rather than pushed in: the answer moves with the bot
    *  list and with the people in the room, and a copy kept here would be a
    *  third place for it to be wrong. */
-  summary: (mode: "solo" | "host") => SetupSummary;
+  summary: (mode: Composing) => SetupSummary;
+  /** The host of the managed service, or "" when none is configured. Asked at
+   *  render time like `summary`, and for the same reason: the field that sets it
+   *  is on this same screen, and a copy kept here would be a second place for it
+   *  to be wrong. */
+  managedHost: () => string;
+  /** Ask that service for a room, and join whatever it hands back. */
+  startManaged: () => void;
+  /** The mode changed. For controls that live in the shared form and mean
+   *  something in only one of the modes it is shown in — listing a game
+   *  publicly is a hosted game's question, and a solo game has no door to
+   *  list — so the alternative is a checkbox that is visibly present and
+   *  silently ignored. */
+  moved?: (mode: SetupMode) => void;
 }
 
 export interface SetupElements {
@@ -74,6 +98,7 @@ const BACK: Partial<Record<SetupMode, string>> = {
   solo: "Back",
   host: "Cancel",
   join: "Leave",
+  compose: "Leave",
 };
 
 export class Setup {
@@ -97,11 +122,13 @@ export class Setup {
           return this.handlers.host();
         case "join":
           return this.dial();
+        case "managed":
+          return this.handlers.startManaged();
         case "back":
           this.show("choose");
           return this.handlers.back();
         case "start":
-          if (this.mode === "solo" || this.mode === "host") this.handlers.start(this.mode);
+          if (COMPOSES.has(this.mode)) this.handlers.start(this.mode as Composing);
           return;
       }
     });
@@ -148,12 +175,17 @@ export class Setup {
   }
 
   render(): void {
-    const configuring = this.mode === "solo" || this.mode === "host";
+    const configuring = COMPOSES.has(this.mode);
     this.els.form.hidden = !configuring;
     // A solo game has nobody to list, and the chooser has no room yet.
     this.els.lobby.hidden = this.mode === "choose" || this.mode === "solo";
+    // The card is the same card; what is being configured is not. A room that
+    // belongs to somebody else has no share line of ours to offer and no door
+    // of ours to list.
+    this.els.root.dataset.setupMode = this.mode;
     this.els.head.innerHTML = this.head();
     this.els.foot.innerHTML = this.foot();
+    this.handlers.moved?.(this.mode);
   }
 
   private dial(): void {
@@ -166,6 +198,7 @@ export class Setup {
 
   private head(): string {
     if (this.mode === "choose") {
+      const managed = this.handlers.managedHost();
       return `
         <h2>Start a game</h2>
         <p class="card-tag">A solo game runs in this tab against empires the
@@ -174,6 +207,14 @@ export class Setup {
         <div class="setup-choose">
           <button class="btn setup-pick" type="button" data-setup-action="solo">Solo</button>
           <button class="btn setup-pick" type="button" data-setup-action="host">Host multiplayer</button>
+          ${
+            // Absent rather than disabled while no service is configured. A
+            // third button that explains it cannot be pressed is a third thing
+            // to read on the screen where you are trying to start a game.
+            managed
+              ? `<button class="btn setup-pick" type="button" data-setup-action="managed">Host on ${escape(managed)}</button>`
+              : ""
+          }
         </div>
         <p class="hint setup-or">…or join a game somebody has sent you the code or
         link for:</p>
@@ -188,9 +229,11 @@ export class Setup {
         ? "Solo"
         : this.mode === "host"
           ? "Hosting a game"
-          : this.mode === "join"
-            ? "Joining a game"
-            : "This game";
+          : this.mode === "compose"
+            ? "Starting a game in this room"
+            : this.mode === "join"
+              ? "Joining a game"
+              : "This game";
     const back = BACK[this.mode];
 
     return `
@@ -203,12 +246,23 @@ export class Setup {
           ? `<p class="card-tag">One empire of yours against the bot empires
              below, on your own machine.</p>`
           : ""
+      }
+      ${
+        this.mode === "compose"
+          ? `<p class="card-tag">Nothing is running in this room yet, so you can
+             set the game up. The room stays where it is &mdash; whoever is
+             serving it keeps the door open, and everybody here plays whatever
+             you seal.</p>
+             <p class="hint">If somebody else in the room does this at the same
+             moment, you will each be playing a different game. Until games are
+             composed together, arrange it between you first.</p>`
+          : ""
       }`;
   }
 
   private foot(): string {
-    if (this.mode !== "solo" && this.mode !== "host") return "";
-    const { note, problem, ready } = this.handlers.summary(this.mode);
+    if (!COMPOSES.has(this.mode)) return "";
+    const { note, problem, ready } = this.handlers.summary(this.mode as Composing);
     return `
       ${note ? `<p class="hint${problem ? " lobby-problem" : ""}">${escape(note)}</p>` : ""}
       <button class="btn primary" type="button" data-setup-action="start"${

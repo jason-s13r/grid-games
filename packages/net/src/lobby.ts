@@ -214,6 +214,18 @@ export class Lobby {
     return formatRef(this.ref);
   }
 
+  /** Whether this peer is the room rather than a guest in one.
+   *
+   *  Not derivable from `phase`, which says where the arranging has got to and
+   *  becomes `playing` for everybody; not derivable from `ref` either, since a
+   *  host has one of those too. It is the same fact the constructor took as
+   *  `joined`, said the way a caller wants to ask it: whoever announces a door
+   *  to an address book is promising to keep it open, and a guest cannot
+   *  promise that about somebody else's room. */
+  get hosting(): boolean {
+    return !this.joined;
+  }
+
   /** Open a lobby on the connection a ref names. A transport arrives here on
    *  demand — a solo game downloads neither PeerJS nor anything else — and this
    *  resolves once the connection has an id, because until then there is no

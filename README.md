@@ -71,6 +71,11 @@ claims, and with the one line a stranger cannot manufacture: a quorum of that
 game's own seats signing for the state it reached. A game whose doors have all
 closed offers to be taken up from a resume point instead of a dead dial.
 
+Going the other way, a tick box on the create form puts your game on that board.
+It is off, and it is worded as what it sends — the room code and the sealed
+record, which carries every player's key — because that is a disclosure about the
+people you are playing with rather than a display preference.
+
 No board ships with this client and none is assumed, which is the point: a board
 is a URL that arrives the way a room code used to. A static JSON file behind any
 HTTP server is a perfectly good one for a group of friends, because
