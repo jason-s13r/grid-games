@@ -14,7 +14,8 @@ import {
   shelfLife,
   Sim,
 } from "@tessera/sim";
-import { Roster } from "@tessera/protocol";
+import { Roster, cleanName, displayName, fingerprint } from "@tessera/protocol";
+import type { MemberKey } from "@tessera/protocol";
 import { Archive, Directory, Lobby, Lockstep, MAX_SEATS, parseRef, resolve } from "@tessera/net";
 import type { ArchivedGame, ConnectionRef, ResumePoint } from "@tessera/net";
 import pkg from "../package.json";
@@ -23,7 +24,7 @@ import { ReplayDriver } from "./game/Replay";
 import { boardClick } from "./game/input";
 import { OnlineGame } from "./game/Online";
 import type { Driver } from "./game/Driver";
-import { myIdentity } from "./net/identity";
+import { myIdentity, myName, setMyName } from "./net/identity";
 import { Announcer, doorOf } from "./net/announce";
 import { mayCompose, roomStatus } from "./net/compose";
 import { askForRoom } from "./net/factory";
@@ -196,6 +197,35 @@ const soloSetup = () => ({ bots: rivals.list, duration: duration(), ...mapSize()
 // read — a board on http behind a page on https fails as an opaque `TypeError`
 // several screens away from the field that caused it, and the field is the only
 // place the reason is still known. See net/settings.ts.
+
+/** The name this browser plays under.
+ *
+ *  Applied live: renaming mid-game is a signed record like any other and the
+ *  whole point of a name being outside the hash is that it can change without
+ *  anything else having to. The preview underneath shows the **cleaned** string
+ *  beside the fingerprint, so what a stranger will see is what this field says,
+ *  and a name that turns out to be mostly invisible characters says so here
+ *  rather than nowhere. */
+const nameEl = pick<HTMLInputElement>('[data-cfg="name"]');
+const nameShownEl = pick<HTMLElement>('[data-cfg="name-shown"]');
+nameEl.value = myName();
+
+async function showName(): Promise<void> {
+  const identity = await myIdentity();
+  nameShownEl.textContent = `Shown as ${displayName(myName(), await fingerprint(identity.key))}`;
+}
+void showName();
+
+nameEl.addEventListener("change", () => {
+  const clean = setMyName(nameEl.value);
+  nameEl.value = clean;
+  void showName();
+  lobby?.setName(clean);
+  // A seat can say so against this game; an observer has nothing to sign with,
+  // and its name stays the unverified one on its hello.
+  void mesh?.rename(clean);
+  panel.render();
+});
 
 const boardEl = pick<HTMLInputElement>('[data-cfg="board"]');
 const boardProblemEl = pick<HTMLElement>('[data-cfg="board-problem"]');
@@ -1238,6 +1268,25 @@ function openChat(seat: { empire: number; member: number }): void {
  *  exactly the moments it matters. The panel drops it when nothing changed. */
 function rosterView(driver: Lockstep): RosterView {
   const here = lobby?.players() ?? [];
+
+  /** What to call a key, on a screen where somebody is about to decide
+   *  something about it.
+   *
+   *  Three sources, best first: a **signed** naming from the driver, an
+   *  unverified one off a lobby hello, and the bare fingerprint. Every one of
+   *  them ends up in `displayName`, so the hex is always there — a decision
+   *  prompt that showed only a chosen prefix would be a prompt anybody could
+   *  spoof by choosing the same prefix.
+   *
+   *  "someone" was what this said before there were names, and it is the one
+   *  answer that is strictly worse than hex: it is not even wrong about who,
+   *  it declines to say. */
+  const call = (key: MemberKey): string => {
+    const player = here.find((who) => who.key === key);
+    const fingerprint = player?.label ?? key.slice(0, 8);
+    return displayName(driver.nameOf(key) || cleanName(player?.name), fingerprint);
+  };
+
   const ours = driver.seat?.empire;
   // The same expression the sim and the lockstep use: read off the record,
   // never off this build's constant.
@@ -1246,14 +1295,16 @@ function rosterView(driver: Lockstep): RosterView {
   return {
     watching: !driver.seat,
     joinsClosed: window > 0 && driver.sim.step >= window,
-    waiting: here.filter((who) => !who.you && !driver.roster.has(who.key)),
+    waiting: here
+      .filter((who) => !who.you && !driver.roster.has(who.key))
+      .map((who) => ({ key: who.key, label: call(who.key) })),
     asks: driver
       .invitations()
       .filter((record) => record.amendment.empire === ours)
       .map((record) => ({
         key: record.amendment.key,
         empire: record.amendment.empire,
-        label: here.find((who) => who.key === record.amendment.key)?.label ?? "someone",
+        label: call(record.amendment.key),
         endorsed: record.signatures.length,
         needed: driver.roster.quorum(record.amendment.empire),
       })),
@@ -1267,7 +1318,7 @@ function rosterView(driver: Lockstep): RosterView {
       .map((record) => ({
         key: record.application.key,
         empire: record.application.empire,
-        label: here.find((who) => who.key === record.application.key)?.label ?? "someone",
+        label: call(record.application.key),
       })),
   };
 }
@@ -1359,6 +1410,9 @@ async function begin(input?: string | JoinTarget): Promise<void> {
   }
 
   lobby = opened;
+  // What we are called in this room, before there is a game to sign it against.
+  // Unverified by construction and said so on the screen that shows it.
+  lobby.setName(myName());
   panel.attach(lobby);
 
   // Backend 2: a host peer's room with nothing running in it yet. Asked rather
@@ -1386,6 +1440,12 @@ async function begin(input?: string | JoinTarget): Promise<void> {
     });
 
     driving = driver;
+    // The claim becomes attributable. A seat re-asserts its name as a signed
+    // record against this game id, and from here the driver's answer is the one
+    // every screen prefers over the lobby's.
+    if (seat) void driver.rename(myName());
+    driver.onNamed = () => panel.setRoster(rosterView(driver));
+
     archive = new Archive(genesis, driver);
     archive.attach(driver);
     archiveBtn.hidden = false;

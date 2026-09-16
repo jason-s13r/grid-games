@@ -12,6 +12,7 @@
 // It holds no state of its own beyond the team assignment it is in the middle
 // of collecting.
 
+import { cleanName, displayName } from "@tessera/protocol";
 import type { MemberKey } from "@tessera/protocol";
 import { MAX_SEATS, composeTeams } from "@tessera/net";
 import type { Lobby, LobbyPlayer } from "@tessera/net";
@@ -319,7 +320,7 @@ export class LobbyPanel {
     return `
       <li class="lobby-seat">
         <span class="lobby-who" style="color:${empireTheme(team + 1).c1}">${escape(
-          player.label,
+          shown(player),
         )}${player.you ? " (you)" : ""}</span>
         <select class="lobby-team" data-lobby-team="${escape(player.key)}">${choices.join("")}</select>
       </li>`;
@@ -415,3 +416,20 @@ export class LobbyPanel {
 
 const option = (value: string, label: string, selected: boolean): string =>
   `<option value="${escape(value)}"${selected ? " selected" : ""}>${escape(label)}</option>`;
+
+/** A player as a screen where a decision is made must show them.
+ *
+ *  **The fingerprint is not optional.** Nothing stops two players choosing
+ *  `master5o1` and nothing should — uniqueness needs an authority to arbitrate,
+ *  and there is no authority anywhere in this system by design. So the eight hex
+ *  characters are the identity, the prefix is a convenience, and impersonation
+ *  is made visible rather than prevented.
+ *
+ *  `cleanName` runs here as well as in the driver, because this is also where a
+ *  **lobby** name lands and a lobby name has never been through anything: it
+ *  rides an unauthenticated hello and proves nothing beyond "here is a key to
+ *  seat me under". A bidi override in one would reverse the rendering of
+ *  everything after it on the line, fingerprint included, and `escape()`
+ *  replaces four characters and would let it straight through. */
+const shown = (player: LobbyPlayer): string =>
+  displayName(cleanName(player.name), player.label);

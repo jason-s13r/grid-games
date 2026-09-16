@@ -128,6 +128,21 @@ describe("hostGame", () => {
   });
 });
 
+/** Wait for the proposal to reach a lobby.
+ *
+ *  A fixed sleep is a race: the frame crosses an in-process bus, but the seal
+ *  and the verification either side of it are async, and a loaded machine will
+ *  lose that bet. Polling costs nothing and cannot.
+ */
+async function tabled(lobby: Lobby): Promise<string> {
+  for (let i = 0; i < 400; i++) {
+    const [one] = lobby.proposals();
+    if (one) return one.id;
+    await new Promise((done) => setTimeout(done, 5));
+  }
+  throw new Error("no proposal arrived");
+}
+
 describe("a host that proposes rather than composes", () => {
   // The difference is the whole of 0009. A composing host decides the game and
   // everybody else's only response is refusal; a proposing one suggests a world
@@ -165,10 +180,7 @@ describe("a host that proposes rather than composes", () => {
     // host for any of it: the id is recomputed from the proposal each of them
     // received.
     for (const lobby of signers) {
-      await new Promise((done) => setTimeout(done, 20));
-      const tabled = lobby.proposals();
-      expect(tabled).toHaveLength(1);
-      expect(await lobby.consent(tabled[0]!.id)).toBe(true);
+      expect(await lobby.consent(await tabled(lobby))).toBe(true);
     }
 
     const hosted = await hosting;
@@ -201,15 +213,16 @@ describe("a host that proposes rather than composes", () => {
       // convention this process holds.
       propose: proposalFrom({
         seed: 78,
-        startedAt: Date.now() + 120,
+        // Generous: the clock is the only thing that seals this one, so the
+        // consent has to land first or the room seals an empty game.
+        startedAt: Date.now() + 1_500,
         map: { width: 24, height: 24 },
         simbots: [{ popMax: 200, coins: 20, phases: { expand: { steps: 60, rate: [12, 24] } } }],
       }),
     });
 
     const lobby = await Lobby.open(alice, REF, { connect: attach(bus) });
-    await new Promise((done) => setTimeout(done, 20));
-    await lobby.consent(lobby.proposals()[0]!.id);
+    await lobby.consent(await tabled(lobby));
 
     const hosted = await hosting;
     expect((await checkConsent(hosted.genesis)).state).toBe("checked");

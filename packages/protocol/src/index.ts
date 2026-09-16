@@ -12,6 +12,8 @@ export {
   checkConsent,
 } from "./proposal.js";
 export type { Proposal, ConsentState, ConsentVerdict } from "./proposal.js";
+export { Names, cleanName, displayName, NAME_BYTES } from "./names.js";
+export type { Named } from "./names.js";
 export { Roster } from "./roster.js";
 export type { Seat } from "./roster.js";
 export {
@@ -36,6 +38,10 @@ export {
   encodeConsent,
   signConsent,
   verifyConsent,
+  encodeNaming,
+  signNaming,
+  verifyNaming,
+  nameInRange,
   endorseAmendment,
   endorseDrop,
   mergeAmendment,
@@ -65,6 +71,8 @@ export type {
   Application,
   SignedApplication,
   SignedConsent,
+  Naming,
+  SignedNaming,
   Claim,
   SignedClaim,
   Drop,
@@ -86,6 +94,7 @@ export type {
   ApplicationFrame,
   ProposalFrame,
   ConsentFrame,
+  NameFrame,
   ByeFrame,
   CheckpointFrame,
   DropFrame,

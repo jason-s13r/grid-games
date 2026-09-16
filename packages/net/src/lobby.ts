@@ -32,6 +32,7 @@ import {
   FRAME,
   Identity,
   composeGenesis,
+  cleanName,
   fingerprint,
   inspectGenesis,
   proposalId,
@@ -110,6 +111,17 @@ export interface LobbyPlayer {
   /** Eight hex characters of the key's digest — short enough to read aloud,
    *  long enough to tell two strangers apart. */
   label: string;
+  /** What they would like to be called, **unverified**.
+   *
+   *  A lobby hello proves nothing beyond "here is a key to seat me under", and
+   *  a name on one has exactly the same standing as the key beside it: a claim,
+   *  not yet a fact. There is no game id to sign against — this is the one
+   *  moment in the protocol where that is true. Once a record is sealed, seats
+   *  re-assert their names as signed records and the claim becomes
+   *  attributable; until then a screen showing this must say so.
+   *
+   *  Cleaned on arrival like any other string off the wire. */
+  name: string;
   you: boolean;
 }
 
@@ -231,6 +243,12 @@ export class Lobby {
   /** Key digests, computed once each. Deriving one is async and the panel
    *  renders synchronously, so they are cached as they arrive. */
   private readonly labels = new Map<MemberKey, string>();
+  /** Unverified lobby names, by key. Cleared into nothing at the seal — the
+   *  driver's signed namings take over, and holding both would leave a screen
+   *  showing a claim after there was something better to show. */
+  private readonly claimed = new Map<MemberKey, string>();
+  /** What we would like to be called, sent on every hello. */
+  private mine = "";
 
   /** Worlds on the table, by proposer. One each: a later `rev` from the same
    *  key supersedes, and a different proposer is a different proposal that the
@@ -408,6 +426,7 @@ export class Lobby {
       peer: "",
       key: this.identity.key,
       label: this.labels.get(this.identity.key) ?? "you",
+      name: this.mine,
       you: true,
     };
     const others = [...this.members.entries()]
@@ -416,9 +435,28 @@ export class Lobby {
         peer,
         key,
         label: this.labels.get(key) ?? peer.slice(0, 8),
+        name: this.claimed.get(key) ?? "",
         you: false,
       }));
     return [mine, ...others];
+  }
+
+  /** What to call us in this room, before there is a game to sign it against.
+   *  Re-greets everybody already here, because a hello is the only thing
+   *  carrying it and one was already sent to each of them. */
+  setName(name: string): void {
+    const clean = cleanName(name);
+    if (clean === this.mine) return;
+    this.mine = clean;
+    if (clean) this.claimed.set(this.identity.key, clean);
+    else this.claimed.delete(this.identity.key);
+    for (const peer of this.connection.peers()) this.greet(peer);
+    this.changed();
+  }
+
+  /** What we are calling ourselves here. */
+  get name(): string {
+    return this.mine;
   }
 
   private async label(key: MemberKey): Promise<void> {
@@ -440,6 +478,7 @@ export class Lobby {
       supported: [...SUPPORTED_PROTOCOLS],
       gameId: "",
       key: this.identity.key,
+      ...(this.mine ? { name: this.mine } : {}),
       nonce: toBase64Url(randomBytes(16)),
     });
   }
@@ -452,6 +491,8 @@ export class Lobby {
       if (!canPlay(frame, this.sealed?.protocol ?? PROTOCOL_VERSION)) return;
       if (frame.key) {
         this.members.set(from, frame.key);
+        const claimed = cleanName(frame.name);
+        if (claimed) this.claimed.set(frame.key, claimed);
         void this.label(frame.key);
         this.changed();
       }

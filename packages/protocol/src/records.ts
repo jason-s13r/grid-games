@@ -15,6 +15,7 @@
 import { MEMBER, MOVE } from "@tessera/sim";
 import type { MemberKind, Move, MoveType } from "@tessera/sim";
 import { Writer, concat, utf8 } from "./bytes.js";
+import { NAME_BYTES } from "./names.js";
 import { Identity, verify } from "./identity.js";
 import type { MemberKey } from "./identity.js";
 import type { Roster } from "./roster.js";
@@ -29,6 +30,7 @@ const TAG_DROP = "tessera/drop/1";
 const TAG_CLAIM = "tessera/claim/1";
 const TAG_APPLICATION = "tessera/application/1";
 const TAG_CONSENT = "tessera/consent/1";
+const TAG_NAMING = "tessera/name/1";
 
 export const NONCE_BYTES = 16;
 
@@ -702,6 +704,95 @@ export async function verifyApplication(
   if (!application || typeof application.key !== "string" || !application.key) return false;
   try {
     return await verify(application.key, signed.sig, encodeApplication(gameId, application));
+  } catch {
+    return false;
+  }
+}
+
+// --- names -------------------------------------------------------------------
+
+/** What somebody would like to be called.
+ *
+ *  In the same class as a chat message and for a stronger reason than taste: a
+ *  name **could not** be part of the world. `gameIdOf` hashes the whole genesis
+ *  minus its own id, so a name on `MemberSpec` would be inside the game id —
+ *  renaming would be impossible, and two peers holding different names for one
+ *  seat would compute different game ids and never meet.
+ *
+ *  Signed by the seat, exactly as a message is, because a name is a claim only
+ *  its own seat may make. The latest `(step, seq)` from a seat wins and earlier
+ *  ones are forgotten like chat lines; `names.ts` holds the store and the
+ *  tiebreak, and keys it by `MemberKey` rather than by seat, because a seat
+ *  index is not stable across a drop and a return.
+ *
+ *  Nothing here hashes, so nothing here can desync. A peer that misses a naming
+ *  shows a bare fingerprint and is otherwise identical to every other peer. */
+export interface Naming {
+  step: number;
+  seq: number;
+  empire: number;
+  member: number;
+  /** Already cleaned by whoever is reading it. The bytes on the wire are
+   *  whatever the sender chose, which is why `cleanName` runs on receipt and
+   *  not on send. */
+  name: string;
+}
+
+export interface SignedNaming {
+  naming: Naming;
+  sig: string;
+}
+
+export function nameInRange(naming: Naming): boolean {
+  return (
+    u32(naming.step) &&
+    u32(naming.seq) &&
+    u8(naming.empire) &&
+    naming.empire >= 1 &&
+    u8(naming.member) &&
+    typeof naming.name === "string" &&
+    utf8(naming.name).length <= NAME_BYTES
+  );
+}
+
+export function encodeNaming(gameId: string, naming: Naming): Uint8Array {
+  if (!nameInRange(naming)) throw new Error("naming field out of range");
+  const name = utf8(naming.name);
+  const record = new Writer(12 + name.length)
+    .u32(naming.step)
+    .u32(naming.seq)
+    .u8(naming.empire)
+    .u8(naming.member)
+    .u16(name.length)
+    .raw(name)
+    .finish();
+  return concat(preamble(TAG_NAMING, gameId), record);
+}
+
+export async function signNaming(
+  identity: Identity,
+  gameId: string,
+  naming: Naming,
+): Promise<SignedNaming> {
+  return { naming, sig: await identity.sign(encodeNaming(gameId, naming)) };
+}
+
+/** Whether this seat signed this name, and nothing else. Attribution runs
+ *  through the roster exactly as it does for a message: a name is a claim about
+ *  the signer and never about anybody else. */
+export async function verifyNaming(
+  roster: Roster,
+  gameId: string,
+  signed: SignedNaming,
+): Promise<boolean> {
+  if (!signed || !signed.naming || typeof signed.sig !== "string") return false;
+  if (!nameInRange(signed.naming)) return false;
+
+  const key = roster.keyOf(signed.naming.empire, signed.naming.member);
+  if (!key) return false;
+
+  try {
+    return await verify(key, signed.sig, encodeNaming(gameId, signed.naming));
   } catch {
     return false;
   }

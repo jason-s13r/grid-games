@@ -258,6 +258,32 @@
           <details class="settings" data-settings>
             <summary>Settings</summary>
             <div class="settings-body">
+              <!-- A label, never a credential. The key is the seat; this is the
+                   word in front of the eight hex characters of its digest, and
+                   the hex is what people are actually told apart by. Two players
+                   may choose the same name and nothing stops them: uniqueness
+                   needs an authority to arbitrate, and there is none. See
+                   protocol/names.ts. -->
+              <div class="field field-stacked">
+                <label for="cfg-name">Your name</label>
+                <input
+                  id="cfg-name"
+                  class="lobby-code"
+                  data-cfg="name"
+                  maxlength="24"
+                  placeholder="master5o1"
+                  spellcheck="false"
+                  autocomplete="off"
+                />
+                <p class="hint" data-cfg="name-shown"></p>
+              </div>
+              <p class="hint">
+                Shown as <code>name#fingerprint</code> wherever somebody is
+                deciding something about you, because anybody may pick any name
+                and the fingerprint is what tells two of them apart. Kept in this
+                browser, and said again in every game you join.
+              </p>
+
               <div class="field field-stacked">
                 <label for="cfg-board">Address book</label>
                 <input

@@ -254,6 +254,8 @@ describe("what an archive says about consent", () => {
       steps: 4,
       hash: hex(sim.hash()),
       moveLog: [],
+      amendments: [],
+      messages: [],
     };
   };
 
@@ -269,12 +271,11 @@ describe("what an archive says about consent", () => {
   // the record, not a mark against it — which is the whole reason this is three
   // states and not a boolean.
   it("says nothing was stated when the record claims nothing", async () => {
-    const { t, game } = await watched();
+    const { game } = await watched();
     const verdict = await verifyArchive(game);
     expect(verdict.consent.state).toBe("absent");
     expect(consentLine(verdict.consent)).toBe("consent: not stated");
     expect(verdict.ok, verdict.problems.join(", ")).toBe(true);
-    t.stop?.();
   });
 
   it("a tampered consent list is failed, and is a problem as well", async () => {

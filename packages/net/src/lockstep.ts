@@ -47,6 +47,10 @@ import {
   verifyMessage,
   verifyMove,
   verifyReady,
+  Names,
+  cleanName,
+  signNaming,
+  verifyNaming,
 } from "@tessera/protocol";
 import type {
   Amendment,
@@ -66,6 +70,9 @@ import type {
   SignedDrop,
   SignedMessage,
   SignedMove,
+  Named,
+  Naming,
+  SignedNaming,
 } from "@tessera/protocol";
 import type { Transport } from "./transport.js";
 import { SNAPSHOT_TAIL, SnapshotStore, decodeSnapshot, encodeSnapshot } from "./snapshots.js";
@@ -173,6 +180,20 @@ const READY_REPEAT_MS = 1000;
  *  deadline somebody had to choose. */
 const APPLY_REFRESH = STEPS_PER_SECOND * 30;
 
+/** How often a seat says its own name again.
+ *
+ *  A name is **persistent UI state**, which is what separates it from chat: a
+ *  missed line scrolls away, a missed name leaves a peer showing bare hex for
+ *  the rest of the game with no way to recover. `Transport` has no connection
+ *  hook to hang a re-send on — `id`, `peers`, `broadcast`, `send`, `listen`,
+ *  and nothing else — so the answer is the one `READY_REPEAT_MS` already uses
+ *  for the same reason a mesh takes a second hop to form: say it again.
+ *
+ *  Slower than a readiness promise by three orders of magnitude, because
+ *  nothing waits on a name. It pairs with answering a stranger's naming with
+ *  our own, which terminates because it fires only on first sight. */
+const NAME_REPEAT = STEPS_PER_SECOND * 60;
+
 /** One live application per key, and at most this many per empire.
  *
  *  Per empire, not in total, and that is the point: key generation is free, so a
@@ -247,6 +268,9 @@ export class Lockstep {
    *  a chat log a stranger can attribute rather than one it is asked to
    *  believe. A UI has no use for it and ignores it. */
   onMessage?: (message: Message, text: string | null, signed?: SignedMessage) => void;
+  /** Somebody is called something new. Fires only when what we would render
+   *  changed, so a re-assert of an unchanged name redraws nothing. */
+  onNamed?: (key: MemberKey, name: string) => void;
   onDesync?: (step: number, ours: number, theirs: number, seat: Seat) => void;
   onEjection?: (seat: Seat, atStep: number, reason: EjectionReason, late: boolean) => void;
   onStalled?: (seats: Seat[], waitedMs: number) => void;
@@ -359,6 +383,11 @@ export class Lockstep {
   /** Our own standing request, while we are asking for one. */
   private asking?: Application;
   private askedAt = -Infinity;
+  /** Names, keyed by `MemberKey` — see `names.ts` for why not by seat. */
+  private readonly named = new Names();
+  private myName = "";
+  private namedAt = -Infinity;
+  private nameSeq = 0;
   private lastBeat = -Infinity;
   private lastReadyAt = -Infinity;
   private halted: string | null = null;
@@ -522,6 +551,8 @@ export class Lockstep {
     // ever learns about it is that we say it again. Once per pump rather than
     // once per step — it is rate-limited on the step count inside.
     void this.refreshApplication();
+    // Same idea again, and slower: a name nobody heard is a name nobody has.
+    void this.refreshName();
 
     const target = this.targetStep();
     let budget = MAX_STEPS_PER_PUMP;
@@ -654,6 +685,92 @@ export class Lockstep {
     return true;
   }
 
+  /** Say what to call us. Signed against this game, so it is attributable to
+   *  the seat and to nothing else — which also means it is **per game**: the
+   *  record names a game id, and nothing here persists it. A caller that wants
+   *  a name to survive between games stores it beside the key.
+   *
+   *  A seatless peer cannot: `verifyNaming` runs through the roster, so an
+   *  observer's only name is the unverified one on its lobby hello. That is
+   *  worth saying plainly rather than discovering — "the claim becomes
+   *  attributable once genesis exists" is only true for people with seats. */
+  async rename(name: string): Promise<boolean> {
+    const seat = this.options.seat;
+    const identity = this.options.identity;
+    if (!seat || !identity) return false;
+
+    // Cleaned here as well as on receipt. Not because it makes anything safe —
+    // the reader's pass is what does that — but so the bytes we sign are the
+    // bytes we would render, and our own name does not change shape on the way
+    // back from somebody else.
+    const clean = cleanName(name);
+    this.myName = clean;
+    this.namedAt = this.sim.step;
+    return this.assertName();
+  }
+
+  /** What to call somebody, or "" if they have not said. Keyed by key, so it
+   *  survives a drop and a re-seat. */
+  nameOf(key: MemberKey): string {
+    return this.named.nameOf(key);
+  }
+
+  /** Everybody who has said, for a roster screen. */
+  names(): Named[] {
+    return this.named.all();
+  }
+
+  private async assertName(): Promise<boolean> {
+    const seat = this.options.seat;
+    const identity = this.options.identity;
+    if (!seat || !identity) return false;
+    const naming: Naming = {
+      step: this.sim.step,
+      seq: this.nameSeq++,
+      empire: seat.empire,
+      member: seat.member,
+      name: this.myName,
+    };
+    const signed = await signNaming(identity, this.gameId, naming);
+    // Held locally too: our own name is not news we hear from somebody else,
+    // and a screen asking `nameOf(ourKey)` should not get "".
+    this.named.take({ key: identity.key, name: this.myName, step: naming.step, seq: naming.seq, sig: signed.sig });
+    this.transport.broadcast({ t: FRAME.NAME, signed });
+    return true;
+  }
+
+  /** Say it again, on a slow timer. Pump-driven for the same reason the
+   *  application refresh is: the driver holds no timer. */
+  private async refreshName(): Promise<void> {
+    if (!this.myName || !this.options.seat) return;
+    if (this.sim.step - this.namedAt < NAME_REPEAT) return;
+    this.namedAt = this.sim.step;
+    await this.assertName();
+  }
+
+  private async onNameFrame(signed: SignedNaming): Promise<void> {
+    if (!(await verifyNaming(this.roster, this.gameId, signed))) return;
+    const key = this.roster.keyOf(signed.naming.empire, signed.naming.member);
+    if (!key) return;
+
+    const first = !this.named.knows(key);
+    const changed = this.named.take({
+      key,
+      // The reader's pass, on a string a stranger chose. This is the one that
+      // matters: a bidi override here reverses the fingerprint beside it.
+      name: cleanName(signed.naming.name),
+      step: signed.naming.step,
+      seq: signed.naming.seq,
+      sig: signed.sig,
+    });
+
+    // Answer a key we have never heard from with our own name. Terminates
+    // because it fires on first sight only, and it is what makes a late joiner
+    // learn the names of everybody already here without any connection hook.
+    if (first && this.myName && key !== this.options.identity?.key) void this.assertName();
+    if (changed) this.onNamed?.(key, this.named.nameOf(key));
+  }
+
   private beat(): void {
     const interval = this.options.genesis.rules.heartbeatInterval;
     if (!this.options.seat || this.sim.step - this.lastBeat < interval) return;
@@ -760,6 +877,8 @@ export class Lockstep {
         return void this.onClaim(frame.signed);
       case FRAME.APPLICATION:
         return void this.onApplicationFrame(frame.signed);
+      case FRAME.NAME:
+        return void this.onNameFrame(frame.signed);
       case FRAME.EQUIVOCATION:
         return this.onEquivocation(frame.proof);
       case FRAME.SNAPSHOT_REQUEST:

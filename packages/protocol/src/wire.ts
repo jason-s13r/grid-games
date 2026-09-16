@@ -22,6 +22,7 @@ import type {
   SignedMessage,
   SignedDrop,
   SignedMove,
+  SignedNaming,
   SignedReady,
 } from "./records.js";
 import type { MemberKey } from "./identity.js";
@@ -41,6 +42,7 @@ export const FRAME = {
   APPLICATION: "application",
   PROPOSAL: "proposal",
   CONSENT: "consent",
+  NAME: "name",
   EQUIVOCATION: "equivocation",
   SNAPSHOT_REQUEST: "snapshot?",
   SNAPSHOT: "snapshot",
@@ -61,6 +63,14 @@ export interface HelloFrame {
   supported?: number[];
   gameId: string;
   key?: MemberKey;
+  /** What they would like to be called, before there is a game to sign it
+   *  against. It **proves nothing at all** — the same standing as the key
+   *  beside it, which is "a claim, not yet a fact". Once a genesis exists,
+   *  seats re-assert their names as signed records and the claim becomes
+   *  attributable; a seatless peer's name stays unverified for the whole game,
+   *  because `verifyNaming` runs through the roster and an observer is not in
+   *  one. */
+  name?: string;
   nonce: string;
 }
 
@@ -154,6 +164,15 @@ export interface ConsentFrame {
   signed: SignedConsent;
 }
 
+/** Somebody saying what to call them. Signed by the seat, never hashed, and
+ *  re-sent on a slow timer: a name is persistent UI state, so a peer that
+ *  missed the one broadcast would show a bare fingerprint for the rest of the
+ *  game and never recover. */
+export interface NameFrame {
+  t: typeof FRAME.NAME;
+  signed: SignedNaming;
+}
+
 export interface EquivocationFrame {
   t: typeof FRAME.EQUIVOCATION;
   proof: EquivocationProof;
@@ -213,6 +232,7 @@ export type Frame =
   | ApplicationFrame
   | ProposalFrame
   | ConsentFrame
+  | NameFrame
   | EquivocationFrame
   | SnapshotRequestFrame
   | SnapshotFrame
@@ -243,6 +263,7 @@ export function decodeFrame(text: string): Frame | null {
         isString(parsed.gameId) &&
         isString(parsed.nonce) &&
         (parsed.key === undefined || isString(parsed.key)) &&
+        (parsed.name === undefined || isString(parsed.name)) &&
         (parsed.supported === undefined ||
           (Array.isArray(parsed.supported) &&
             parsed.supported.every((v) => typeof v === "number")))
@@ -273,6 +294,7 @@ export function decodeFrame(text: string): Frame | null {
     case FRAME.CLAIM:
     case FRAME.APPLICATION:
     case FRAME.CONSENT:
+    case FRAME.NAME:
       // Field-level checking belongs to the verifier, which has to re-derive
       // the payload anyway. Here it is enough that there is something to verify.
       return isObject(parsed.signed) ? (parsed as unknown as Frame) : null;
