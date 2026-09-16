@@ -3,6 +3,15 @@ export { Identity, verify, sha256, randomBytes, fingerprint, SIGNATURE_BYTES } f
 export type { MemberKey } from "./identity.js";
 export { canonicalJson, gameIdOf, sealGenesis, inspectGenesis } from "./genesis.js";
 export type { GenesisProblem } from "./genesis.js";
+export {
+  proposalId,
+  proposalFrom,
+  proposalOf,
+  orderConsents,
+  composeGenesis,
+  checkConsent,
+} from "./proposal.js";
+export type { Proposal, ConsentState, ConsentVerdict } from "./proposal.js";
 export { Roster } from "./roster.js";
 export type { Seat } from "./roster.js";
 export {
@@ -24,6 +33,9 @@ export {
   encodeApplication,
   signApplication,
   verifyApplication,
+  encodeConsent,
+  signConsent,
+  verifyConsent,
   endorseAmendment,
   endorseDrop,
   mergeAmendment,
@@ -52,6 +64,7 @@ export type {
   Checkpoint,
   Application,
   SignedApplication,
+  SignedConsent,
   Claim,
   SignedClaim,
   Drop,
@@ -71,6 +84,8 @@ export type {
   AmendmentFrame,
   ClaimFrame,
   ApplicationFrame,
+  ProposalFrame,
+  ConsentFrame,
   ByeFrame,
   CheckpointFrame,
   DropFrame,

@@ -251,8 +251,14 @@ export interface BotProfile {
   /** Population this seat banks to, never above `rules.popMax`. The most
    *  expensive tile it can ever leave behind, and the bot's whole strength. */
   popMax?: number;
-  /** The cycle. A bot moves through the phases it has durations for, in the
-   *  order they are declared here, and starts over. */
+  /** The cycle. A bot moves through the phases it has durations for and starts
+   *  over — in `MODES` order, which is fixed (`policy.ts`), and never in the
+   *  order they happen to be written here. This is a **set of durations, not a
+   *  sequence**, and saying otherwise was a promise the simulation has never
+   *  kept: `turnOf` builds its cycle with `MODES.map(...)`, and a genesis is
+   *  canonicalised with its keys sorted anyway, so a declared order could not
+   *  survive the record even if the sim honoured it. Nobody noticed because the
+   *  three presets happen to declare their phases in exactly that order. */
   phases?: Partial<Record<BotMode, BotPhase>>;
   /** Percent chance of taking an adjacent coin instead of following the phase.
    *  Coins are the one way in the game to gain ground faster than population
@@ -290,6 +296,20 @@ export interface Genesis {
   map: MapConfig;
   rules: Rules;
   empires: EmpireSpec[];
+  /** Who agreed to play this world, before it was a game.
+   *
+   *  Structural rather than imported, exactly as `MemberSpec.key` is: the
+   *  simulation never inspects a signature, and `sim` cannot depend on
+   *  `protocol` without inverting the one dependency in the tree. The net layer
+   *  checks these against the proposal the record recomposes to — see
+   *  `protocol/src/proposal.ts`.
+   *
+   *  Absent from every record composed before consent existed, and that is a
+   *  state rather than a failure: a record claims nothing here and is checked
+   *  for nothing. `gameIdOf` strips only `gameId`, so where the field *is*
+   *  present it is hashed into the game id like everything else — which is
+   *  what stops a sealer adding, removing or reordering one after the fact. */
+  consent?: readonly { key: string; proposalId: string; sig: string }[];
 }
 
 export interface Move {

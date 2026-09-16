@@ -10,10 +10,12 @@ import {
   proveHello,
   signApplication,
   signClaim,
+  signConsent,
   signMove,
   verifyHello,
   verifyMove,
 } from "../records.js";
+import { proposalFrom, proposalId } from "../proposal.js";
 import type { SignedMove } from "../records.js";
 import { randomBytes } from "../identity.js";
 import { FRAME, decodeFrame, encodeFrame } from "../wire.js";
@@ -153,6 +155,46 @@ describe("an application on the wire", () => {
     // complaint — so an older peer never sees this, never counts it as a
     // violation, and behaves exactly as it does today.
     expect(decodeFrame('{"t":"something-from-next-year","signed":{}}')).toBeNull();
+  });
+});
+
+describe("a proposal on the wire", () => {
+  // The only frame whose contents are hashed on arrival, so the only one whose
+  // numbers have to be checked at the decoder. `canonicalJson` throws on a
+  // non-finite number; without these checks that throw is reachable by anybody
+  // who can send a frame.
+  const proposal = proposalFrom({ seed: 7, startedAt: 1_700_000_000_000 });
+
+  it("survives the round trip", () => {
+    const frame = { t: FRAME.PROPOSAL, proposal, rev: 0, by: f.alice.key } as const;
+    const back = decodeFrame(encodeFrame(frame));
+    expect(back?.t).toBe(FRAME.PROPOSAL);
+    expect((back as { proposal: typeof proposal }).proposal.seed).toBe(7);
+  });
+
+  it.each([
+    ["a non-finite seed", { ...proposal, seed: Number.NaN }],
+    ["a non-finite start", { ...proposal, startedAt: Number.POSITIVE_INFINITY }],
+    ["a fractional seed", { ...proposal, seed: 1.5 }],
+    ["a negative vacancy count", { ...proposal, vacancies: -1 }],
+  ])("%s never reaches the hash", (_what, poisoned) => {
+    const text = JSON.stringify({ t: FRAME.PROPOSAL, proposal: poisoned, rev: 0, by: "k" });
+    expect(decodeFrame(text)).toBeNull();
+  });
+
+  it("needs a proposer and a revision", () => {
+    expect(decodeFrame(JSON.stringify({ t: FRAME.PROPOSAL, proposal, rev: 0 }))).toBeNull();
+    expect(
+      decodeFrame(JSON.stringify({ t: FRAME.PROPOSAL, proposal, rev: -1, by: "k" })),
+    ).toBeNull();
+    expect(decodeFrame('{"t":"proposal","rev":0,"by":"k"}')).toBeNull();
+  });
+
+  it("a consent carries something to verify, or it is null", async () => {
+    const signed = await signConsent(f.alice, await proposalId(proposal));
+    expect(decodeFrame(encodeFrame({ t: FRAME.CONSENT, signed }))?.t).toBe(FRAME.CONSENT);
+    expect(decodeFrame('{"t":"consent"}')).toBeNull();
+    expect(decodeFrame('{"t":"consent","signed":"yes"}')).toBeNull();
   });
 });
 

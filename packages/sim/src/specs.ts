@@ -4,10 +4,10 @@
 // noise at every call site — the replay tool and the test fixtures both did it
 // before this file existed.
 
-import type { BotMode, BotPhase, BotProfile, EmpireSpec } from "./types.js";
+import type { BotMode, BotPhase, BotProfile, EmpireSpec, Rules } from "./types.js";
 import { CONTROL, MEMBER } from "./types.js";
 import { MODES } from "./policy.js";
-import { STEPS_PER_SECOND } from "./constants.js";
+import { DEFAULT_RULES, STEPS_PER_SECOND } from "./constants.js";
 
 /** Seconds in, steps out. Every duration a bot carries is a step count; this
  *  exists only so the table below reads in the units a person tunes it in. */
@@ -153,6 +153,65 @@ export const DIFFICULTY: Record<Difficulty, BotProfile> = {
   steady: tuneBot(TUNING.steady),
   hard: tuneBot(TUNING.hard),
 };
+
+/** Why this profile cannot be played, or "" if it can.
+ *
+ *  Refuses; never clamps. The two clamps that actually bind already exist and
+ *  stay exactly where they are — `popMax` against `rules.popMax` when the seat
+ *  is created, and a phase's rate floored at `rules.botActionInterval` on every
+ *  action — so nothing here is what keeps a hand-rolled profile honest. What
+ *  this buys is telling somebody *before* the record is broadcast, for the same
+ *  reason `checkPlan` refuses early: by the time a clamp silently swallows an
+ *  absurd number, the composer has already told everyone it was in the game.
+ *
+ *  It lives here rather than in a UI because there are three composers — a web
+ *  panel, a host peer's `--plan` file and a test — and a validation that lives
+ *  in one of them is a validation the other two do not have. */
+export function checkProfile(profile: BotProfile, rules: Rules = DEFAULT_RULES): string {
+  if (!profile || typeof profile !== "object") return "a bot profile is an object";
+
+  const popMax = profile.popMax;
+  if (popMax !== undefined) {
+    if (!Number.isFinite(popMax) || !Number.isInteger(popMax) || popMax < 1) {
+      return "a population ceiling is a whole number of at least 1";
+    }
+    // Asking for more than the game allows is not dangerous — `state.ts` clamps
+    // it, and a difficulty setting can only ever hold a seat back. It is a
+    // person who thinks they have set something they have not.
+    if (popMax > rules.popMax) return `a population ceiling tops out at ${rules.popMax}`;
+  }
+
+  const coins = profile.coins;
+  if (coins !== undefined && (!Number.isInteger(coins) || coins < 0 || coins > 100)) {
+    return "a coin appetite is a percentage";
+  }
+
+  const phases = profile.phases;
+  if (!phases || typeof phases !== "object") return "a bot with no phases never acts";
+  let live = 0;
+  for (const mode of MODES) {
+    const one = phases[mode];
+    if (one === undefined) continue;
+    if (!Number.isInteger(one.steps) || one.steps < 0) {
+      return `${mode} lasts a whole number of steps`;
+    }
+    if (
+      !Array.isArray(one.rate) ||
+      one.rate.length !== 2 ||
+      !one.rate.every((n) => Number.isInteger(n) && n >= 0) ||
+      one.rate[0]! > one.rate[1]!
+    ) {
+      return `${mode} needs a click rate of [shortest, longest]`;
+    }
+    if (one.steps > 0) live++;
+  }
+  // Every phase absent or zero-length is a bot that never enters one, which
+  // `turnOf` has nothing to cycle through. A person who wanted an opponent that
+  // does nothing wanted one fewer opponent.
+  if (live === 0) return "a bot with no phases never acts";
+
+  return "";
+}
 
 /** How hard a bot empire plays: one of the three presets, or a profile somebody
  *  dialled in themselves.

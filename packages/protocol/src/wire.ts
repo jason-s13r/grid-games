@@ -11,9 +11,11 @@
 // none of it should be able to raise an exception on the receiving side.
 
 import type { Genesis } from "@tessera/sim";
+import type { Proposal } from "./proposal.js";
 import type {
   EquivocationProof,
   SignedAmendment,
+  SignedConsent,
   SignedApplication,
   SignedClaim,
   SignedCheckpoint,
@@ -37,6 +39,8 @@ export const FRAME = {
   AMENDMENT: "amendment",
   CLAIM: "claim",
   APPLICATION: "application",
+  PROPOSAL: "proposal",
+  CONSENT: "consent",
   EQUIVOCATION: "equivocation",
   SNAPSHOT_REQUEST: "snapshot?",
   SNAPSHOT: "snapshot",
@@ -128,6 +132,28 @@ export interface ApplicationFrame {
   signed: SignedApplication;
 }
 
+/** A world somebody is suggesting, which anybody may suggest.
+ *
+ *  `by` is attribution and not authority: nothing arbitrates between two
+ *  proposals, because nothing has to — a proposal with no signatures on it dies
+ *  of that. A later `rev` from the same `by` supersedes the earlier one, so
+ *  "make it three days" stops being a thing you say in chat and hope for and
+ *  becomes a revision with one field changed that everybody can see and sign. */
+export interface ProposalFrame {
+  t: typeof FRAME.PROPOSAL;
+  proposal: Proposal;
+  /** Monotonic per proposer. */
+  rev: number;
+  by: MemberKey;
+}
+
+/** One signature over one proposal id. Not a vote and not a tally: the set of
+ *  these *is* the roster, so there is no threshold to reach. */
+export interface ConsentFrame {
+  t: typeof FRAME.CONSENT;
+  signed: SignedConsent;
+}
+
 export interface EquivocationFrame {
   t: typeof FRAME.EQUIVOCATION;
   proof: EquivocationProof;
@@ -185,6 +211,8 @@ export type Frame =
   | AmendmentFrame
   | ClaimFrame
   | ApplicationFrame
+  | ProposalFrame
+  | ConsentFrame
   | EquivocationFrame
   | SnapshotRequestFrame
   | SnapshotFrame
@@ -244,9 +272,25 @@ export function decodeFrame(text: string): Frame | null {
     case FRAME.AMENDMENT:
     case FRAME.CLAIM:
     case FRAME.APPLICATION:
+    case FRAME.CONSENT:
       // Field-level checking belongs to the verifier, which has to re-derive
       // the payload anyway. Here it is enough that there is something to verify.
       return isObject(parsed.signed) ? (parsed as unknown as Frame) : null;
+
+    case FRAME.PROPOSAL:
+      // The only frame whose *contents* get hashed on arrival, so the only one
+      // whose numbers have to be checked here. `canonicalJson` throws on a
+      // non-finite number, and hashing an arbitrary peer's proposal would
+      // otherwise put that throw inside a receive path — reachable by anyone
+      // who can send a frame. Refused cheaply, before the hash.
+      return isObject(parsed.proposal) &&
+        isStep((parsed.proposal as Record<string, unknown>).seed) &&
+        isStep((parsed.proposal as Record<string, unknown>).startedAt) &&
+        isStep((parsed.proposal as Record<string, unknown>).vacancies) &&
+        isStep(parsed.rev) &&
+        isString(parsed.by)
+        ? (parsed as unknown as ProposalFrame)
+        : null;
 
     case FRAME.EQUIVOCATION:
       return isObject(parsed.proof) ? (parsed as unknown as EquivocationFrame) : null;

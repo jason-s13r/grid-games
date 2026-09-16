@@ -10,7 +10,7 @@ import { MOVE, MEMBER, CONTROL, TERRAIN, ITEM, WIN } from "../types.js";
 import { idx } from "../geometry.js";
 import { DEFAULT_RULES, STAT, STEPS_PER_SECOND, VACANCY_RULES } from "../constants.js";
 import { arena, at, claimNow, held, humans, own, ownerAt, popAt } from "./testkit.js";
-import { DIFFICULTY, TUNING, simbot, tuneBot } from "../specs.js";
+import { DIFFICULTY, TUNING, checkProfile, simbot, tuneBot } from "../specs.js";
 import { turnOf } from "../policy.js";
 import { isProtected } from "../rules.js";
 import type { Difficulty } from "../specs.js";
@@ -805,5 +805,56 @@ describe("a bot's phase cycle", () => {
   it("a bot with no phases sleeps", () => {
     const sim = arena([simbot("steady"), humans(1)]);
     expect(turnOf(sim.state, sim.state.empires[0]!, 0, { phases: {} }).mode).toBe("sleep");
+  });
+});
+
+describe("a profile somebody tuned by hand", () => {
+  // `checkProfile` refuses; it never clamps. The two clamps that actually bind
+  // are elsewhere and stay there — this is the early refusal, while whoever is
+  // composing can still fix it and before the record is broadcast.
+  it("accepts every preset", () => {
+    for (const profile of Object.values(DIFFICULTY)) expect(checkProfile(profile)).toBe("");
+  });
+
+  it.each([
+    ["an empty phase set", { phases: {} }],
+    ["every phase at zero", { phases: { expand: { steps: 0, rate: [12, 24] as [number, number] } } }],
+    ["no phases at all", {}],
+    ["a population ceiling above the rule", { ...DIFFICULTY.easy, popMax: DEFAULT_RULES.popMax + 1 }],
+    ["a population ceiling of zero", { ...DIFFICULTY.easy, popMax: 0 }],
+    ["a fractional ceiling", { ...DIFFICULTY.easy, popMax: 12.5 }],
+    ["a coin appetite over 100", { ...DIFFICULTY.easy, coins: 101 }],
+    ["a negative duration", { phases: { expand: { steps: -1, rate: [12, 24] as [number, number] } } }],
+    ["a backwards click rate", { phases: { expand: { steps: 60, rate: [24, 12] as [number, number] } } }],
+    ["a click rate that is not a pair", { phases: { expand: { steps: 60, rate: [12] as unknown as [number, number] } } }],
+  ])("refuses %s", (_what, profile) => {
+    expect(checkProfile(profile)).not.toBe("");
+  });
+
+  // The two clamps, exercised rather than trusted. An absurd profile is an
+  // opponent and not an exploit: it plays a deterministic game, never banks
+  // above the rule and never out-reflexes anybody.
+  it("an absurd profile plays a game, and the clamps are what bind", () => {
+    const absurd = {
+      popMax: 99_999,
+      coins: 100,
+      phases: { expand: { steps: 600, rate: [0, 0] as [number, number] } },
+    };
+    // Refused before it is proposed — but a hostile client does not call this,
+    // which is exactly why the clamps below are the things that matter.
+    expect(checkProfile(absurd)).not.toBe("");
+
+    const sim = arena([simbot(absurd), humans(1)]);
+    // `state.ts` holds the seat back to the rule rather than lifting it.
+    expect(sim.state.empires[0]!.members[0]!.popMax).toBeLessThanOrEqual(DEFAULT_RULES.popMax);
+
+    const before = sim.hash();
+    for (let i = 0; i < 400; i++) sim.advance();
+    const once = sim.hash();
+    expect(once).not.toBe(before);
+
+    const again = arena([simbot(absurd), humans(1)]);
+    for (let i = 0; i < 400; i++) again.advance();
+    expect(again.hash()).toBe(once);
   });
 });

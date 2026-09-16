@@ -28,6 +28,7 @@ const TAG_READY = "tessera/ready/1";
 const TAG_DROP = "tessera/drop/1";
 const TAG_CLAIM = "tessera/claim/1";
 const TAG_APPLICATION = "tessera/application/1";
+const TAG_CONSENT = "tessera/consent/1";
 
 export const NONCE_BYTES = 16;
 
@@ -701,6 +702,81 @@ export async function verifyApplication(
   if (!application || typeof application.key !== "string" || !application.key) return false;
   try {
     return await verify(application.key, signed.sig, encodeApplication(gameId, application));
+  } catch {
+    return false;
+  }
+}
+
+// --- consent -----------------------------------------------------------------
+
+/** Agreeing to a world before there is a game to agree inside.
+ *
+ *  Every other record here carries a game id, for the reason stated at the top
+ *  of this file: a signature over a move in one game must not be replayable as a
+ *  signature over the same move in another. A consent cannot carry one, because
+ *  the game it consents to does not exist yet — its id is the hash of a record
+ *  that will be composed *out of* these signatures.
+ *
+ *  What stands in for it is the proposal id, and the substitution is exact
+ *  rather than approximate. `preamble` is reused unchanged and the proposal hash
+ *  occupies the slot the game id normally holds, because it is doing the game
+ *  id's whole job: naming one specific object so that a signature over it means
+ *  nothing anywhere else. That works only because a proposal cannot recur — the
+ *  seed is random rather than derived from a room code and a clock, so two
+ *  identical-looking worlds are distinct objects and a consent cannot be lifted
+ *  out of one room into another.
+ *
+ *  One signature, and there is no second to collect. A consent is not a vote:
+ *  nothing here binds a key that did not sign, so unanimity is not a threshold
+ *  anybody clears. The set of consents *is* the roster, which is why the
+ *  proposal names nobody — see `composeGenesis`. */
+export interface SignedConsent {
+  key: MemberKey;
+  proposalId: string;
+  /** By `key`, over `TAG_CONSENT ‖ proposalId`. */
+  sig: string;
+}
+
+export function encodeConsent(proposalId: string, key: MemberKey): Uint8Array {
+  const raw = utf8(key);
+  if (!u16(raw.length) || raw.length === 0) throw new Error("consent key is absurd");
+  if (!proposalId) throw new Error("consent proposal id is absurd");
+
+  const record = new Writer(4 + raw.length).u32(raw.length).raw(raw).finish();
+  return concat(preamble(TAG_CONSENT, proposalId), record);
+}
+
+export async function signConsent(
+  identity: Identity,
+  proposalId: string,
+): Promise<SignedConsent> {
+  return {
+    key: identity.key,
+    proposalId,
+    sig: await identity.sign(encodeConsent(proposalId, identity.key)),
+  };
+}
+
+/** Whether a consent was signed by the key it seats, over the proposal it
+ *  names.
+ *
+ *  Deliberately narrow, exactly as `verifyClaim` is. Whether that proposal is
+ *  one anybody proposed, whether the world it describes is one this build can
+ *  play, whether the record composed from it seats this signer where they
+ *  expect — every one of those is a question about a game rather than about a
+ *  signature, and `checkConsent` in `proposal.ts` is where they are asked. */
+export async function verifyConsent(
+  signed: SignedConsent,
+  proposalId: string,
+): Promise<boolean> {
+  if (!signed || typeof signed !== "object" || typeof signed.sig !== "string") return false;
+  if (typeof signed.key !== "string" || !signed.key) return false;
+  // A consent for a different proposal is not a bad signature, it is a record
+  // about something else — and checking it here rather than letting the
+  // signature fail is what makes the distinction legible to the caller.
+  if (signed.proposalId !== proposalId) return false;
+  try {
+    return await verify(signed.key, signed.sig, encodeConsent(proposalId, signed.key));
   } catch {
     return false;
   }

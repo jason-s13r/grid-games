@@ -15,6 +15,7 @@ import {
 import type { Genesis } from "@tessera/sim";
 import { toHex, utf8 } from "./bytes.js";
 import { sha256 } from "./identity.js";
+import { checkConsent } from "./proposal.js";
 
 /** Deterministic JSON: object keys in code-unit order, arrays in place,
  *  undefined dropped. Numbers use JS's own shortest round-trip form, which the
@@ -62,7 +63,8 @@ export type GenesisProblem =
   | "members"
   | "duplicate-key"
   | "seats"
-  | "rules";
+  | "rules"
+  | "consent";
 
 /** Everything a peer checks before it agrees to play. Returns the problems it
  *  found; empty means the record is one this build can join.
@@ -158,6 +160,15 @@ export async function inspectGenesis(genesis: Genesis): Promise<GenesisProblem[]
   // Somebody has to be playing. A record of nothing but vacancies would pass
   // every check above and then end on the first victory pass with no winner.
   if (claimed < 1) problems.push("members");
+
+  // Checked when it is present, and never demanded. `inspectGenesis` is
+  // stateless, so it can ask "does every signature in this list cover the world
+  // this record composes" and it cannot ask "was I meant to be in this" — that
+  // second half needs to know what we signed, and lives in the lobby.
+  //
+  // A record with no `consent` field passes untouched, which is what keeps
+  // every archive, fixture and test written before this one green.
+  if ((await checkConsent(genesis)).state === "failed") problems.push("consent");
 
   return [...new Set(problems)];
 }
