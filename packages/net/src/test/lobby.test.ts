@@ -16,7 +16,15 @@
 // mechanism keeps it out because none is needed.
 
 import { describe, expect, it } from "vitest";
-import { Identity } from "@tessera/protocol";
+import {
+  Identity,
+  checkConsent,
+  composeGenesis,
+  proposalFrom,
+  proposalId,
+  sealGenesis,
+  signConsent,
+} from "@tessera/protocol";
 import { LoopbackNetwork, Lobby } from "../index.js";
 import type { Connection, ConnectionRef, Opener, Seat } from "../index.js";
 import { settle } from "./harness.js";
@@ -233,5 +241,234 @@ describe("two lobbies over a loopback", () => {
     const lobby = await Lobby.open(id, { kind: "rtc", code: "tsr-missing" }, { connect });
     expect(lobby.shareable).toBe("tsr-missing");
     lobby.close();
+  });
+});
+
+describe("a game everybody signed", () => {
+  const world = (over: Record<string, unknown> = {}) =>
+    proposalFrom({ seed: 1234, startedAt: 0, map: { width: 24, height: 24 }, ...over });
+
+  /** Two peers in one room, connected and greeted. */
+  async function room2() {
+    const room = new LoopbackRoom();
+    const connect = room.opener();
+    const aliceId = await Identity.generate();
+    const alice = await Lobby.open(aliceId, undefined, { connect });
+    const bobId = await Identity.generate();
+    const bob = await Lobby.open(bobId, { kind: "rtc", code: alice.code }, { connect });
+    await room.run();
+    return { room, connect, alice, bob, aliceId, bobId };
+  }
+
+  it("a proposal reaches the room, and signing it is what seats you", async () => {
+    const { room, alice, bob, aliceId, bobId } = await room2();
+
+    const id = await alice.propose(world());
+    expect(id).toBeDefined();
+    await room.run();
+
+    // Everybody sees the same world, and nobody has signed it yet.
+    expect(bob.phase).toBe("composing");
+    expect(bob.proposals()).toHaveLength(1);
+    expect(bob.proposals()[0]!.id).toBe(id);
+    expect(bob.proposals()[0]!.signers).toEqual([]);
+
+    expect(await bob.consent(id!)).toBe(true);
+    expect(await alice.consent(id!)).toBe(true);
+    await room.run();
+
+    const seats = [seatOf(alice), seatOf(bob)];
+    expect(await alice.seal(id)).toBe(true);
+    await room.run();
+
+    expect(alice.phase, alice.problem).toBe("playing");
+    expect(bob.phase, bob.problem).toBe("playing");
+
+    // One signer, one empire, in key order — so the seat you get is decided by
+    // your key and not by who sealed.
+    const order = [aliceId.key, bobId.key].sort();
+    const mine = await seats[0]!;
+    const theirs = await seats[1]!;
+    expect(mine!.empire).toBe(order.indexOf(aliceId.key) + 1);
+    expect(theirs!.empire).toBe(order.indexOf(bobId.key) + 1);
+  });
+
+  it("a record that came out of a proposal says who accepted the world", async () => {
+    const { room, alice, bob } = await room2();
+    const id = (await alice.propose(world({ simbots: [] })))!;
+    await room.run();
+    await alice.consent(id);
+    await bob.consent(id);
+    await room.run();
+
+    let sealed: { consent?: unknown } | undefined;
+    alice.onStart = (genesis) => {
+      sealed = genesis;
+    };
+    await alice.seal(id);
+    await room.run();
+
+    expect(await checkConsent(sealed as never)).toEqual({
+      state: "checked",
+      signed: 2,
+      seats: 2,
+    });
+  });
+
+  // The deadlock the world/roster split exists to avoid, over the wire.
+  it("a signature survives somebody else arriving and signing", async () => {
+    const { room, connect, alice, bob } = await room2();
+    const id = (await alice.propose(world()))!;
+    await room.run();
+    await alice.consent(id);
+    await room.run();
+
+    const laterId = await Identity.generate();
+    const later = await Lobby.open(laterId, { kind: "rtc", code: alice.code }, { connect });
+    await room.run();
+
+    // Re-sent to somebody who was not here: a broadcast reaches whoever
+    // happened to be connected in that instant, and a room is a place people
+    // arrive into.
+    expect(later.proposals()).toHaveLength(1);
+    expect(later.proposals()[0]!.signers).toHaveLength(1);
+
+    await bob.consent(id);
+    await later.consent(id);
+    await room.run();
+
+    // Alice signed first and has not re-signed. Her signature is still good.
+    expect(alice.proposals()[0]!.signers).toHaveLength(3);
+    expect(await alice.seal(id)).toBe(true);
+    await room.run();
+    expect(alice.phase, alice.problem).toBe("playing");
+    expect(later.phase, later.problem).toBe("playing");
+  });
+
+  it("a revision supersedes, and an older one replayed does not unseat it", async () => {
+    const { room, alice, bob } = await room2();
+    await alice.propose(world());
+    await room.run();
+    const second = (await alice.propose(world({ vacancies: 1 })))!;
+    await room.run();
+
+    expect(bob.proposals()).toHaveLength(1);
+    expect(bob.proposals()[0]!.rev).toBe(1);
+    expect(bob.proposals()[0]!.id).toBe(second);
+
+    // The earlier world, replayed by anybody who kept it.
+    bob.connection.broadcast({
+      t: "proposal",
+      proposal: world(),
+      rev: 0,
+      by: alice.identity.key,
+    } as never);
+    await room.run();
+    expect(bob.proposals()[0]!.id).toBe(second);
+  });
+
+  // The lead finding, and the reason the exclusion check cannot be stateless.
+  // Sealing a subset is a *valid* record — it is the sealer's one real power —
+  // so a peer left out of a world it signed is the only one who can notice.
+  it("a peer left out of a game it signed fails rather than observing", async () => {
+    const { room, alice, bob, bobId } = await room2();
+    const id = (await alice.propose(world()))!;
+    await room.run();
+    await alice.consent(id);
+    await bob.consent(id);
+    await room.run();
+
+    // Alice seals with her own signature only. The record is impeccable.
+    const honest = await sealGenesis(
+      composeGenesis(alice.proposals()[0]!.proposal, [
+        await signConsent(alice.identity, id),
+      ]),
+    );
+    expect((await checkConsent(honest)).state).toBe("checked");
+
+    alice.connection.broadcast({ t: "genesis", genesis: honest } as never);
+    await room.run();
+
+    expect(bob.phase).toBe("failed");
+    expect(bob.problem).toContain("does not carry your signature");
+    expect(honest.empires.some((e) => e.members[0]?.key === bobId.key)).toBe(false);
+  });
+
+  it("a peer that signed nothing still watches a game it was left out of", async () => {
+    const { room, connect, alice } = await room2();
+    const id = (await alice.propose(world()))!;
+    await room.run();
+    await alice.consent(id);
+    await room.run();
+
+    const watcherId = await Identity.generate();
+    const watcher = await Lobby.open(watcherId, { kind: "rtc", code: alice.code }, { connect });
+    const seat = seatOf(watcher);
+    await room.run();
+    await alice.seal(id);
+    await room.run();
+
+    // It never signed, so it has nothing to be excluded from. An observer by
+    // construction, exactly as before.
+    expect(watcher.phase, watcher.problem).toBe("playing");
+    expect(await seat).toBeUndefined();
+  });
+
+  it("a sealed record whose consents do not verify is refused by everyone", async () => {
+    const { room, alice, bob } = await room2();
+    const id = (await alice.propose(world()))!;
+    await room.run();
+    await alice.consent(id);
+    await bob.consent(id);
+    await room.run();
+
+    const honest = composeGenesis(alice.proposals()[0]!.proposal, [
+      await signConsent(alice.identity, id),
+      await signConsent(bob.identity, id),
+    ]);
+    const tampered = await sealGenesis({
+      ...honest,
+      rules: { ...honest.rules, popMax: honest.rules.popMax + 1 },
+    });
+
+    alice.connection.broadcast({ t: "genesis", genesis: tampered } as never);
+    await room.run();
+    expect(bob.phase).toBe("failed");
+    expect(bob.problem).toContain("consent");
+  });
+
+  it("refuses to seal a world nobody signed", async () => {
+    const { room, alice } = await room2();
+    const id = (await alice.propose(world()))!;
+    await room.run();
+    expect(await alice.seal(id)).toBe(false);
+    expect(alice.problem).toContain("nobody has signed");
+  });
+
+  // A record sealed for a future instant is adopted and does not begin. The
+  // driver may be built early; it is the screen that must not claim the game is
+  // running.
+  it("a game sealed for later sits in `starting` until the instant", async () => {
+    const { room, alice, bob } = await room2();
+    const soon = Date.now() + 30_000;
+    const id = (await alice.propose(world({ startedAt: soon })))!;
+    await room.run();
+    await alice.consent(id);
+    await bob.consent(id);
+    await room.run();
+
+    let started = false;
+    bob.onStart = () => {
+      started = true;
+    };
+    await alice.seal(id);
+    await room.run();
+
+    expect(bob.phase).toBe("starting");
+    expect(started).toBe(false);
+    expect(bob.startsIn).toBeGreaterThan(0);
+    expect(bob.startsIn).toBeLessThanOrEqual(30_000);
+    bob.close();
+    alice.close();
   });
 });

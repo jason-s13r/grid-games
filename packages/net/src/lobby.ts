@@ -31,13 +31,24 @@ import type { BotChoice, DurationRules, EmpireSpec, Genesis } from "@tessera/sim
 import {
   FRAME,
   Identity,
+  composeGenesis,
   fingerprint,
   inspectGenesis,
+  proposalId,
+  proposalOf,
   randomBytes,
   sealGenesis,
+  signConsent,
   toBase64Url,
+  verifyConsent,
 } from "@tessera/protocol";
-import type { Frame, HelloFrame, MemberKey } from "@tessera/protocol";
+import type {
+  Frame,
+  HelloFrame,
+  MemberKey,
+  Proposal,
+  SignedConsent,
+} from "@tessera/protocol";
 import { openConnection } from "./connect.js";
 import type { Connection, ConnectOptions, Opener } from "./connect.js";
 import { formatRef } from "./ref.js";
@@ -55,7 +66,35 @@ import type { FrameHandler, Transport } from "./transport.js";
  *  everything is fine. */
 const JOIN_TIMEOUT_MS = 15_000;
 
-export type LobbyPhase = "connecting" | "hosting" | "waiting" | "playing" | "failed";
+/** Where the arranging has got to.
+ *
+ *  `composing` and `starting` exist because a consented game has two moments
+ *  the old flow did not. A proposal on the table is not yet a game, and a record
+ *  sealed for a future instant is a game that has not begun — `targetStep`
+ *  clamps at zero, so it sits there correctly with no new simulation code, but a
+ *  screen that said "playing" would be showing a frozen board and calling it
+ *  live. `onStart` fires on the way out of `starting`, never on the way in. */
+export type LobbyPhase =
+  | "connecting"
+  | "hosting"
+  | "waiting"
+  | "composing"
+  | "starting"
+  | "playing"
+  | "failed";
+
+/** A world on the table, as a screen wants to read it. */
+export interface Tabled {
+  id: string;
+  proposal: Proposal;
+  /** Monotonic per proposer; a later one supersedes. */
+  rev: number;
+  by: MemberKey;
+  /** Keys that have signed this exact world. */
+  signers: MemberKey[];
+  /** Whether we are among them. */
+  mine: boolean;
+}
 
 export interface LobbyMember {
   peer: string;
@@ -177,6 +216,25 @@ export class Lobby {
    *  renders synchronously, so they are cached as they arrive. */
   private readonly labels = new Map<MemberKey, string>();
 
+  /** Worlds on the table, by proposer. One each: a later `rev` from the same
+   *  key supersedes, and a different proposer is a different proposal that the
+   *  screen shows alongside. Nothing arbitrates between them, because nothing
+   *  has to — a proposal nobody signs dies of that. */
+  private readonly tabled = new Map<MemberKey, { id: string; proposal: Proposal; rev: number }>();
+  /** Signatures held per proposal id. Nobody's copy is authoritative; a sealer
+   *  seals the set it happens to hold, and everyone verifies the result. */
+  private readonly signatures = new Map<string, Map<MemberKey, SignedConsent>>();
+  /** Every world we have put our own name to.
+   *
+   *  A set rather than a single id, and that matters: we may consent to rev 4,
+   *  the proposer may revise, and a sealer may legitimately seal the earlier
+   *  world with the signatures it had. What we must never accept is a record we
+   *  are seated in having signed nothing that composes to it. */
+  private readonly signed = new Set<string>();
+  /** The instant a sealed record begins, while we are waiting for it. */
+  private countdown?: ReturnType<typeof setTimeout>;
+  private pending?: { genesis: Genesis; seat: Seat | undefined };
+
   private constructor(
     readonly identity: Identity,
     readonly connection: Connection,
@@ -295,6 +353,17 @@ export class Lobby {
     // device. They cannot ask for the genesis, because until they have it they
     // do not know the game id every other frame is signed against.
     if (this.sealed) this.connection.send(peer, { t: FRAME.GENESIS, genesis: this.sealed });
+    // Pre-game arrival, which in a persistent room is the interesting case: the
+    // proposal went out before this peer was here, and a broadcast reaches
+    // whoever happened to be connected in that instant. Re-sent for the same
+    // reason `sealed` is — somebody who cannot see the world on the table cannot
+    // sign it, and would sit in a room watching nothing happen.
+    for (const [by, one] of this.tabled) {
+      this.connection.send(peer, { t: FRAME.PROPOSAL, proposal: one.proposal, rev: one.rev, by });
+      for (const signed of this.signatures.get(one.id)?.values() ?? []) {
+        this.connection.send(peer, { t: FRAME.CONSENT, signed });
+      }
+    }
     this.changed();
   }
 
@@ -373,13 +442,162 @@ export class Lobby {
       }
       return;
     }
-    if (frame.t === FRAME.GENESIS && this.phase !== "playing") {
+    if (frame.t === FRAME.PROPOSAL) {
+      void this.tableFrom(frame.proposal, frame.rev, frame.by);
+      return;
+    }
+    if (frame.t === FRAME.CONSENT) {
+      void this.take(frame.signed);
+      return;
+    }
+    if (frame.t === FRAME.GENESIS && this.phase !== "playing" && this.phase !== "starting") {
       void this.adopt(frame.genesis);
       return;
     }
 
     if (this.handler) this.handler(from, frame);
     else if (this.backlog.length < 4096) this.backlog.push({ from, frame });
+  }
+
+  // --- composing together --------------------------------------------------
+
+  /** Put a world on the table. Anybody may; nothing arbitrates.
+   *
+   *  A revision is a counter-proposal — "make it three days" stops being a thing
+   *  you say in chat and hope for, and becomes a rev with one field changed that
+   *  everybody can see and sign. Revising abandons the signatures over the
+   *  previous world, which is correct: they were signatures over a different
+   *  game.
+   *
+   *  Consents to our own proposal are ours to give like anybody's. The proposer
+   *  is not a host and does not sign by proposing — somebody putting a world up
+   *  to see who wants it is a legitimate thing to do. */
+  async propose(proposal: Proposal): Promise<string | undefined> {
+    let id: string;
+    try {
+      id = await proposalId(proposal);
+    } catch {
+      // A non-finite number somewhere in the world. Unhashable is unsignable.
+      this.problem = "that game cannot be described in a record";
+      this.changed();
+      return undefined;
+    }
+    const before = this.tabled.get(this.identity.key);
+    const rev = before ? before.rev + 1 : 0;
+    this.tabled.set(this.identity.key, { id, proposal, rev });
+    if (this.phase === "hosting" || this.phase === "waiting") this.phase = "composing";
+    this.connection.broadcast({ t: FRAME.PROPOSAL, proposal, rev, by: this.identity.key });
+    this.changed();
+    return id;
+  }
+
+  /** Sign a world, meaning *I will play this*.
+   *
+   *  One signature, and there is no second to collect. It carries no game id
+   *  because there is no game: the proposal hash stands in that slot, which
+   *  works only because a proposal cannot recur — the seed is random, so two
+   *  identical-looking worlds in two rooms are distinct objects and a consent
+   *  cannot be lifted out of one into the other. */
+  async consent(id: string): Promise<boolean> {
+    const table = [...this.tabled.values()].find((one) => one.id === id);
+    if (!table) return false;
+    const signed = await signConsent(this.identity, id);
+    this.signed.add(id);
+    this.hold(signed);
+    this.connection.broadcast({ t: FRAME.CONSENT, signed });
+    this.changed();
+    return true;
+  }
+
+  /** Every world on the table, newest proposer order aside, with who has signed
+   *  each. What a screen renders, and the only reason `tabled` is private. */
+  proposals(): Tabled[] {
+    return [...this.tabled.entries()]
+      .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
+      .map(([by, one]) => ({
+        id: one.id,
+        proposal: one.proposal,
+        rev: one.rev,
+        by,
+        signers: [...(this.signatures.get(one.id)?.keys() ?? [])].sort(),
+        mine: this.signed.has(one.id),
+      }));
+  }
+
+  /** Compose the record from a world and whoever signed it, and broadcast it.
+   *
+   *  This is the one clerical act. What the sealer demonstrably cannot do is
+   *  change a rule, seat a non-signer, invent a player or reorder the roster —
+   *  every one of those fails `checkConsent` at every peer that reads the
+   *  record. What is left to it is deciding who was late, which is the one power
+   *  a doorman is supposed to have.
+   *
+   *  It seals the set it holds. Two peers holding different sets seal different
+   *  games, which is why somebody has to say "sealed" and why it does not matter
+   *  much who. */
+  async seal(id?: string): Promise<boolean> {
+    const table = id
+      ? [...this.tabled.values()].find((one) => one.id === id)
+      : this.tabled.get(this.identity.key);
+    if (!table) {
+      this.problem = "there is no proposal to seal";
+      this.changed();
+      return false;
+    }
+    const consents = [...(this.signatures.get(table.id)?.values() ?? [])];
+    if (consents.length === 0) {
+      this.problem = "nobody has signed that game";
+      this.changed();
+      return false;
+    }
+
+    const sealed = await sealGenesis(composeGenesis(table.proposal, consents));
+    this.connection.broadcast({ t: FRAME.GENESIS, genesis: sealed });
+    await this.adopt(sealed);
+    return this.phase === "playing" || this.phase === "starting";
+  }
+
+  /** Somebody else's world, taken onto the table.
+   *
+   *  The id is recomputed here rather than trusted: a proposer that named an id
+   *  its own proposal does not hash to would have every consent signed against a
+   *  world nobody can reconstruct. `decodeFrame` has already refused the numbers
+   *  that would make this throw, and it is wrapped anyway — the cost of being
+   *  wrong is an unhandled rejection in a receive path. */
+  private async tableFrom(proposal: Proposal, rev: number, by: MemberKey): Promise<void> {
+    const before = this.tabled.get(by);
+    // Supersede by revision, and never backwards: a replayed earlier proposal
+    // must not unseat the one everybody is signing.
+    if (before && rev <= before.rev) return;
+    let id: string;
+    try {
+      id = await proposalId(proposal);
+    } catch {
+      return;
+    }
+    this.tabled.set(by, { id, proposal, rev });
+    if (this.phase === "hosting" || this.phase === "waiting") this.phase = "composing";
+    void this.label(by);
+    this.changed();
+  }
+
+  /** Keep a consent if it is one, ignore it if it is not. Verified against the
+   *  proposal it names before it is held, so a sealer never seals junk and a
+   *  screen never shows a signer who did not sign. */
+  private async take(signed: SignedConsent): Promise<void> {
+    if (!signed || typeof signed.proposalId !== "string") return;
+    // Signatures for a world nobody here has proposed are kept anyway: the
+    // proposal and the consents race, and a room is a place people arrive into.
+    if (!(await verifyConsent(signed, signed.proposalId))) return;
+    this.hold(signed);
+    this.changed();
+  }
+
+  private hold(signed: SignedConsent): void {
+    let held = this.signatures.get(signed.proposalId);
+    if (!held) this.signatures.set(signed.proposalId, (held = new Map()));
+    held.set(signed.key, signed);
+    void this.label(signed.key);
   }
 
   /** Compose the game and tell everyone.
@@ -473,7 +691,9 @@ export class Lobby {
   async revive(genesis: Genesis): Promise<boolean> {
     this.connection.broadcast({ t: FRAME.GENESIS, genesis });
     await this.adopt(genesis);
-    return this.phase === "playing";
+    // `starting` counts: the record was accepted, and a game sealed for an
+    // instant that has not arrived is adopted rather than refused.
+    return this.phase === "playing" || this.phase === "starting";
   }
 
   /** Check the record before agreeing to play it, then find our own seat. An
@@ -500,6 +720,30 @@ export class Lobby {
       return;
     }
 
+    // The half `inspectGenesis` cannot do.
+    //
+    // It is stateless, so it can ask "does every signature in this list cover
+    // the world this record composes" and it cannot ask "was *I* meant to be in
+    // this". And the gap matters: sealing a subset of the consents is a valid
+    // record — it is exactly the power the sealer is granted — so a peer left
+    // out of one would pass every check and quietly become an observer of the
+    // game it had agreed to play. Only the peer that signed can notice its own
+    // absence, which is why this lives here and not in the verifier.
+    if (this.signed.size > 0) {
+      const world = proposalOf(genesis);
+      const id = world ? await this.hashOf(world) : undefined;
+      if (id !== undefined && this.signed.has(id)) {
+        const listed = (genesis.consent ?? []).some((one) => one.key === this.identity.key);
+        if (!listed) {
+          this.fail(
+            "the sealed game does not carry your signature — you agreed to that world, " +
+              "and the record that came back seats somebody else in it",
+          );
+          return;
+        }
+      }
+    }
+
     let seat: Seat | undefined;
     genesis.empires.forEach((empire, offset) => {
       empire.members.forEach((member, index) => {
@@ -514,10 +758,54 @@ export class Lobby {
     // joins a game already in progress.
     this.clearWatchdog();
     this.sealed = genesis;
+
+    // A record sealed for a future instant is a game that has not begun.
+    // `targetStep` clamps at zero, so the simulation sits at step 0 correctly
+    // with no new code — but a screen told "playing" would show a frozen board
+    // and call it live, and the driver is built either way. So the phase says
+    // `starting` and `onStart` waits for the instant.
+    const wait = genesis.startedAt - this.now();
+    if (wait > 0) {
+      this.phase = "starting";
+      this.pending = { genesis, seat };
+      this.changed();
+      this.countdown = setTimeout(() => this.begin(), wait);
+      return;
+    }
+
     this.phase = "playing";
     this.changed();
-
     this.onStart?.(genesis, seat, this.baseTransport());
+  }
+
+  /** The instant a game sealed for later actually starts. */
+  private begin(): void {
+    this.countdown = undefined;
+    const waiting = this.pending;
+    this.pending = undefined;
+    if (!waiting || this.phase !== "starting") return;
+    this.phase = "playing";
+    this.changed();
+    this.onStart?.(waiting.genesis, waiting.seat, this.baseTransport());
+  }
+
+  /** How long until a game sealed for a future instant begins, in
+   *  milliseconds, or 0 when it already has. What a countdown renders. */
+  get startsIn(): number {
+    return Math.max(0, (this.sealed?.startedAt ?? 0) - this.now());
+  }
+
+  /** Wall clock, in one place so a test can hold it still. */
+  private now(): number {
+    return Date.now();
+  }
+
+  private async hashOf(world: Proposal): Promise<string | undefined> {
+    try {
+      return await proposalId(world);
+    } catch {
+      return undefined;
+    }
   }
 
   /** The page's one view of the connection. Its listener is routed through the lobby
@@ -546,6 +834,8 @@ export class Lobby {
 
   close(): void {
     this.clearWatchdog();
+    if (this.countdown !== undefined) clearTimeout(this.countdown);
+    this.countdown = undefined;
     this.connection.close();
   }
 }
