@@ -1150,6 +1150,7 @@ const panel = new LobbyPanel(lobbyEl, {
   invite: (key) => void mesh?.amend(key),
   endorse: (empire, key) => void mesh?.endorse(empire, key),
   admit: (empire, key) => void mesh?.admit(empire, key),
+  consent: (id) => void lobby?.consent(id),
 });
 
 /** The flow: which kind of game, then the one form that configures it, then

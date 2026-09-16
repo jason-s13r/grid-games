@@ -26,6 +26,10 @@ export interface LobbyHandlers {
    *  proposal, everybody after them signs the one that exists — which is the
    *  driver's distinction, not this panel's. */
   admit: (empire: number, key: MemberKey) => void;
+  /** Put our name to a world somebody has proposed. Signing is what seats you:
+   *  the roster of a co-signed game *is* the set of people who signed it, so
+   *  this button is the whole of joining one. */
+  consent: (id: string) => void;
   /** How many human empires the picker has composed, so the bot rows on the
    *  shared form can be coloured with the empires they will actually hold. */
   seated?: (empires: number) => void;
@@ -101,6 +105,10 @@ export class LobbyPanel {
       }
       if (action === "endorse" && button.dataset.key) {
         this.handlers.endorse(Number(button.dataset.empire), button.dataset.key);
+        return;
+      }
+      if (action === "consent" && button.dataset.proposal) {
+        this.handlers.consent(button.dataset.proposal);
       }
     });
 
@@ -212,6 +220,15 @@ export class LobbyPanel {
         <p class="hint">Joined <code>${escape(lobby.shareable)}</code>. The host sets
         the map, the length and the opponents; the game starts when they do.</p>`;
     }
+    if (lobby.phase === "composing") return this.tableBody(lobby);
+    if (lobby.phase === "starting") {
+      const secs = Math.ceil(lobby.startsIn / 1000);
+      return `
+        <p class="hint">Agreed. The game starts in ${secs} second${secs === 1 ? "" : "s"},
+        at the instant in the record — so everybody begins on the same step rather
+        than whenever their copy of it arrived.</p>
+        <p class="hint" data-lobby-status></p>`;
+    }
 
     const { players, teamOf, empires } = this.compose();
     const alone = players.length === 1;
@@ -241,6 +258,56 @@ export class LobbyPanel {
              people than another.</p>`
           : ""
       }`;
+  }
+
+  /** Worlds on the table, and the one button that matters.
+   *
+   *  A signer count and no tally: there is no threshold to reach, because the
+   *  set of signatures *is* the roster. Four people signing is a game of four,
+   *  not four votes out of some number — so the line says how many will be
+   *  playing rather than how many are still needed.
+   *
+   *  The proposal screen proper — the duration control, the vacancy rows, the
+   *  profile editor, the revision history — is 0014. This is the sign button on
+   *  the panel that already exists, and nothing more. */
+  private tableBody(lobby: Lobby): string {
+    const worlds = lobby.proposals();
+    if (worlds.length === 0) return `<p class="hint">Nothing on the table yet.</p>`;
+
+    const rows = worlds
+      .map((world) => {
+        const n = world.signers.length;
+        const bots = world.proposal.simbots.length;
+        const vacant = world.proposal.vacancies;
+        const extra = [
+          bots ? `${bots} bot empire${bots === 1 ? "" : "s"}` : "",
+          vacant ? `${vacant} empire${vacant === 1 ? "" : "s"} left open` : "",
+        ]
+          .filter(Boolean)
+          .join(", ");
+        return `
+        <li class="lobby-seat">
+          <span class="lobby-who">${world.proposal.map.width}\u00d7${world.proposal.map.height}${
+            extra ? ` \u2014 ${escape(extra)}` : ""
+          }
+            <span class="lobby-tally">${n} signed${world.rev > 0 ? `, rev ${world.rev}` : ""}</span></span>
+          ${
+            world.mine
+              ? `<span class="lobby-tally">you signed</span>`
+              : `<button class="btn btn-small" data-lobby-action="consent"
+            data-proposal="${escape(world.id)}">Play this</button>`
+          }
+        </li>`;
+      })
+      .join("");
+
+    return `
+      <p class="hint">Share this room:</p>
+      <p class="lobby-room"><code>${escape(lobby.shareable)}</code></p>
+      <p class="hint">A game on the table. Signing it is what seats you \u2014 the
+      players are whoever signed, so nobody can put you in a game you did not
+      agree to, and nobody else signing changes the world you did.</p>
+      <ul class="lobby-teams">${rows}</ul>`;
   }
 
   private seatRow(player: LobbyPlayer, team: number, used: number): string {
