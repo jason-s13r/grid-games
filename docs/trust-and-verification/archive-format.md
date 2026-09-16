@@ -81,6 +81,19 @@ Team chat is [per-message ECDH fanout](../protocol/team-chat.md) with no group
 key, so there is nothing to publish afterwards — an archived team channel stays
 ciphertext forever. A deliberate trade, not an unbuilt feature.
 
+## Every direct message ever sent is in here, unreadable
+
+`messages` holds every `SignedMessage` exactly as it crossed the wire, which
+now includes `channel: 2`. The archive therefore contains every private word
+anybody exchanged during the game, sealed, permanently — and permanently is
+the right word, because the construction is static-static ECDH with no
+ephemeral component: anyone who later obtains either party's private key can
+open their whole conversation out of any copy of this file.
+
+Nothing about the format changed to allow it. `channel` is a `u8` in the signed
+bytes and `messageInRange` accepts the whole range, so a direct message
+verifies exactly like any other and `ARCHIVE_FORMAT` did not move.
+
 ## from, and gaps
 
 `from` is **where this peer started watching**, not the step of its first record: a

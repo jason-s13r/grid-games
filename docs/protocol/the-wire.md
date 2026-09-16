@@ -18,7 +18,7 @@ recognise. A peer can send whatever it likes; none of it should raise an
 exception on the receiving side. `decodeFrame` checks only *shape* — field-level
 checking belongs to the verifier, which re-derives the payload anyway.
 
-## The eighteen frame types
+## The nineteen frame types
 
 `FRAME` ([`wire.ts:25`](../../packages/protocol/src/wire.ts#L25)). Only `move`
 carries a move; the rest are how peers agree about moves, and none can change
@@ -26,7 +26,7 @@ state on its own.
 
 | Frame | Carries | Purpose |
 |---|---|---|
-| `hello` | `protocol`, `gameId`, `key?`, `nonce` | opens a connection; `key` is a claim, not yet a fact. An observer sends none |
+| `hello` | `protocol`, `gameId`, `key?`, `name?`, `nonce` | opens a connection; `key` is a claim, not yet a fact, and `name` has exactly the same standing — there is no game id to sign either against. An observer sends no key |
 | `welcome` | `key?`, `nonce`, `proof?` | the host's side of the handshake |
 | `proof` | `proof` | the joiner's signature over both nonces |
 | `genesis` | the **full** `Genesis` record | so a joiner computes the game id itself |
@@ -40,6 +40,7 @@ state on its own.
 | `application` | `SignedApplication` | somebody asking an empire for a seat; **re-sent on a slow timer**, because it never grows and so cannot be gossiped by growth |
 | `proposal` | `Proposal`, `rev`, `by` | a world somebody is suggesting. A later `rev` from the same `by` supersedes; a different `by` is a different proposal. `by` is **attribution, not authority** — nothing arbitrates, because a proposal nobody signs dies of that |
 | `consent` | `SignedConsent` | one signature over one proposal id. Not a tally: the set of these *is* the roster |
+| `name` | `SignedNaming` | what a seat would like to be called; **re-sent on a slow timer**, because a name is persistent UI state and a missed one never repairs itself |
 | `equivocation` | `EquivocationProof` | a self-contained proof of cheating |
 | `snapshot?` | `step` | a request — the step is advisory |
 | `snapshot` | `step`, `hash`, `data` (base64url), `amendments?`, `claims?`, `drops?` | the world at a step |

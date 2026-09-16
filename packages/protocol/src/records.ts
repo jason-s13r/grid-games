@@ -113,13 +113,20 @@ export async function verifyMove(
 
 // --- chat --------------------------------------------------------------------
 
-export const CHANNEL = { PUBLIC: 0, TEAM: 1 } as const;
+export const CHANNEL = { PUBLIC: 0, TEAM: 1, DIRECT: 2 } as const;
 export type Channel = (typeof CHANNEL)[keyof typeof CHANNEL];
 
 /** Ordered, signed and attributable — but never hashed into state. That is the
  *  whole reason chat is safe: a message that arrives late, out of order, or not
  *  at all cannot cause a desync. `body` is plaintext on PUBLIC and base64url
- *  AES-GCM ciphertext on TEAM. */
+ *  AES-GCM ciphertext on TEAM and DIRECT.
+ *
+ *  **The recipient of a DIRECT message is not a field here**, and that is the
+ *  design rather than an omission: the envelope already carries it, wrapped, so
+ *  the wire shows *that* a seat spoke privately and never to whom. `channel` is
+ *  a `u8` and `messageInRange` accepts the whole range, so this record did not
+ *  have to change at all — which is also why `ARCHIVE_FORMAT` did not: a
+ *  `channel: 2` message verifies exactly like any other. */
 export interface Message {
   step: number;
   seq: number;

@@ -34,7 +34,9 @@ import {
   mergeAmendment,
   mergeDrop,
   signCheckpoint,
+  openDirectBody,
   openTeamBody,
+  sealDirectBody,
   sealTeamBody,
   signMessage,
   signMove,
@@ -385,6 +387,14 @@ export class Lockstep {
   private askedAt = -Infinity;
   /** Names, keyed by `MemberKey` — see `names.ts` for why not by seat. */
   private readonly named = new Names();
+  /** Who each of our own direct messages went to, by `seq`.
+   *
+   *  Local and never sent: the record does not name a recipient, which is the
+   *  property the whole envelope exists for. Without this, our own DMs are the
+   *  one thing we cannot read back — we hold both wraps, but not the label
+   *  saying which counterpart to derive against. Lost on reload, like the rest
+   *  of a chat scrollback. */
+  private readonly sentTo = new Map<number, MemberKey>();
   private myName = "";
   private namedAt = -Infinity;
   private nameSeq = 0;
@@ -427,6 +437,12 @@ export class Lockstep {
 
   get seat(): Seat | undefined {
     return this.options.seat;
+  }
+
+  /** The key this peer plays under, if it holds one. A screen listing who can
+   *  be written to needs it to leave us off the list. */
+  get key(): MemberKey | undefined {
+    return this.options.identity?.key;
   }
 
   get step(): number {
@@ -653,12 +669,23 @@ export class Lockstep {
    *  ciphertext to everyone but them. The signature still names the sender, so
    *  an opponent can see that somebody on empire 2 said something; only the
    *  words are private. */
-  async say(body: string, channel: Channel = CHANNEL.PUBLIC): Promise<boolean> {
+  async say(body: string, channel: Channel = CHANNEL.PUBLIC, to?: MemberKey): Promise<boolean> {
     const seat = this.options.seat;
     const identity = this.options.identity;
     if (!seat || !identity) return false;
 
     let wire = body;
+    if (channel === CHANNEL.DIRECT) {
+      // Seat to seat, and deliberately not to a seatless peer: there is no key
+      // directory outside the roster here, and every lookup in this file goes
+      // through it. The people most likely to want a private word — somebody
+      // asking for a seat, somebody watching — are exactly who this cannot
+      // reach, and that is a known cost rather than an oversight.
+      if (!to || !this.roster.seatOf(to)) return false;
+      const sealed = await sealDirectBody(identity, this.gameId, to, body);
+      if (!sealed) return false;
+      wire = sealed;
+    }
     if (channel === CHANNEL.TEAM) {
       const mates = this.roster
         .membersOf(seat.empire)
@@ -677,6 +704,7 @@ export class Lockstep {
       channel,
       body: wire,
     };
+    if (channel === CHANNEL.DIRECT && to) this.sentTo.set(message.seq, to);
     const signed = await signMessage(identity, this.gameId, message);
     this.transport.broadcast({ t: FRAME.MESSAGE, signed });
     // Our own line comes back as what we typed. The sender is not among its own
@@ -947,11 +975,31 @@ export class Lockstep {
 
   /** What a message says to us, or null when it does not say anything to us.
    *  Another empire's team traffic is the ordinary case, not an error. */
+  /** What a message says to *us*, or null when it says nothing.
+   *
+   *  Dispatched on the channel **first**, which is the whole of the change a DM
+   *  forces. The old shape short-circuited on `seat.empire !== message.empire`
+   *  before looking at anything else — correct for team traffic and exactly
+   *  backwards for a direct message, which arrives from an arbitrary empire and
+   *  has to be attempted anyway. */
   private async read(message: Message): Promise<string | null> {
-    if (message.channel !== CHANNEL.TEAM) return message.body;
-
     const seat = this.options.seat;
     const identity = this.options.identity;
+
+    if (message.channel === CHANNEL.DIRECT) {
+      if (!seat || !identity) return null;
+      const sender = this.roster.keyOf(message.empire, message.member);
+      if (!sender) return null;
+      // Our own line, read back out of the log rather than out of the UI: a v2
+      // envelope carries the sender's wrap too, so a conversation survives a
+      // reload with both halves in it. `to` is remembered locally because the
+      // record does not name it — that is the point of the record.
+      const counterpart = sender === identity.key ? this.sentTo.get(message.seq) : sender;
+      if (!counterpart) return null;
+      return openDirectBody(identity, this.gameId, counterpart, message.body);
+    }
+
+    if (message.channel !== CHANNEL.TEAM) return message.body;
     if (!seat || !identity || seat.empire !== message.empire) return null;
 
     const sender = this.roster.keyOf(message.empire, message.member);

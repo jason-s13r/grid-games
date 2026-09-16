@@ -1172,8 +1172,27 @@ let mesh: Lockstep | undefined;
 let archive: Archive | undefined;
 
 const chat = new ChatPanel(chatEl, {
-  send: (body, channel) => void mesh?.say(body, channel),
+  send: (body, channel, to) => void mesh?.say(body, channel, to),
 });
+
+/** Who this tab can write to privately.
+ *
+ *  Everybody seated except us, by key, with the name they are known by. Rebuilt
+ *  rather than captured: people arrive by amendment and by claim for as long as
+ *  the join window is open, and a list taken once is a list of who was here when
+ *  the game started. */
+function refreshCorrespondents(): void {
+  const driver = mesh;
+  if (!driver?.seat) return chat.setCorrespondents([]);
+  const mine = driver.key;
+  chat.setCorrespondents(
+    driver.roster
+      .all()
+      .map((seat) => driver.roster.keyOf(seat.empire, seat.member))
+      .filter((key): key is string => !!key && key !== mine)
+      .map((key) => ({ key, label: nameFor(driver, key) })),
+  );
+}
 
 const panel = new LobbyPanel(lobbyEl, {
   seated: (empires) => rivals.seat(empires + 1),
@@ -1258,6 +1277,7 @@ panel.onChange = () => setup.refresh();
 function openChat(seat: { empire: number; member: number }): void {
   const empires = mesh?.sim.state.empires ?? [];
   chat.open(seat, (empires[seat.empire - 1]?.members.length ?? 1) - 1);
+  refreshCorrespondents();
   chat.note(`You are ${empireTheme(seat.empire).name}. Say hello.`);
 }
 
@@ -1266,6 +1286,24 @@ function openChat(seat: { empire: number; member: number }): void {
  *  Recomputed rather than remembered: the roster changes underneath this — a
  *  vote carries, somebody arrives — and a cached answer would be wrong in
  *  exactly the moments it matters. The panel drops it when nothing changed. */
+/** What to call a key, on a screen where somebody is about to decide something
+ *  about it.
+ *
+ *  Three sources, best first: a **signed** naming from the driver, an
+ *  unverified one off a lobby hello, and the bare fingerprint. Every one of them
+ *  ends up in `displayName`, so the hex is always there — a decision prompt
+ *  showing only a chosen prefix would be a prompt anybody could spoof by
+ *  choosing the same prefix.
+ *
+ *  "someone" was what this said before there were names, and it is the one
+ *  answer strictly worse than hex: it is not even wrong about who, it declines
+ *  to say. */
+function nameFor(driver: Lockstep, key: MemberKey): string {
+  const player = (lobby?.players() ?? []).find((who) => who.key === key);
+  const fingerprint = player?.label ?? key.slice(0, 8);
+  return displayName(driver.nameOf(key) || cleanName(player?.name), fingerprint);
+}
+
 function rosterView(driver: Lockstep): RosterView {
   const here = lobby?.players() ?? [];
 
@@ -1281,11 +1319,7 @@ function rosterView(driver: Lockstep): RosterView {
    *  "someone" was what this said before there were names, and it is the one
    *  answer that is strictly worse than hex: it is not even wrong about who,
    *  it declines to say. */
-  const call = (key: MemberKey): string => {
-    const player = here.find((who) => who.key === key);
-    const fingerprint = player?.label ?? key.slice(0, 8);
-    return displayName(driver.nameOf(key) || cleanName(player?.name), fingerprint);
-  };
+  const call = (key: MemberKey): string => nameFor(driver, key);
 
   const ours = driver.seat?.empire;
   // The same expression the sim and the lockstep use: read off the record,
@@ -1444,7 +1478,10 @@ async function begin(input?: string | JoinTarget): Promise<void> {
     // record against this game id, and from here the driver's answer is the one
     // every screen prefers over the lobby's.
     if (seat) void driver.rename(myName());
-    driver.onNamed = () => panel.setRoster(rosterView(driver));
+    driver.onNamed = () => {
+      panel.setRoster(rosterView(driver));
+      refreshCorrespondents();
+    };
 
     archive = new Archive(genesis, driver);
     archive.attach(driver);

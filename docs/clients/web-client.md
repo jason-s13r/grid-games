@@ -266,3 +266,17 @@ answer.
 Note that `node`'s `src/test/**/*.test.ts` glob matches `*.browser.test.ts` too,
 so it carries an explicit `exclude`; without it every browser test runs twice and
 fails once.
+
+## Your name
+
+Set in Settings, kept in `localStorage` beside the keypair, and said again in
+every game this browser joins. A label and never a credential: the key is the
+seat, and losing the name costs nothing.
+
+Shown as `name#fingerprint` wherever somebody is deciding something about you,
+because anybody may pick any name — see [identity](../protocol/identity.md). The
+field previews the cleaned string beside the fingerprint, so a name that turns
+out to be mostly invisible characters says so there rather than nowhere.
+
+Renaming applies live. A naming is a signed record outside the hash, which is
+the whole point of it being there: it can change without anything else having to.

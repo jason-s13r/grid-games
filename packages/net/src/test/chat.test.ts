@@ -7,7 +7,7 @@
 import { beforeAll, describe, expect, it } from "vitest";
 import { CHANNEL, FRAME } from "@tessera/protocol";
 import type { Frame } from "@tessera/protocol";
-import { agreed, run, table } from "./harness.js";
+import { agreed, run, settleNetwork, table } from "./harness.js";
 import type { Table } from "./harness.js";
 
 /** Every chat message to this peer is dropped on the floor. If chat were inside
@@ -93,4 +93,67 @@ describe("team chat is private to the empire", () => {
   });
 
   it("and nothing about it touched the state", () => expect(agreed(t)).toBe(true));
+});
+
+describe("a word to one person", () => {
+  // A DM is team chat with a different derivation and one fewer field, and the
+  // field it drops is the point: the recipient is not named anywhere, so the
+  // wire shows that a seat spoke privately and never to whom.
+  it("reaches its recipient and nobody else, across empires", async () => {
+    const t = await table({ seats: [2, 2] });
+    const [alice, mate, rival] = t.peers;
+    const NOTE = "your left flank is open and I am not going to take it";
+
+    expect(await alice!.driver.say(NOTE, CHANNEL.DIRECT, rival!.driver.key!)).toBe(true);
+    await settleNetwork(t);
+
+    const heardBy = (peer: (typeof t.peers)[number]) =>
+      peer.heard[peer.chat.findIndex((m) => m.channel === CHANNEL.DIRECT)];
+
+    expect(heardBy(rival!)).toBe(NOTE);
+    // Our own half of the conversation, which the two-wrap envelope is what
+    // buys: a conversation with every other line blank reads as broken.
+    expect(heardBy(alice!)).toBe(NOTE);
+    // A teammate on the sender's own empire gets nothing. A DM is not team chat
+    // with a shorter list.
+    expect(mate!.chat.some((m) => m.channel === CHANNEL.DIRECT)).toBe(true);
+    expect(heardBy(mate!)).toBeNull();
+  });
+
+  it("is refused without a recipient, and to somebody who is not seated", async () => {
+    const t = await table({ seats: [1, 1], applicants: 1 });
+    const alice = t.peers[0]!;
+    const watcher = t.peers.find((peer) => !peer.seat && peer.identity)!;
+
+    expect(await alice.driver.say("hello?", CHANNEL.DIRECT)).toBe(false);
+    // No key directory outside the roster: the people most likely to want a
+    // private word are exactly the ones this cannot reach.
+    expect(await alice.driver.say("hello?", CHANNEL.DIRECT, watcher.driver.key!)).toBe(false);
+  });
+
+  it("cannot desync a game, like every other thing outside the hash", async () => {
+    const t = await table({ seats: [2, 1] });
+    const targets = t.peers.filter((peer) => peer.seat && peer.identity);
+    await run(t, 72, async (step) => {
+      if (step % 9 !== 0) return;
+      const from = targets[0]!;
+      for (const to of targets.slice(1)) {
+        await from.driver.say(`step ${step}`, CHANNEL.DIRECT, to.driver.key!);
+      }
+    });
+    expect(agreed(t)).toBe(true);
+  });
+
+  it("an old build drops a channel it does not know and keeps playing", async () => {
+    const t = await table({ seats: [2, 1] });
+    const targets = t.peers.filter((peer) => peer.seat && peer.identity);
+    await run(t, 48, async (step) => {
+      if (step % 8 !== 0) return;
+      await targets[0]!.driver.say("x", CHANNEL.DIRECT, targets[1]!.driver.key!);
+    });
+    // `channel` is a u8 and `messageInRange` accepts the whole range, so a peer
+    // that does not know channel 2 verifies the signature, fails to open the
+    // body and drops the line — which is what chat is allowed to do.
+    expect(agreed(t)).toBe(true);
+  });
 });

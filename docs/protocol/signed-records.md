@@ -32,6 +32,7 @@ that arrived.
 | `SignedAmendment` | `amendment/1` | `empire, step, key, kind` + endorsement list | a [quorum](roster.md) of the empire's *existing* seats | "seat this key" — becomes a `ROSTER_AMEND` [move](../continuity/roster-amendments.md) locally |
 | `SignedClaim` | `claim/1` | `empire, key, step` | **the key it seats** | "I am taking this empire nobody has claimed" — becomes a `ROSTER_AMEND` [move](../gameplay/empires-and-seats.md) |
 | `SignedApplication` | `application/1` | `empire, key, step` | **the key that is asking** | "I would like a seat on this empire" — becomes nothing on its own; a member's agreement turns it into an amendment |
+| `SignedNaming` | `name/1` | `step, seq, empire, member, name` (`name` ≤ 64 bytes) | the seat | "call me this" — attributable, **never hashed**, latest `(step, seq)` wins with a signature tiebreak |
 | `SignedConsent` | `consent/1` | `key, proposalId` | **the key it seats** | "I will play this world" — the set of these *is* the roster of a [co-signed game](../mesh/the-lobby.md) |
 | `EquivocationProof` | — (each half is a `move/1`) | `{ a: SignedMove, b: SignedMove }` | carries two seat signatures | proof one seat signed two moves for one `(empire, member, step, seq)` — [equivocation](../continuity/equivocation.md) |
 | handshake | `hello/1` | both nonces (`NONCE_BYTES` = 16) | each side | mutual challenge-response — [joining](../continuity/joining.md) |
@@ -61,6 +62,26 @@ authorisation story in one sentence:
 A claim and an application are the same bytes with a different tag, and that is
 what the [domain tag](#the-three-properties) is for: a signature over one can
 never be replayed as the other.
+
+### A name is in chat's class, and could not be anywhere else
+
+A naming is verified exactly as a message is, and for the same reason it can
+never move the hash. But the stronger argument is not about taste: **a name
+could not be part of the world even if somebody wanted it there.** `gameIdOf`
+hashes the whole genesis minus its own id, so a `name` on `MemberSpec` would be
+*inside the game id* — renaming would be impossible, and two peers holding
+different names for one seat would compute different game ids and never meet.
+
+Two consequences the record's shape does not show:
+
+- **The store is keyed by `MemberKey`, not by seat.** The record names a seat,
+  because a seat is what `roster.keyOf` can check a signature against. Within one
+  game a seat index is not stable across a drop and a return, so a name kept
+  under `empire:member` would follow the chair rather than the person.
+- **Ties break on the signature bytes.** Two namings from one seat at one
+  `(step, seq)` are not a desync — nothing here is hashed — but they are a
+  permanent UI split, two peers showing different names for one person for the
+  rest of the game. `EquivocationWatch` covers moves and only moves.
 
 ### The one record with no game id
 

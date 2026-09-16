@@ -51,3 +51,30 @@ Safe because the two uses are cryptographically separated: ECDSA signs
 domain-tagged payloads; every ECDH-derived secret goes through HKDF with its own
 tag ([`secrets.ts:50`](../../packages/protocol/src/secrets.ts#L50)). Neither can
 be made to produce something the other would accept.
+
+## name#fingerprint
+
+A `MemberKey` is unreadable and a `fingerprint(key)` is eight hex characters,
+which tells two strangers apart and is useless for playing with people you know.
+A [naming](signed-records.md) puts a word in front of it.
+
+**The suffix is not optional.** Nothing stops two players choosing `master5o1`
+and nothing should: uniqueness needs an authority to arbitrate, and there is no
+authority anywhere in this system by design. So the name is never shown alone —
+`master5o1#a3f19c04` is the rendering, the eight hex characters are the identity,
+and **impersonation is made visible rather than prevented**. A chat line may
+abbreviate to the prefix where the seat colour already disambiguates; the roster,
+the rivals panel and every join or endorsement prompt show the full form.
+
+**Every string off the wire is filtered before it is rendered.** `escape()`
+replaces `&`, `<`, `>` and `"` and nothing else, which is enough against
+injection and useless here: a name containing U+202E passes through it untouched
+and reverses the rendering of everything after it on the line — *including the
+fingerprint that was supposed to make impersonation visible*. So `cleanName`
+strips the control, bidi and zero-width classes, normalises to NFC, collapses
+whitespace and truncates to 64 bytes on a code point boundary, and it runs on the
+**reader's** side. Input validation is worth nothing here: the sender is
+untrusted and a hostile client does not run ours.
+
+The cap is in bytes because "24 characters" is three different numbers — UTF-16
+units, bytes, grapheme clusters — and only the encoder's can be the wire's.

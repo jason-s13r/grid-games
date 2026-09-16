@@ -1,0 +1,31 @@
+{
+  "alice": {
+    "key_ops": [
+      "sign"
+    ],
+    "ext": true,
+    "kty": "EC",
+    "x": "o43StTap4l5rG45cq5skKguHlZn4Q_izUrHPh3xhaTw",
+    "y": "MbpPO3KZucRzkNQbfgZjMD2BlVWBQol46ylFLvrQHf0",
+    "crv": "P-256",
+    "d": "70dP2oSGdMHR1SMXppsUTpNEWbahV3JFQz3IrUZfhn8"
+  },
+  "bob": {
+    "key_ops": [
+      "sign"
+    ],
+    "ext": true,
+    "kty": "EC",
+    "x": "v4-5B3GaYCcFSuhejj63z99rTu1dEc0bQmERusUZkj4",
+    "y": "py6zQIAkL56cG8NM97uqnSoZgEmqLeRSd8_ckSn9evI",
+    "crv": "P-256",
+    "d": "ArT8OYnPfAFyFhXWi1n9Rrbd2kqxuYhruQcYpRLzYSM"
+  },
+  "aliceKey": "BKON0rU2qeJeaxuOXKubJCoLh5WZ-EP4s1Kxz4d8YWk8MbpPO3KZucRzkNQbfgZjMD2BlVWBQol46ylFLvrQHf0",
+  "bobKey": "BL-PuQdxmmAnBUroXo4-t8_fa07tXRHNG0JhEbrFGZI-py6zQIAkL56cG8NM97uqnSoZgEmqLeRSd8_ckSn9evI",
+  "gameId": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+  "empire": 2,
+  "member": 1,
+  "text": "the bridge at dawn, and bring everything",
+  "body": "AQENXQPGwxdLxH5GGxcBFzDEQrXEXs9_oW1iEc9O4vpEN5mfW-daeAjT2DsrvvpgWZKJRRYc5OxS3yH893e2jBIDhRhpgZO_uIKh1GN1jgSF3D8iAJCH1POFpOVRdpsZMGpofMDEnyOPC0mbgfEG_B2ynmmGdLxXAo01ixpCYz4WnYE"
+}

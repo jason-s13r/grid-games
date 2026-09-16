@@ -4,9 +4,18 @@
 // tampered body — gets nothing.
 
 import { beforeAll, describe, expect, it } from "vitest";
-import { Identity, openTeamBody, sealTeamBody } from "../index.js";
+import {
+  Identity,
+  fromBase64Url,
+  openDirectBody,
+  openTeamBody,
+  sealDirectBody,
+  sealTeamBody,
+  toBase64Url,
+} from "../index.js";
 import type { Teammate } from "../index.js";
 import { fixture } from "./fixture.js";
+import vector from "./vectors/team-chat-v1.json" with { type: "json" };
 import type { Fixture } from "./fixture.js";
 
 let f: Fixture;
@@ -122,5 +131,141 @@ describe("size", () => {
     const crowd: Teammate[] = [1, 2, 3, 4].map((member) => ({ member, key: f.bob.key }));
     const body = await sealTeamBody(f.alice, f.gameId, 1, crowd, "x".repeat(280));
     expect(body!.length).toBeLessThan(2048);
+  });
+});
+
+describe("the stored v1 vector", () => {
+  // The tripwire, and the reason this file could not have one before.
+  //
+  // Every other test here seals an envelope and opens it five milliseconds
+  // later with the same code — `fixture()` generates fresh keypairs on every
+  // call and `sealTeamBody` draws a fresh content key per message — so a
+  // changed derivation would go on passing forever, because the thing being
+  // opened was sealed by the change.
+  //
+  // This opens bytes that were written before. `ArchivedGame.messages` holds
+  // every `SignedMessage` exactly as it crossed the wire, so archives on disk
+  // already contain v1 bodies and `openTeamBody` is the only thing that will
+  // ever read them again.
+  it("still opens, and its plaintext is unchanged", async () => {
+    const bob = await Identity.restore(JSON.stringify(vector.bob));
+    expect(bob).toBeTruthy();
+    const text = await openTeamBody(
+      bob!,
+      vector.gameId,
+      vector.empire,
+      vector.aliceKey,
+      vector.member,
+      vector.body,
+    );
+    expect(text).toBe(vector.text);
+  });
+
+  it("does not open for anybody else", async () => {
+    const alice = await Identity.restore(JSON.stringify(vector.alice));
+    // Not even its own sender: the sender is not among its own recipients.
+    await expect(
+      openTeamBody(alice!, vector.gameId, vector.empire, vector.aliceKey, 0, vector.body),
+    ).resolves.toBeNull();
+  });
+
+  // The assertion that would have caught `VERSION` moving from 1 to 2 and
+  // silently deleting the empire binding along with it: a team message's
+  // wrapping key is derived over the game *and the empire*, so the same text
+  // for the same pair on two empires produces different wraps.
+  it("a team key still binds the empire it was sealed for", async () => {
+    const bob = await Identity.restore(JSON.stringify(vector.bob));
+    // The vector was sealed on empire 2. Opening it as empire 3 derives a
+    // different key and gets nothing, which is the binding, asserted.
+    await expect(
+      openTeamBody(bob!, vector.gameId, 3, vector.aliceKey, vector.member, vector.body),
+    ).resolves.toBeNull();
+    // And the game id binds too.
+    await expect(
+      openTeamBody(bob!, "another-game", vector.empire, vector.aliceKey, vector.member, vector.body),
+    ).resolves.toBeNull();
+  });
+});
+
+describe("a direct message", () => {
+  const NOTE = "I will not march on you if you do not march on me";
+
+  it("opens for its recipient", async () => {
+    const sealed = (await sealDirectBody(f.alice, f.gameId, f.bob.key, NOTE))!;
+    await expect(openDirectBody(f.bob, f.gameId, f.alice.key, sealed)).resolves.toBe(NOTE);
+  });
+
+  // The clause the plan's honest statement was missing, and the reason the
+  // envelope carries two wraps instead of one: live, the UI shows what was
+  // typed — but on reload, on resume and in every archive, a two-person
+  // conversation with every other line blank reads as broken, not as private.
+  it("opens for its own sender", async () => {
+    const sealed = (await sealDirectBody(f.alice, f.gameId, f.bob.key, NOTE))!;
+    await expect(openDirectBody(f.alice, f.gameId, f.bob.key, sealed)).resolves.toBe(NOTE);
+  });
+
+  it("opens for nobody else, including the sender's own teammates", async () => {
+    const sealed = (await sealDirectBody(f.alice, f.gameId, f.mallory.key, NOTE))!;
+    // Carol shares an empire with Alice and gets nothing: a DM is not team chat
+    // with a shorter list.
+    await expect(openDirectBody(f.carol, f.gameId, f.alice.key, sealed)).resolves.toBeNull();
+    await expect(openDirectBody(f.bob, f.gameId, f.alice.key, sealed)).resolves.toBeNull();
+  });
+
+  it("does not open against the wrong counterpart", async () => {
+    const sealed = (await sealDirectBody(f.alice, f.gameId, f.bob.key, NOTE))!;
+    await expect(openDirectBody(f.bob, f.gameId, f.carol.key, sealed)).resolves.toBeNull();
+  });
+
+  it("does not open in another game", async () => {
+    const sealed = (await sealDirectBody(f.alice, f.gameId, f.bob.key, NOTE))!;
+    await expect(openDirectBody(f.bob, "another-game", f.alice.key, sealed)).resolves.toBeNull();
+  });
+
+  // The property the whole envelope exists for. The recipient is not a field
+  // anywhere — not in the `Message` record and not in the wrap — so the wire
+  // shows that a seat spoke privately and never to whom.
+  it("does not name its recipient, and every envelope is the same shape", async () => {
+    const toBob = (await sealDirectBody(f.alice, f.gameId, f.bob.key, NOTE))!;
+    const toMallory = (await sealDirectBody(f.alice, f.gameId, f.mallory.key, NOTE))!;
+
+    expect(toBob.length).toBe(toMallory.length);
+    // Two wraps, always, whoever it is for — which is a stronger
+    // indistinguishability property than one wrap would give.
+    expect(fromBase64Url(toBob)![1]).toBe(2);
+    expect(fromBase64Url(toMallory)![1]).toBe(2);
+    // And no member index anywhere in the wrap region, which is the byte a team
+    // envelope carries and this one deliberately omits.
+    expect(fromBase64Url(toBob)![0]).toBe(2);
+  });
+
+  it("is silent about a body that is not one of ours", async () => {
+    await expect(openDirectBody(f.bob, f.gameId, f.alice.key, "not base64url!!")).resolves.toBeNull();
+    await expect(openDirectBody(f.bob, f.gameId, f.alice.key, "")).resolves.toBeNull();
+    // A team envelope handed to the direct reader is refused on the scheme byte
+    // rather than attempted, which is what makes the byte a scheme and not a
+    // generation.
+    await expect(openDirectBody(f.bob, f.gameId, f.alice.key, sealed)).resolves.toBeNull();
+  });
+
+  it("is refused by the team reader for the same reason", async () => {
+    const direct = (await sealDirectBody(f.alice, f.gameId, f.bob.key, NOTE))!;
+    await expect(openTeamBody(f.bob, f.gameId, 1, f.alice.key, 1, direct)).resolves.toBeNull();
+  });
+
+  // The two schemes must not collide: a team message between two people and a
+  // DM between the same two derive different keys, or the empire binding the
+  // team comment defends is meaningless.
+  it("a team key and a direct key between one pair are different keys", async () => {
+    const direct = (await sealDirectBody(f.alice, f.gameId, f.bob.key, NOTE))!;
+    const team = (await sealTeamBody(f.alice, f.gameId, 1, [{ member: 1, key: f.bob.key }], NOTE))!;
+    // Neither reader can be made to accept the other's bytes even with the
+    // scheme byte swapped, because the derivation differs underneath.
+    const swapped = fromBase64Url(direct)!.slice();
+    swapped[0] = 1;
+    await expect(
+      openTeamBody(f.bob, f.gameId, 1, f.alice.key, 1, toBase64Url(swapped)),
+    ).resolves.toBeNull();
+    expect(team).not.toBe(direct);
   });
 });

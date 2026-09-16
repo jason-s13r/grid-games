@@ -45,7 +45,11 @@ record is adopted, `onBegin` when the game is actually live.
 - **Joining** sends a `HELLO` frame with `gameId: ""` — the one moment in the
   protocol where that is true, and why a lobby hello proves nothing beyond "here
   is a key to seat me under". Everything that decides anything is signed against
-  a real game id.
+  a real game id. A `name` on a hello has **exactly the same standing**: a claim,
+  not yet a fact, for the same reason — there is nothing to sign it against. Once
+  a record is sealed, seats re-assert their names as signed records and the claim
+  becomes attributable. A seatless peer never gets past the claim, because
+  `verifyNaming` runs through the roster and an observer is not in one.
 - `JOIN_TIMEOUT_MS = 15000` watchdog. Reaching the broker is **not** the same as
   reaching the host; a symmetric-NAT failure is silent (no error, the channel
   just never opens).

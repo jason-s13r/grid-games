@@ -17,7 +17,7 @@
 
 import { STEPS_PER_SECOND } from "@tessera/sim";
 import { CHANNEL } from "@tessera/protocol";
-import type { Channel, Message } from "@tessera/protocol";
+import type { Channel, MemberKey, Message } from "@tessera/protocol";
 import { empireTheme } from "./palette";
 
 /** Long enough to scroll back through a fight, short enough that a multi-day
@@ -29,7 +29,27 @@ const MAX_LINES = 200;
 const MAX_BODY = 280;
 
 export interface ChatHooks {
-  send: (body: string, channel: Channel) => void;
+  /** `to` is set only on a direct message, and is the recipient's key.
+   *
+   *  A DM is not a channel you select — it is a channel **plus a person** — and
+   *  the two-option `<select>` this panel had could not express that. The
+   *  obvious gesture for picking the person, clicking a name in a line, is
+   *  already bound to muting and is not worth stealing for a panel 0014
+   *  rebuilds. So the select carries the people instead: the smallest widget
+   *  that makes the feature reachable, and no new gesture to unlearn. */
+  send: (body: string, channel: Channel, to?: MemberKey) => void;
+}
+
+/** Somebody a direct message can be addressed to.
+ *
+ *  **Seated peers only.** There is no key directory outside the roster, so an
+ *  observer — somebody asking for a seat, somebody just watching — cannot be
+ *  written to. That is the cost of not inventing one here, and it falls on
+ *  exactly the people most likely to want a private word. */
+export interface Correspondent {
+  key: MemberKey;
+  /** `name#fingerprint`, because this is a list somebody picks from. */
+  label: string;
 }
 
 /** Game time, not wall-clock time: the step number is the one clock every peer
@@ -53,6 +73,8 @@ export class ChatPanel {
   private readonly muted = new Map<string, { empire: number; member: number }>();
   private readonly mutedBar: HTMLDivElement;
   private you?: { empire: number; member: number };
+  /** Keys addressable by DM, by the select value that names them. */
+  private readonly correspondents = new Map<string, MemberKey>();
 
   constructor(
     private readonly root: HTMLElement,
@@ -110,6 +132,8 @@ export class ChatPanel {
     this.input.value = "";
     this.input.placeholder = "Chat opens when you host or join a game";
     this.channel.disabled = true;
+    this.correspondents.clear();
+    this.rebuild(0, []);
     this.channel.value = String(CHANNEL.PUBLIC);
   }
 
@@ -117,15 +141,47 @@ export class ChatPanel {
     this.you = seat;
     this.input.disabled = false;
     this.input.placeholder = "Say something";
-    this.channel.disabled = teammates === 0;
+    this.channel.disabled = false;
     this.channel.title = teammates === 0 ? "You are the only seat on this empire" : "";
+    this.rebuild(teammates);
+  }
+
+  /** Who can be written to privately. Rebuilt as the roster changes — people
+   *  arrive by amendment and by claim, and a list captured once would be a list
+   *  of who was here when the game started. */
+  setCorrespondents(people: readonly Correspondent[]): void {
+    const chosen = this.channel.value;
+    this.correspondents.clear();
+    for (const one of people) this.correspondents.set(`dm:${one.key}`, one.key);
+    this.rebuild(undefined, people);
+    // Keep the reader's choice across a rebuild, unless the person they were
+    // writing to has gone.
+    if ([...this.channel.options].some((option) => option.value === chosen)) {
+      this.channel.value = chosen;
+    }
+  }
+
+  private rebuild(teammates?: number, people?: readonly Correspondent[]): void {
+    const list = people ?? [...this.correspondents.entries()].map(([value, key]) => ({
+      key,
+      label: value.slice(3, 11),
+    }));
+    const options = [
+      new Option("All", String(CHANNEL.PUBLIC)),
+      ...(teammates === 0 ? [] : [new Option("Team", String(CHANNEL.TEAM))]),
+      ...list.map((one) => new Option(`\u2192 ${one.label}`, `dm:${one.key}`)),
+    ];
+    this.channel.replaceChildren(...options);
   }
 
   private submit(): void {
     const body = this.input.value.trim().slice(0, MAX_BODY);
     this.input.value = "";
     if (!body || !this.you) return;
-    this.hooks.send(body, Number(this.channel.value) as Channel);
+    const chosen = this.channel.value;
+    const to = this.correspondents.get(chosen);
+    if (to) return this.hooks.send(body, CHANNEL.DIRECT, to);
+    this.hooks.send(body, Number(chosen) as Channel);
   }
 
   /** A line nobody said: connection notices and the like. Local to this client,
@@ -146,18 +202,35 @@ export class ChatPanel {
    *  times a minute, saying nothing. Traffic analysis is not a feature anybody
    *  asked for. So a team line from an empire that is not yours is dropped
    *  outright, and the sealed rendering below now only covers the case that
-   *  really is worth seeing — our own team's line that we could not open. */
+   *  really is worth seeing — our own team's line that we could not open.
+   *
+   *  **A direct message follows the same rule, and needed the filter edited
+   *  rather than extended.** A DM has no empire to compare against — it arrives
+   *  from an arbitrary one and is addressed by key — so the old condition let
+   *  every DM in the game through, and each would have rendered as "sealed to
+   *  their empire" on every peer. That is exactly the noise the paragraph above
+   *  says was removed, reintroduced by a channel the condition predates.
+   *
+   *  So `text === null` stops being sufficient to classify a line. It used to
+   *  mean "our team, unopenable"; with DMs it means that *or* "not for us", and
+   *  only `channel` separates them. */
   add(message: Message, text: string | null): void {
     if (this.muted.has(seatKey(message))) return;
+    // Not for us: another empire's team traffic, or somebody else's private
+    // word. Both are a stranger's conversation announcing itself.
     if (message.channel === CHANNEL.TEAM && message.empire !== this.you?.empire) return;
+    if (message.channel === CHANNEL.DIRECT && text === null) return;
 
     const theme = empireTheme(message.empire);
     const mine =
       this.you?.empire === message.empire && this.you?.member === message.member;
     const team = message.channel === CHANNEL.TEAM;
+    const direct = message.channel === CHANNEL.DIRECT;
 
     const line = document.createElement("div");
-    line.className = `chat-line${mine ? " chat-mine" : ""}${team ? " chat-team" : ""}`;
+    line.className = `chat-line${mine ? " chat-mine" : ""}${team ? " chat-team" : ""}${
+      direct ? " chat-direct" : ""
+    }`;
     // So a later mute can take this line down with the rest of theirs.
     line.dataset.seat = seatKey(message);
 
@@ -186,10 +259,10 @@ export class ChatPanel {
     body.textContent = text ?? "sealed to their empire";
 
     line.append(when, who, body);
-    if (team) {
+    if (team || direct) {
       const mark = document.createElement("span");
       mark.className = "chat-mark";
-      mark.textContent = "team";
+      mark.textContent = team ? "team" : "direct";
       line.insertBefore(mark, body);
     }
     this.append(line);
