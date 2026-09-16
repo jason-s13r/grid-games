@@ -67,6 +67,30 @@
           <summary>Your seats</summary>
           <div class="acc-body" data-roster></div>
         </details>
+
+        <!-- Who is here without a seat, who has asked for one, and which
+             empires nobody is playing.
+             
+             This used to be rendered into [data-lobby], inside the setup
+             screen, which `Shell.show` sets `hidden` for the entire duration of
+             a game. So the endorse button existed, was redrawn five times a
+             second, and could not be reached: the only route back to the menu
+             is Leave, which closes the lobby and drops the mesh. Moving it here
+             is most of what this panel is. See view/RosterPanel.ts. -->
+        <details class="acc" data-acc="people" data-people-panel hidden>
+          <summary>People</summary>
+          <div class="acc-body" data-people></div>
+        </details>
+
+        <!-- Two registers, deliberately distinguishable: what happened in the
+             world, which is identical on every peer because it is derived from
+             hashed counters, and what happened to this tab, which is not. A
+             player must never have to wonder which kind of line they are
+             reading. See view/LogPanel.ts. -->
+        <details class="acc" data-acc="log" data-log-panel hidden>
+          <summary>Log</summary>
+          <div class="acc-body" data-log></div>
+        </details>
       </aside>
 
       <main class="stage">

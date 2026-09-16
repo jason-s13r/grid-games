@@ -111,14 +111,38 @@ export class Controls {
     });
   }
 
+  /** The last markup written to each subtree, so an unchanged one is left
+   *  alone.
+   *
+   *  Not an optimisation. `render` runs from a 200 ms block and used to rewrite
+   *  three subtrees unconditionally on every call — and **`[data-acts]` is the
+   *  shop**, whose tiles are buttons. Replace a button between `pointerdown` and
+   *  `pointerup` and the browser fires `click` on the nearest surviving
+   *  ancestor, where `closest("[data-buy]")` finds nothing and the purchase is
+   *  silently dropped. At 200 ms and a typical press, a meaningful fraction of
+   *  every purchase in the game was being thrown away.
+   *
+   *  Nobody noticed because the standings hold no buttons and the HUD holds
+   *  none either. The guard is per subtree so a HUD that changes every step
+   *  does not force the shop to redraw with it. */
+  private readonly drawn = new Map<string, string>();
+
+  /** Write only if it changed. Returns whether it did. */
+  private put(el: HTMLElement, key: string, markup: string): boolean {
+    if (this.drawn.get(key) === markup) return false;
+    this.drawn.set(key, markup);
+    el.innerHTML = markup;
+    return true;
+  }
+
   render(state: State): void {
     // An observer holds no empire, and empire 0 is neutral. It has a clock and
     // a board like everyone else; what it does not have is a seat to describe.
     const empire = state.empires[this.game.empire - 1];
     if (!empire) {
       this.els.clock.textContent = clockLine(state, this.game.online);
-      this.els.hud.innerHTML = `<strong class="hud-name">Watching</strong>`;
-      this.els.acts.innerHTML = "";
+      this.put(this.els.hud, "hud", `<strong class="hud-name">Watching</strong>`);
+      this.put(this.els.acts, "acts", "");
       this.els.rosterPanel.hidden = true;
       this.renderStandings(state);
       return;
@@ -131,7 +155,10 @@ export class Controls {
 
     const pct = Math.round((member.popTimer / rules.popMax) * 100);
 
-    this.els.hud.innerHTML = `
+    this.put(
+      this.els.hud,
+      "hud",
+      `
       <span class="swatch" data-banner="${empireTheme(empire.id).id}"></span>
       <strong class="hud-name">${theme.name}</strong>
       ${isProtected(state, empire) ? '<span class="tag">protected</span>' : ""}
@@ -152,11 +179,15 @@ export class Controls {
           ? '<span class="mod" title="Tiles connected to your capital gain population over time.">Growth</span>'
           : ""
       }
-    `;
+    `,
+    );
 
     // A bought modifier is not a button. It has no second state to toggle and
     // nothing left to spend, so it leaves the shop and shows on the HUD.
-    this.els.acts.innerHTML = [
+    this.put(
+      this.els.acts,
+      "acts",
+      [
       tile({
         buy: "bridge",
         glyph: "&#9636;",
@@ -195,7 +226,8 @@ export class Controls {
             cost: rules.growthCost,
             affordable: empire.diamonds >= rules.growthCost,
           }),
-    ].join("");
+      ].join(""),
+    );
 
     // Only a shared empire has seats worth listing; a solo player is the seat.
     // Only when it actually changes. Writing the same value still counts as an
@@ -204,15 +236,19 @@ export class Controls {
     const seats = empire.members.length >= 2;
     if (this.els.rosterPanel.hidden === seats) this.els.rosterPanel.hidden = !seats;
     if (empire.members.length > 1) {
-      this.els.roster.innerHTML = empire.members
-        .map((m, i) => {
-          const live = state.step - m.lastBeat <= rules.livenessWindow;
-          return `<div class="roster-row${live ? "" : " afk"}">
+      this.put(
+        this.els.roster,
+        "roster",
+        empire.members
+          .map((m, i) => {
+            const live = state.step - m.lastBeat <= rules.livenessWindow;
+            return `<div class="roster-row${live ? "" : " afk"}">
             <span>${i === this.game.member ? "You" : m.kind === 1 ? `Bot ${i}` : `Member ${i}`}</span>
             <span class="roster-pop">${m.popTimer}</span>
           </div>`;
-        })
-        .join("");
+          })
+          .join(""),
+      );
     }
 
     this.renderStandings(state);
@@ -220,7 +256,11 @@ export class Controls {
     if (state.phase === PHASE.ENDED) {
       const winner = state.winner > 0 ? empireTheme(state.winner).name : "Nobody";
       this.els.banner.hidden = false;
-      this.els.banner.innerHTML = `<strong>${winner} wins</strong><span>${WIN_TEXT[state.winReason] ?? ""}</span>`;
+      this.put(
+        this.els.banner,
+        "banner",
+        `<strong>${winner} wins</strong><span>${WIN_TEXT[state.winReason] ?? ""}</span>`,
+      );
     } else {
       this.els.banner.hidden = true;
     }
@@ -247,7 +287,10 @@ export class Controls {
       this.game.empire === 0 &&
       !(window > 0 && state.step >= window);
 
-    this.els.standings.innerHTML = rows
+    this.put(
+      this.els.standings,
+      "standings",
+      rows
       .map((e) => {
         const t = empireTheme(e.id);
         // An empire nobody has claimed is in the standings, not hidden from
@@ -270,8 +313,9 @@ export class Controls {
           }</span>
           <span class="standing-meta">${e.largestCascade.tiles ? `${e.largestCascade.tiles}&#9733;` : ""}</span>
         </div>`;
-      })
-      .join("");
+        })
+        .join(""),
+    );
   }
 
   setZoomHint(text: string): void {

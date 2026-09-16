@@ -1552,3 +1552,62 @@ a.btn {
     text-decoration: none;
   }
 }
+
+// --- the game log ----------------------------------------------------------
+//
+// Two registers, and they have to be tellable apart at a glance: one is what
+// happened in the world and is identical on every peer, the other is what
+// happened to this tab and is true nowhere else. A reader who cannot tell them
+// apart will quote a session line at somebody who never saw it.
+
+.log-lines {
+  max-height: 260px;
+  overflow-y: auto;
+  font-size: 12px;
+  line-height: 1.45;
+}
+.log-line {
+  display: flex;
+  gap: 5px;
+  padding: 1px 0;
+  overflow-wrap: anywhere;
+}
+.log-when {
+  flex: none;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+  font-size: 10px;
+  padding-top: 1px;
+}
+.log-body {
+  flex: 1;
+  min-width: 0;
+}
+// The shared account: plain, because it is the default reading.
+.log-world .log-body {
+  color: var(--ink);
+}
+// This tab's own: set back, italic, and marked. Nothing here happened to
+// anybody else.
+.log-session {
+  opacity: 0.72;
+}
+.log-session .log-body {
+  font-style: italic;
+}
+.log-session .log-body::before {
+  content: "· ";
+  color: var(--muted);
+}
+// The gap a reloaded tab cannot narrate. A marker and a number, because the
+// moves that built the state it adopted were broadcast before it was listening
+// and nobody will send them again.
+.log-gap {
+  margin: 6px 0;
+  padding: 3px 0;
+  border-top: 1px dashed var(--edge);
+  border-bottom: 1px dashed var(--edge);
+  color: var(--muted);
+  font-size: 11px;
+  text-align: center;
+}

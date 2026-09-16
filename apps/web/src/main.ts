@@ -15,9 +15,9 @@ import {
   Sim,
 } from "@tessera/sim";
 import { Roster, cleanName, displayName, fingerprint } from "@tessera/protocol";
-import { BANNERS, bannerById } from "@tessera/sim";
+import { BANNERS, bannerById, isVacant } from "@tessera/sim";
 import type { MemberKey } from "@tessera/protocol";
-import { Archive, Directory, Lobby, Lockstep, MAX_SEATS, parseRef, resolve } from "@tessera/net";
+import { Archive, Directory, Lobby, Lockstep, MAX_SEATS, WorldLog, parseRef, resolve } from "@tessera/net";
 import type { ArchivedGame, ConnectionRef, ResumePoint } from "@tessera/net";
 import pkg from "../package.json";
 import { LocalGame } from "./game/Local";
@@ -41,6 +41,10 @@ import {
   settings,
 } from "./net/settings";
 import { LobbyPanel } from "./view/LobbyPanel";
+import { LogPanel } from "./view/LogPanel";
+import type { PeopleView } from "./view/RosterPanel";
+import { RosterPanel } from "./view/RosterPanel";
+import { tap } from "./view/tap";
 import { Setup } from "./view/Setup";
 import { Games } from "./view/Games";
 import { Scrubber } from "./view/Scrubber";
@@ -815,9 +819,12 @@ function leaveMesh(): void {
   lobby.close();
   lobby = undefined;
   mesh = undefined;
+  worldLog = undefined;
   archive = undefined;
   archiveBtn.hidden = true;
   chat.close();
+  gameLog.close();
+  people.set(null);
   panel.detach();
   sayTransport();
 }
@@ -1187,6 +1194,7 @@ function frame(now: number): void {
     zoomOutEl.disabled = !camera.canZoomOut;
     panel.setStatus(game.status());
     panel.setRoster(mesh ? rosterView(mesh) : null);
+    people.set(mesh ? peopleView(mesh) : null);
     minimapDue = now + 200;
   }
 
@@ -1201,6 +1209,8 @@ let lobby: Lobby | undefined;
  *  than through the Driver interface: a solo game has nobody to talk to, so
  *  there is nothing for LocalGame to implement. */
 let mesh: Lockstep | undefined;
+/** The shared event stream, while there is a game to derive one from. */
+let worldLog: WorldLog | undefined;
 /** The game this tab has been writing down, for as long as it has been in it.
  *
  *  A tab is not a durable archive and is not pretending to be one — that is
@@ -1231,6 +1241,26 @@ function refreshCorrespondents(): void {
       .map((key) => ({ key, label: nameFor(driver, key) })),
   );
 }
+
+/** The people panel, in the left column beside Map and Standings.
+ *
+ *  Its content used to live in the lobby panel, which is inside the setup
+ *  screen, which is `hidden` for the whole duration of a game — so the endorse
+ *  button was rebuilt five times a second into a subtree nobody could see, and
+ *  the only route back to it closed the lobby and dropped the mesh. This is
+ *  where it becomes reachable. */
+const people = new RosterPanel(
+  pick<HTMLElement>("[data-people]"),
+  pick<HTMLElement>("[data-people-panel]"),
+  {
+    invite: (key) => void mesh?.amend(key),
+    endorse: (empire, key) => void mesh?.endorse(empire, key),
+    admit: (empire, key) => void mesh?.admit(empire, key),
+    claim: (empire) => void mesh?.claim(empire, myBanner() || undefined),
+  },
+);
+
+const gameLog = new LogPanel(pick<HTMLElement>("[data-log]"), pick<HTMLElement>("[data-log-panel]"));
 
 const panel = new LobbyPanel(lobbyEl, {
   seated: (empires) => rivals.seat(empires + 1),
@@ -1359,6 +1389,64 @@ function nameFor(driver: Lockstep, key: MemberKey): string {
   const player = (lobby?.players() ?? []).find((who) => who.key === key);
   const fingerprint = player?.label ?? key.slice(0, 8);
   return displayName(driver.nameOf(key) || cleanName(player?.name), fingerprint);
+}
+
+/** The people panel's view of who is here.
+ *
+ *  **Reads the mesh rather than the lobby**, which is the fix for a list that
+ *  was silently empty for half of every game. `lobby?.players()` is populated
+ *  from lobby hellos, so a peer that *resumed into* a game rather than starting
+ *  in one has no lobby membership at all and saw nobody. The driver's transport
+ *  knows who is connected and the roster knows who is seated; the difference is
+ *  the answer. */
+function peopleView(driver: Lockstep): PeopleView {
+  const ours = driver.seat?.empire;
+  const genesis = driver.sim.state.genesis;
+  const window = genesis.protocol >= 4 ? (genesis.rules.joinWindow ?? 0) : 0;
+  const closed = window > 0 && driver.sim.step >= window;
+
+  // Everyone the lobby knows about, plus everyone the roster does, minus the
+  // seated. A key that appears in neither is a peer we have no key for, which
+  // is an observer with nothing to offer and nothing to be offered.
+  const known = new Map<MemberKey, string>();
+  for (const who of lobby?.players() ?? []) {
+    if (!who.you && !driver.roster.has(who.key)) known.set(who.key, nameFor(driver, who.key));
+  }
+  for (const named of driver.names()) {
+    if (named.key !== driver.key && !driver.roster.has(named.key)) {
+      known.set(named.key, nameFor(driver, named.key));
+    }
+  }
+
+  return {
+    watching: !driver.seat,
+    joinsClosed: closed,
+    waiting: [...known].map(([key, label]) => ({ key, label })),
+    asks: driver
+      .invitations()
+      .filter((record) => record.amendment.empire === ours)
+      .map((record) => ({
+        key: record.amendment.key,
+        empire: record.amendment.empire,
+        label: nameFor(driver, record.amendment.key),
+        endorsed: record.signatures.length,
+        needed: driver.roster.quorum(record.amendment.empire),
+      })),
+    applications: driver
+      .applications()
+      .filter((record) => !driver.invitation(record.application.empire, record.application.key))
+      .map((record) => ({
+        key: record.application.key,
+        empire: record.application.empire,
+        label: nameFor(driver, record.application.key),
+      })),
+    // An empire nobody is playing. Territory with a capital and a flag, sealed
+    // into the record before anybody arrived — and a claim needs nobody's
+    // permission, which is why this list has no tally on it.
+    vacancies: driver.sim.state.empires
+      .filter((empire) => isVacant(empire))
+      .map((empire) => ({ empire: empire.id, label: empireTheme(empire.id).name })),
+  };
 }
 
 function rosterView(driver: Lockstep): RosterView {
@@ -1541,11 +1629,35 @@ async function begin(input?: string | JoinTarget): Promise<void> {
     if (seat) void driver.rename(myName());
     driver.onNamed = () => {
       panel.setRoster(rosterView(driver));
+      people.set(peopleView(driver));
       refreshCorrespondents();
     };
 
+    // The shared account of what happened, derived from hashed counters so that
+    // two players comparing screens see the same lines in the same order.
+    worldLog = new WorldLog(driver, { onEvent: (events) => gameLog.world(events) });
+    worldLog.attach();
+    gameLog.open();
+    // And the other register. Everything below is true of this tab and of
+    // nothing else, which is why none of it is in the stream above.
+    tap(driver, "onViolation", (given, what) =>
+      gameLog.session({
+        step: driver.sim.step,
+        text: `empire ${given.empire} seat ${given.member}: ${what}`,
+      }),
+    );
+    tap(driver, "onDesync", (step) =>
+      gameLog.session({ step, text: "our state disagreed with the majority" }),
+    );
+    tap(driver, "onEjection", (given, atStep, reason, late) =>
+      gameLog.session({
+        step: atStep,
+        text: `empire ${given.empire} seat ${given.member} dropped — ${reason}${late ? " (found out late)" : ""}`,
+      }),
+    );
+    tap(driver, "onHalt", (why) => gameLog.session({ step: driver.sim.step, text: `halted: ${why}` }));
+
     archive = new Archive(genesis, driver);
-    archive.attach(driver);
     archiveBtn.hidden = false;
 
     sayTransport(lobby!.ref);
@@ -1563,15 +1675,23 @@ async function begin(input?: string | JoinTarget): Promise<void> {
       announcer.start(genesis, doorOf(lobby!), () => driver.resumePoint());
     }
 
-    driver.onMessage = (message, text) => chat.add(message, text);
+    tap(driver, "onMessage", (message, text) => chat.add(message, text));
     // Being voted a seat mid-game is the moment an observer becomes a player.
     // Nothing about the driver changes — it was already verifying every move —
     // so all that is left is to open the parts of the UI that need a seat.
-    driver.onSeated = (given, key) => {
+    tap(driver, "onSeated", (given, key) => {
       if (key !== identity.key) return;
       openChat(given);
       panel.setStatus(`You have been seated as ${empireTheme(given.empire).name}.`);
-    };
+    });
+
+    // **Attached last, and that is the fix for a live bug.** `attach` wraps
+    // whatever is on a hook and installs its wrapper; anything assigned after it
+    // throws the wrapper away. Attaching before the UI hooks meant
+    // `Archive.chat` was never called again, so every archive this client wrote
+    // carried an empty chat log — and the one hook the log panel also wants,
+    // `onApplied`, is the hook that would have cost the archive its *moves*.
+    archive.attach(driver);
     // A revived game starts at the step its witnesses signed for rather than at
     // zero, and the archive is attached first on purpose: `onAdopted` marks the
     // gap, so the log this tab keeps says honestly that it begins in the middle.

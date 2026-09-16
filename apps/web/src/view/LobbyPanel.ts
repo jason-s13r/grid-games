@@ -17,6 +17,7 @@ import type { MemberKey } from "@tessera/protocol";
 import { MAX_SEATS, composeTeams } from "@tessera/net";
 import type { Lobby, LobbyPlayer } from "@tessera/net";
 import { empireTheme } from "./palette";
+import { escape } from "./escape";
 
 export interface LobbyHandlers {
   /** Propose seating this key on our own empire. */
@@ -65,8 +66,6 @@ export interface Seating {
   crowded: boolean;
 }
 
-const escape = (text: string): string =>
-  text.replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]!);
 
 export class LobbyPanel {
   private lobby?: Lobby;

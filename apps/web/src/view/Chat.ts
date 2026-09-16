@@ -19,6 +19,7 @@ import { STEPS_PER_SECOND } from "@tessera/sim";
 import { CHANNEL } from "@tessera/protocol";
 import type { Channel, MemberKey, Message } from "@tessera/protocol";
 import { empireTheme } from "./palette";
+import { stamp } from "./clock";
 
 /** Long enough to scroll back through a fight, short enough that a multi-day
  *  game does not accumulate a DOM node per line said since Tuesday. */
@@ -50,15 +51,6 @@ export interface Correspondent {
   key: MemberKey;
   /** `name#fingerprint`, because this is a list somebody picks from. */
   label: string;
-}
-
-/** Game time, not wall-clock time: the step number is the one clock every peer
- *  already agrees on, so two players comparing screenshots see the same stamp. */
-function stamp(step: number): string {
-  const seconds = Math.floor(step / STEPS_PER_SECOND);
-  const mm = Math.floor(seconds / 60);
-  const ss = seconds % 60;
-  return `${mm}:${String(ss).padStart(2, "0")}`;
 }
 
 /** Seats whose lines this reader has chosen not to see, keyed empire:member. */

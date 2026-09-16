@@ -4,6 +4,8 @@ export { SnapshotStore, SNAPSHOT_TAIL, encodeSnapshot, decodeSnapshot } from "./
 export type { Checkpointed } from "./snapshots.js";
 export { Archive, ARCHIVE_FORMAT, verifyArchive, consentLine, seatsOf } from "./archive.js";
 export type { ArchivedGame, ArchiveOptions, ArchiveRecord, ArchiveSource, Verdict } from "./archive.js";
+export { WorldLog } from "./worldlog.js";
+export type { LogEvent, WorldLogOptions } from "./worldlog.js";
 export { rankArchives } from "./rankings.js";
 export type { Leaderboard, Standing } from "./rankings.js";
 export { rosterAt, verifyResumePoint } from "./resume.js";
