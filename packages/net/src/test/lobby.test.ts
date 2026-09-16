@@ -457,18 +457,84 @@ describe("a game everybody signed", () => {
     await bob.consent(id);
     await room.run();
 
-    let started = false;
+    // The driver is built now — a peer that waited would be a room nobody could
+    // reach during the countdown, and `targetStep` clamps it at step 0 anyway.
+    // What waits is the word "playing".
+    let built = false;
+    let begun = false;
     bob.onStart = () => {
-      started = true;
+      built = true;
+    };
+    bob.onBegin = () => {
+      begun = true;
     };
     await alice.seal(id);
     await room.run();
 
     expect(bob.phase).toBe("starting");
-    expect(started).toBe(false);
+    expect(built).toBe(true);
+    expect(begun).toBe(false);
     expect(bob.startsIn).toBeGreaterThan(0);
     expect(bob.startsIn).toBeLessThanOrEqual(30_000);
     bob.close();
     alice.close();
+  });
+});
+
+describe("the instant a game begins", () => {
+  it("a record sealed for now begins immediately, as every record did before", async () => {
+    const room = new LoopbackRoom();
+    const connect = room.opener();
+    const hostId = await Identity.generate();
+    const host = await Lobby.open(hostId, undefined, { connect });
+    const guestId = await Identity.generate();
+    const guest = await Lobby.open(guestId, { kind: "rtc", code: host.code }, { connect });
+    await room.run();
+
+    let begun = false;
+    guest.onBegin = () => {
+      begun = true;
+    };
+    await host.host({ empires: [[hostId.key], [guestId.key]], simbots: [], width: 24, height: 24 });
+    await room.run();
+
+    expect(guest.phase).toBe("playing");
+    expect(begun).toBe(true);
+    expect(guest.startsIn).toBe(0);
+  });
+
+  it("a record sealed for later begins on the instant, everywhere at once", async () => {
+    const room = new LoopbackRoom();
+    const connect = room.opener();
+    const aliceId = await Identity.generate();
+    const alice = await Lobby.open(aliceId, undefined, { connect });
+    const bobId = await Identity.generate();
+    const bob = await Lobby.open(bobId, { kind: "rtc", code: alice.code }, { connect });
+    await room.run();
+
+    const id = (await alice.propose(
+      proposalFrom({
+        seed: 5,
+        startedAt: Date.now() + 400,
+        map: { width: 24, height: 24 },
+      }),
+    ))!;
+    await room.run();
+    await alice.consent(id);
+    await bob.consent(id);
+    await room.run();
+
+    await alice.seal(id);
+    await room.run();
+    expect(alice.phase).toBe("starting");
+    expect(bob.phase).toBe("starting");
+
+    await new Promise((done) => setTimeout(done, 450));
+    expect(alice.phase).toBe("playing");
+    expect(bob.phase).toBe("playing");
+    expect(bob.startsIn).toBe(0);
+
+    alice.close();
+    bob.close();
   });
 });

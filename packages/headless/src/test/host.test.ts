@@ -13,7 +13,7 @@
 // check on the first try.
 
 import { describe, expect, it } from "vitest";
-import { Identity, inspectGenesis } from "@tessera/protocol";
+import { Identity, checkConsent, inspectGenesis, proposalFrom } from "@tessera/protocol";
 import { Lobby, RoomBus, SocketTransport, localPair } from "@tessera/net";
 import type { ConnectionRef, Opener } from "@tessera/net";
 import { hostGame } from "../peer.js";
@@ -125,5 +125,98 @@ describe("hostGame", () => {
     expect(lobby.phase).toBe("hosting");
     expect(lobby.code).toBe("abc234");
     lobby.close();
+  });
+});
+
+describe("a host that proposes rather than composes", () => {
+  // The difference is the whole of 0009. A composing host decides the game and
+  // everybody else's only response is refusal; a proposing one suggests a world
+  // and seals a record whose roster *is* the people who signed it — so the
+  // record it produces carries proof that its players agreed to it.
+  it("seals with whoever signed, and the record says so", async () => {
+    const bus = new RoomBus({ serves: () => true });
+    const host = await Identity.generate();
+    const alice = await Identity.generate();
+    const bob = await Identity.generate();
+
+    const hosting = hostGame({
+      identity: host,
+      ref: REF,
+      connect: attach(bus),
+      compose: () => null,
+      propose: proposalFrom({
+        seed: 77,
+        // Far enough out that the signature count is what seals it, not the
+        // clock. The clock is the other half and has its own test.
+        startedAt: Date.now() + 60_000,
+        map: { width: 24, height: 24 },
+      }),
+      sealWhen: (signers) => signers.length >= 2,
+    });
+
+    const signers = await Promise.all(
+      [alice, bob].map(async (who) => {
+        const lobby = await Lobby.open(who, REF, { connect: attach(bus) });
+        return lobby;
+      }),
+    );
+
+    // Everybody signs the world they were shown. Nobody was asked to trust the
+    // host for any of it: the id is recomputed from the proposal each of them
+    // received.
+    for (const lobby of signers) {
+      await new Promise((done) => setTimeout(done, 20));
+      const tabled = lobby.proposals();
+      expect(tabled).toHaveLength(1);
+      expect(await lobby.consent(tabled[0]!.id)).toBe(true);
+    }
+
+    const hosted = await hosting;
+    expect(await inspectGenesis(hosted.genesis)).toEqual([]);
+    // Still an observer with a job. Proposing seats nobody, including us.
+    expect(hosted.seat).toBeUndefined();
+
+    const verdict = await checkConsent(hosted.genesis);
+    expect(verdict).toEqual({ state: "checked", signed: 2, seats: 2 });
+    // One signer, one empire, in key order — decided by the keys and not by the
+    // process that sealed.
+    const order = [alice.key, bob.key].sort();
+    expect(hosted.genesis.empires.map((e) => e.members[0]?.key)).toEqual(order);
+
+    for (const lobby of signers) lobby.close();
+    await hosted.stop();
+  });
+
+  it("seals on the instant in the record when nobody says otherwise", async () => {
+    const bus = new RoomBus({ serves: () => true });
+    const host = await Identity.generate();
+    const alice = await Identity.generate();
+
+    const hosting = hostGame({
+      identity: host,
+      ref: REF,
+      connect: attach(bus),
+      compose: () => null,
+      // No `sealWhen`: the deadline is a fact of the record rather than a
+      // convention this process holds.
+      propose: proposalFrom({
+        seed: 78,
+        startedAt: Date.now() + 120,
+        map: { width: 24, height: 24 },
+        simbots: [{ popMax: 200, coins: 20, phases: { expand: { steps: 60, rate: [12, 24] } } }],
+      }),
+    });
+
+    const lobby = await Lobby.open(alice, REF, { connect: attach(bus) });
+    await new Promise((done) => setTimeout(done, 20));
+    await lobby.consent(lobby.proposals()[0]!.id);
+
+    const hosted = await hosting;
+    expect((await checkConsent(hosted.genesis)).state).toBe("checked");
+    // One human who signed, plus the bot the world named.
+    expect(hosted.genesis.empires).toHaveLength(2);
+
+    lobby.close();
+    await hosted.stop();
   });
 });

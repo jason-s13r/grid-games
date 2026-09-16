@@ -12,9 +12,17 @@
 
 import { beforeAll, describe, expect, it } from "vitest";
 import { MOVE, Sim, hex } from "@tessera/sim";
-import { CHANNEL, Identity } from "@tessera/protocol";
+import {
+  CHANNEL,
+  Identity,
+  composeGenesis,
+  proposalFrom,
+  proposalId,
+  sealGenesis,
+  signConsent,
+} from "@tessera/protocol";
 import type { SignedMove } from "@tessera/protocol";
-import { ARCHIVE_FORMAT, Archive, verifyArchive } from "../index.js";
+import { ARCHIVE_FORMAT, Archive, consentLine, verifyArchive } from "../index.js";
 import type { ArchivedGame } from "../index.js";
 import { clickAround, run, settleNetwork, table } from "./harness.js";
 import type { Table } from "./harness.js";
@@ -216,5 +224,70 @@ describe("an archive of a game that seated someone mid-way", () => {
     const verdict = await verifyArchive(doctored);
     expect(verdict.ok).toBe(false);
     expect(verdict.problems.some((one) => one.startsWith("unsigned move"))).toBe(true);
+  });
+});
+
+describe("what an archive says about consent", () => {
+  // An archive could already prove what happened. It could not prove anybody
+  // agreed to the rules it happened under — which starts mattering the moment
+  // there is a leaderboard and a disputed game.
+  async function agreed(over: Record<string, unknown> = {}) {
+    const people = await Promise.all([Identity.generate(), Identity.generate()]);
+    const world = proposalFrom({
+      seed: 99,
+      startedAt: 0,
+      map: { width: 24, height: 24 },
+      ...over,
+    });
+    const id = await proposalId(world);
+    const consents = await Promise.all(people.map((one) => signConsent(one, id)));
+    return { genesis: await sealGenesis(composeGenesis(world, consents)), people };
+  }
+
+  const logOf = (genesis: Awaited<ReturnType<typeof agreed>>["genesis"]): ArchivedGame => {
+    const sim = new Sim(genesis);
+    sim.fastForward(4, []);
+    return {
+      format: ARCHIVE_FORMAT,
+      genesis,
+      from: 0,
+      steps: 4,
+      hash: hex(sim.hash()),
+      moveLog: [],
+    };
+  };
+
+  it("says how many seats signed the world it was played under", async () => {
+    const { genesis } = await agreed();
+    const verdict = await verifyArchive(logOf(genesis));
+    expect(verdict.ok, verdict.problems.join(", ")).toBe(true);
+    expect(verdict.consent).toEqual({ state: "checked", signed: 2, seats: 2 });
+    expect(consentLine(verdict.consent)).toBe("consent: 2 of 2 keyed seats signed this world");
+  });
+
+  // Every archive written before consent existed. "Not stated" is a fact about
+  // the record, not a mark against it — which is the whole reason this is three
+  // states and not a boolean.
+  it("says nothing was stated when the record claims nothing", async () => {
+    const { t, game } = await watched();
+    const verdict = await verifyArchive(game);
+    expect(verdict.consent.state).toBe("absent");
+    expect(consentLine(verdict.consent)).toBe("consent: not stated");
+    expect(verdict.ok, verdict.problems.join(", ")).toBe(true);
+    t.stop?.();
+  });
+
+  it("a tampered consent list is failed, and is a problem as well", async () => {
+    const { genesis } = await agreed();
+    const forged = await sealGenesis({
+      ...genesis,
+      consent: genesis.consent!.map((one, at) =>
+        at === 0 ? { ...one, sig: "not-a-signature" } : one,
+      ),
+    });
+    const verdict = await verifyArchive(logOf(forged));
+    expect(verdict.consent.state).toBe("failed");
+    expect(verdict.problems).toContain("genesis: consent");
+    expect(verdict.ok).toBe(false);
   });
 });

@@ -2,7 +2,7 @@ export { LoopbackNetwork } from "./transport.js";
 export type { Transport, FrameHandler, LoopbackOptions } from "./transport.js";
 export { SnapshotStore, SNAPSHOT_TAIL, encodeSnapshot, decodeSnapshot } from "./snapshots.js";
 export type { Checkpointed } from "./snapshots.js";
-export { Archive, ARCHIVE_FORMAT, verifyArchive, seatsOf } from "./archive.js";
+export { Archive, ARCHIVE_FORMAT, verifyArchive, consentLine, seatsOf } from "./archive.js";
 export type { ArchivedGame, ArchiveOptions, ArchiveRecord, ArchiveSource, Verdict } from "./archive.js";
 export { rankArchives } from "./rankings.js";
 export type { Leaderboard, Standing } from "./rankings.js";

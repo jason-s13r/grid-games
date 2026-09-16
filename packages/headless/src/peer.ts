@@ -15,7 +15,7 @@
 import { STEPS_PER_SECOND, Sim } from "@tessera/sim";
 import type { Genesis } from "@tessera/sim";
 import { Roster } from "@tessera/protocol";
-import type { Identity } from "@tessera/protocol";
+import type { Identity, MemberKey, Proposal } from "@tessera/protocol";
 import { Lobby, Lockstep, parseRef } from "@tessera/net";
 import type { ConnectionRef, HostPlan, LobbyPlayer, Opener, Seat, Transport } from "@tessera/net";
 import { installWebRTC, shutdownWebRTC } from "./webrtc.js";
@@ -85,6 +85,25 @@ export interface HostOptions {
    *  seat", which is the guard that stops a browser host sealing a game with
    *  somebody's name missing from it. */
   compose: (players: LobbyPlayer[]) => HostPlan | null;
+  /** A world to put on the table instead of a plan to compose.
+   *
+   *  The difference is the whole of 0009. With `compose`, this process decides
+   *  the game and everybody else's only available response is refusal. With
+   *  `propose`, it suggests one, waits for signatures, and seals a record whose
+   *  roster *is* the set of people who signed — so it cannot change a rule, seat
+   *  a non-signer or reorder the roster, and what is left to it is deciding who
+   *  was late.
+   *
+   *  `compose` is ignored when this is set. */
+  propose?: Proposal;
+  /** Whether to seal now, given who has signed.
+   *
+   *  Absent means wait for the proposal's own `startedAt`, which is the shape
+   *  the design is written for: the deadline is a fact of the record rather than
+   *  a convention somebody holds. `--auto` and `--wait` supply one, and they
+   *  keep their meaning — they decide *when* the room stops waiting, never what
+   *  it seals. */
+  sealWhen?: (signers: readonly MemberKey[]) => boolean;
   interval?: number;
   onDriver?: (driver: Lockstep, genesis: Genesis, seat?: Seat) => void;
   /** The room filled up or the deadline passed and nothing could be composed. */
@@ -127,25 +146,58 @@ export async function hostGame(options: HostOptions): Promise<HostedGame> {
   });
 
   let sealing = false;
-  lobby.onChange = () => {
-    if (sealing || lobby.phase === "playing") return;
-    const plan = options.compose(lobby.players());
-    if (!plan) {
-      options.onWaiting?.(lobby.players());
-      return;
-    }
-    // One at a time: `host` is async, and a second arrival landing inside it
-    // would compose a second genesis for the same room.
-    sealing = true;
-    void lobby.host(plan).then((sealed) => {
-      if (sealed) return;
-      sealing = false;
-      options.onRefused?.(lobby.problem, lobby.players());
-    });
-  };
+  let clock: ReturnType<typeof setTimeout> | undefined;
+
+  if (options.propose) {
+    // The world goes up first and stays up: a room is a place people arrive
+    // into, and the lobby re-sends it to each of them.
+    const id = await lobby.propose(options.propose);
+    const close = (): void => {
+      if (sealing || !id) return;
+      sealing = true;
+      void lobby.seal(id).then((ok) => {
+        if (ok) return;
+        sealing = false;
+        options.onRefused?.(lobby.problem, lobby.players());
+      });
+    };
+
+    // The deadline in the record. Everything else is somebody's impatience.
+    const until = options.propose.startedAt - Date.now();
+    clock = setTimeout(close, Math.max(0, until));
+    clock.unref?.();
+
+    lobby.onChange = () => {
+      if (sealing || lobby.phase === "playing" || lobby.phase === "starting") return;
+      const signers = lobby.proposals().find((one) => one.id === id)?.signers ?? [];
+      if (!options.sealWhen?.(signers)) {
+        options.onWaiting?.(lobby.players());
+        return;
+      }
+      close();
+    };
+  } else {
+    lobby.onChange = () => {
+      if (sealing || lobby.phase === "playing") return;
+      const plan = options.compose(lobby.players());
+      if (!plan) {
+        options.onWaiting?.(lobby.players());
+        return;
+      }
+      // One at a time: `host` is async, and a second arrival landing inside it
+      // would compose a second genesis for the same room.
+      sealing = true;
+      void lobby.host(plan).then((sealed) => {
+        if (sealed) return;
+        sealing = false;
+        options.onRefused?.(lobby.problem, lobby.players());
+      });
+    };
+  }
   lobby.onChange();
 
   const joined = await started;
+  if (clock) clearTimeout(clock);
   return { ...run(options, lobby, joined, (driver) => (driving = driver)), shareable: lobby.shareable };
 }
 

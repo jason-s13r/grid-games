@@ -15,9 +15,10 @@
 // difference between a leaderboard that is reported and one that is checkable.
 
 import { MOVE, Sim, hex } from "@tessera/sim";
+import type { ConsentVerdict } from "@tessera/protocol";
 import type { EmpireSummary, Genesis, Move } from "@tessera/sim";
 import { Roster, inspectGenesis, verifyAmendment, verifyMessage, verifyMove } from "@tessera/protocol";
-import { verifyClaim } from "@tessera/protocol";
+import { checkConsent, verifyClaim } from "@tessera/protocol";
 import type {
   Message,
   Seat,
@@ -276,6 +277,17 @@ export interface Verdict {
   verified: number;
   /** Everything wrong with it, empty when nothing is. */
   problems: string[];
+  /** Whether the people seated in this game are on record as having agreed to
+   *  play it, and to *this* world.
+   *
+   *  An archive could already prove what happened; it could not prove anybody
+   *  agreed to the rules it happened under. Three states rather than a boolean,
+   *  and the distinction is the answer to the one real objection to shipping
+   *  consent without a protocol bump: an unverified list looks like proof, and a
+   *  verdict that separates checked from absent from failed cannot be mistaken
+   *  for one. Every archive written before consent existed reads `absent`, which
+   *  is a fact about the record and not a mark against it. */
+  consent: ConsentVerdict;
   /** The empire that won, or zero for a game that has not ended — and for the
    *  rare one that ended with nobody left. Read off the replay rather than off
    *  the archive, so it is a result nobody had the chance to assert. */
@@ -311,6 +323,8 @@ export async function verifyArchive(game: ArchivedGame): Promise<Verdict> {
       moves: 0,
       verified: 0,
       problems: ["not an archive"],
+      // Nothing to have claimed anything.
+      consent: { state: "absent", signed: 0, seats: 0 },
       winner: 0,
       summary: [],
     };
@@ -427,9 +441,21 @@ export async function verifyArchive(game: ArchivedGame): Promise<Verdict> {
     moves: moves.length,
     verified,
     problems,
+    // Not folded into `problems`. A failed list is already there — it is a
+    // `genesis: consent` problem from `inspectGenesis` above — and what this
+    // adds is the two verdicts that are *not* faults: a record whose signatures
+    // all check out, and one that never claimed any.
+    consent: await checkConsent(genesis),
     winner: sim.state.winner,
     summary: sim.summary(),
   };
+}
+
+/** The consent line in one sentence, for anything that prints a verdict. */
+export function consentLine(verdict: ConsentVerdict): string {
+  if (verdict.state === "absent") return "consent: not stated";
+  if (verdict.state === "failed") return "consent: claimed, and it does not check out";
+  return `consent: ${verdict.signed} of ${verdict.seats} keyed seats signed this world`;
 }
 
 /** Seats that ever held the game, for a ranking to attribute results to. Read

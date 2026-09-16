@@ -11,6 +11,9 @@
 
 import { MAX_SEATS } from "@tessera/net";
 import type { HostPlan, LobbyPlayer } from "@tessera/net";
+import { proposalFrom, randomBytes } from "@tessera/protocol";
+import type { Proposal } from "@tessera/protocol";
+import { DEFAULT_RULES, DIFFICULTY, VACANCY_RULES, checkProfile } from "@tessera/sim";
 import type { BotChoice, DurationRules } from "@tessera/sim";
 
 /** A file handed to `--plan`. Keys rather than names, because a key is the seat:
@@ -83,4 +86,48 @@ function plan(file: PlanFile, empires: string[][], players: LobbyPlayer[]): Host
     height: file.height ?? 48,
     ...(file.duration ? { duration: file.duration } : {}),
   };
+}
+
+/** The world a `--propose` room puts on the table.
+ *
+ *  The same plan file, read for everything except the roster — because a
+ *  proposal names nobody, and the roster is whoever signs it. `--vacancies`,
+ *  `--plan`'s map and duration and its bot list all mean exactly what they mean
+ *  in the composing path; `empires` is the one field that stops applying, and
+ *  that is the point.
+ *
+ *  `startedAt` is a future instant rather than `Date.now()`, so the deadline for
+ *  signing is a fact of the record everyone can read rather than a convention
+ *  held by this process. A random seed, not one derived from the room code and
+ *  the clock: two identical-looking worlds in two rooms must be distinct
+ *  objects, or a consent could be lifted out of one into the other. */
+export function worldFrom(file: PlanFile, opensIn: number): Proposal {
+  const bots = file.simbots ?? [];
+  for (const one of bots) {
+    if (typeof one === "string") continue;
+    const wrong = checkProfile(one, { ...DEFAULT_RULES, ...file.duration });
+    if (wrong) throw new Error(`a bot in this plan cannot be played: ${wrong}`);
+  }
+  return proposalFrom({
+    seed: randomSeed(),
+    startedAt: Date.now() + Math.max(0, opensIn) * 1000,
+    map: { width: file.width ?? 48, height: file.height ?? 48 },
+    ...(file.duration || file.vacancies
+      ? { rules: { ...(file.vacancies ? VACANCY_RULES : {}), ...file.duration } }
+      : {}),
+    simbots: bots.map((one) => (typeof one === "string" ? DIFFICULTY[one] : one)),
+    ...(file.vacancies ? { vacancies: file.vacancies } : {}),
+  });
+}
+
+/** Whether enough people have signed to stop waiting. `--auto n` supplies the
+ *  number; without one the room waits for the instant in the record. */
+export function sealAt(count: number | undefined): ((signers: readonly string[]) => boolean) | undefined {
+  if (count === undefined) return undefined;
+  return (signers) => signers.length >= count;
+}
+
+function randomSeed(): number {
+  const bytes = randomBytes(4);
+  return ((bytes[0]! << 24) | (bytes[1]! << 16) | (bytes[2]! << 8) | bytes[3]!) >>> 0;
 }

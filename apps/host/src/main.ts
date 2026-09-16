@@ -43,7 +43,7 @@ import {
 import type { ConnectionRef, Listing, Opener } from "@tessera/net";
 import { FileArchive, hostGame, identityAt, readArchive, readResumePoint } from "@tessera/headless";
 import type { HostedGame } from "@tessera/headless";
-import { fromAuto, fromPlan, sealWith } from "./compose.js";
+import { fromAuto, fromPlan, sealAt, sealWith, worldFrom } from "./compose.js";
 import type { Composer, PlanFile } from "./compose.js";
 import { serve } from "./serve.js";
 import type { Room } from "./serve.js";
@@ -68,6 +68,9 @@ Options:
   --vacancies <n>      empires left unclaimed, for players to arrive into later
   --auto <n>           seal as soon as n players are here, one empire each
   --wait <secs>        seal early at this deadline with whoever is present
+  --propose <secs>     put a world on the table and seal in <secs> with whoever
+                       signed it — the roster is the signatures, so this process
+                       composes nothing and decides only who was late
   --dir <path>         where archives go (default ./archives)
   --key <path>         identity file (default <dir>/identity.jwk)
   --ice <urls>         STUN/TURN urls, replacing PeerJS's own (rtc only)
@@ -95,6 +98,7 @@ const { values, positionals } = parseArgs({
     plan: { type: "string" },
     auto: { type: "string" },
     wait: { type: "string" },
+    propose: { type: "string" },
     dir: { type: "string", default: "./archives" },
     key: { type: "string" },
     ice: { type: "string" },
@@ -169,8 +173,11 @@ async function run(): Promise<void> {
   if (asked !== undefined) file.vacancies = asked;
   const auto = number(values.auto, "--auto");
   const wait = number(values.wait, "--wait");
-  if (!values.plan && auto === undefined && !values.ref) {
-    throw new Error("say how to compose the game: --plan <file> or --auto <n>");
+  const opensIn = number(values.propose, "--propose");
+  if (!values.plan && auto === undefined && opensIn === undefined && !values.ref) {
+    throw new Error(
+      "say how to compose the game: --propose <secs>, --plan <file> or --auto <n>",
+    );
   }
   // One empire is last-empire-standing on the first step, so a game needs two.
   // Refused here rather than discovered later: the alternative is a host that
@@ -199,8 +206,10 @@ async function run(): Promise<void> {
         `more players, or add simbots to --plan`,
     );
   }
-  if (vacant > 0 && auto === undefined && !values.plan) {
-    throw new Error("--vacancies needs a game to put them in: --plan <file> or --auto <n>");
+  if (vacant > 0 && auto === undefined && opensIn === undefined && !values.plan) {
+    throw new Error(
+      "--vacancies needs a game to put them in: --propose <secs>, --plan <file> or --auto <n>",
+    );
   }
 
   const port = number(values.port, "--port") ?? 8080;
@@ -236,13 +245,19 @@ async function run(): Promise<void> {
   // `--auto` wins when both are given, because then the plan file is the
   // *settings* — bots, map, duration — and the roster is whoever turns up. A plan
   // file is both things, and naming empires in it is what makes it a roster.
-  const composer: Composer | null = values.ref
-    ? null
-    : auto !== undefined
-      ? fromAuto(auto, file)
-      : values.plan
-        ? fromPlan(file)
-        : null;
+  const composer: Composer | null =
+    values.ref || opensIn !== undefined
+      ? null
+      : auto !== undefined
+        ? fromAuto(auto, file)
+        : values.plan
+          ? fromPlan(file)
+          : null;
+
+  // The world this room is suggesting, if it is suggesting one rather than
+  // composing. Built once, before anybody arrives: it names nobody, so there is
+  // nothing about it that waiting would settle.
+  const world = opensIn !== undefined && !values.ref ? worldFrom(file, opensIn) : undefined;
 
   let archive: FileArchive | undefined;
   let hosted: HostedGame | undefined;
@@ -295,6 +310,8 @@ async function run(): Promise<void> {
       if (plan) sealed = true;
       return plan;
     },
+    ...(world ? { propose: world } : {}),
+    ...(world && auto !== undefined ? { sealWhen: sealAt(auto) } : {}),
     onRefused: (problem) => {
       // Structural, every time: composing again would be refused again.
       console.error(`cannot compose this game: ${problem}`);
@@ -303,7 +320,15 @@ async function run(): Promise<void> {
     onWaiting: (players) => {
       const here = players.filter((player) => !player.you).length;
       if (composer) say(`waiting  ${here} here, want ${composer.wants}`);
-      if (wait === undefined || deadline || here < 1) return;
+      if (world) {
+        const left = Math.max(0, Math.round((world.startedAt - Date.now()) / 1000));
+        say(`waiting  ${here} here, sealing in ${left}s with whoever has signed`);
+        return;
+      }
+      // A proposed game has its own deadline, in the record, and everybody can
+      // read it. `--wait` is for the composing path, where the only clock is
+      // this process's patience.
+      if (world || wait === undefined || deadline || here < 1) return;
       deadline = setTimeout(() => {
         if (sealed) return;
         say(`sealing  with ${here} — the deadline passed`);

@@ -200,10 +200,26 @@ export class Lobby {
   readonly members = new Map<string, MemberKey>();
 
   onChange?: () => void;
-  /** `seat` is undefined for an observer — a peer whose key is not in the
+  /** The record was adopted: here is the game, your seat in it, and the wire.
+   *
+   *  Fires the moment a record is accepted, **including one sealed for an
+   *  instant that has not arrived**. A driver built early is correct — it sits
+   *  at step 0 because `targetStep` clamps there, it archives, it serves the
+   *  room, and a host process that waited for the instant before coming up
+   *  would be a room nobody could reach during the countdown.
+   *
+   *  What must not happen early is a *screen* claiming the game is running. That
+   *  is `phase` — `starting` until the instant, `playing` after — and `onBegin`
+   *  below, which is the moment a view swaps.
+   *
+   *  `seat` is undefined for an observer — a peer whose key is not in the
    *  roster. It follows, verifies and archives the game like anyone else, and
    *  can be voted a seat later by ROSTER_AMEND. */
   onStart?: (genesis: Genesis, seat: Seat | undefined, transport: Transport) => void;
+  /** The agreed instant arrived and the game is live. Fires immediately after
+   *  `onStart` for a record sealed for now, which is every record composed
+   *  before 0009 and every one the old `host` path still produces. */
+  onBegin?: () => void;
 
   private handler?: FrameHandler;
   /** The record we agreed to play, kept so a peer that arrives after the game
@@ -233,7 +249,6 @@ export class Lobby {
   private readonly signed = new Set<string>();
   /** The instant a sealed record begins, while we are waiting for it. */
   private countdown?: ReturnType<typeof setTimeout>;
-  private pending?: { genesis: Genesis; seat: Seat | undefined };
 
   private constructor(
     readonly identity: Identity,
@@ -759,34 +774,32 @@ export class Lobby {
     this.clearWatchdog();
     this.sealed = genesis;
 
-    // A record sealed for a future instant is a game that has not begun.
-    // `targetStep` clamps at zero, so the simulation sits at step 0 correctly
-    // with no new code — but a screen told "playing" would show a frozen board
-    // and call it live, and the driver is built either way. So the phase says
-    // `starting` and `onStart` waits for the instant.
+    // A record sealed for a future instant is a game that has not begun, and
+    // the two halves of that come apart here. The driver is built now — it sits
+    // at step 0 because `targetStep` clamps there, and a peer that waited would
+    // be a room nobody could reach during the countdown. The *phase* is what
+    // holds: `starting` until the instant, so nothing tells a player a frozen
+    // board is live.
     const wait = genesis.startedAt - this.now();
-    if (wait > 0) {
-      this.phase = "starting";
-      this.pending = { genesis, seat };
-      this.changed();
-      this.countdown = setTimeout(() => this.begin(), wait);
-      return;
-    }
-
-    this.phase = "playing";
+    this.phase = wait > 0 ? "starting" : "playing";
     this.changed();
     this.onStart?.(genesis, seat, this.baseTransport());
+
+    if (wait <= 0) {
+      this.onBegin?.();
+      return;
+    }
+    this.countdown = setTimeout(() => this.begin(), wait);
+    this.countdown.unref?.();
   }
 
   /** The instant a game sealed for later actually starts. */
   private begin(): void {
     this.countdown = undefined;
-    const waiting = this.pending;
-    this.pending = undefined;
-    if (!waiting || this.phase !== "starting") return;
+    if (this.phase !== "starting") return;
     this.phase = "playing";
     this.changed();
-    this.onStart?.(waiting.genesis, waiting.seat, this.baseTransport());
+    this.onBegin?.();
   }
 
   /** How long until a game sealed for a future instant begins, in
