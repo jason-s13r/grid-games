@@ -1,14 +1,11 @@
 // The sign button, against a DOM that is actually a DOM.
 //
-// The proposal screen proper is 0014; what ships here is one row per world on
-// the table and a button that signs one. That is still markup built by
-// concatenating strings, and the thing it concatenates is a **proposal id a
-// stranger chose** — the id comes off a frame anybody in the room can send, and
-// it goes straight into an attribute that the click handler reads back out.
-//
-// So this asks the two questions only a parser can answer: does the row survive
-// the round trip, and does a hostile id stay inside its attribute instead of
-// escaping into the markup and taking the button's identity with it.
+// One sheet per world on the table, and a button that signs one. The sheet's
+// two halves are pinned as strings in `proposal.test.ts`; what only a parser can
+// answer is whether the markup survives being read back, and whether the
+// **proposal id a stranger chose** stays inside the attribute the click handler
+// reads out of it — the id comes off a frame anybody in the room can send, and
+// an id that escapes its attribute takes the button identity with it.
 
 import { describe, expect, it } from "vitest";
 import { proposalFrom } from "@tessera/protocol";
@@ -64,16 +61,15 @@ describe("a world on the table", () => {
       ]),
     );
 
-    const rows = root.querySelectorAll("li.lobby-seat");
-    expect(rows).toHaveLength(2);
+    expect(root.querySelectorAll(".sheet")).toHaveLength(2);
     expect(root.textContent).toContain("48×32");
     expect(root.textContent).toContain("2 empires left open");
-    // A signer count and never a tally: the signatures *are* the roster, so
-    // there is no threshold anybody is short of.
-    expect(root.textContent).toContain("1 signed");
-    expect(root.textContent).toContain("2 signed, rev 3");
+    // A count and never a tally: the signatures *are* the roster, so there is
+    // no threshold anybody is short of.
+    expect(root.textContent).toContain("1 player in this game");
+    expect(root.textContent).toContain("2 players in this game, at revision 3");
 
-    const buttons = root.querySelectorAll<HTMLElement>("[data-lobby-action='consent']");
+    const buttons = root.querySelectorAll<HTMLElement>("[data-proposal='sign']");
     expect(buttons).toHaveLength(2);
     buttons[1]!.click();
     expect(signed).toEqual(["bbb"]);
@@ -84,8 +80,8 @@ describe("a world on the table", () => {
     panel.attach(
       stub([{ id: "aaa", proposal: world(), rev: 0, by: "k1", signers: ["k1"], mine: true }]),
     );
-    expect(root.querySelectorAll("[data-lobby-action='consent']")).toHaveLength(0);
-    expect(root.textContent).toContain("you signed");
+    expect(root.querySelectorAll("[data-proposal='sign']")).toHaveLength(0);
+    expect(root.textContent).toContain("You are in");
   });
 
   // The id is a string a stranger chose. If it escapes its attribute it takes
@@ -97,10 +93,10 @@ describe("a world on the table", () => {
       stub([{ id: nasty, proposal: world(), rev: 0, by: "k1", signers: [], mine: false }]),
     );
 
-    const button = root.querySelector<HTMLElement>("[data-lobby-action='consent']");
+    const button = root.querySelector<HTMLElement>("[data-proposal='sign']");
     expect(button).not.toBeNull();
     expect(button!.getAttribute("onclick")).toBeNull();
-    expect(button!.dataset.proposal).toBe(nasty);
+    expect(button!.dataset.id).toBe(nasty);
     button!.click();
     expect(signed).toEqual([nasty]);
   });

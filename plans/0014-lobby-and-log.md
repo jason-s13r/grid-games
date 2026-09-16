@@ -1,6 +1,6 @@
 # 0014 — The lobby rejig and the game log
 
-Status: draft
+Status: built (2026-09-16)
 Depends on: 0009 (the proposal it renders), 0010, 0011, 0012, 0013
 Branch: `lobby-and-log`
 
@@ -612,6 +612,59 @@ about the diff and not about a `<div>`.
 | the log holds at its cap through a 240-step pump and reads `scrollHeight` once | `LogPanel`, measured — the constraint stated as a number |
 | **claiming a vacancy and endorsing an application both work from the roster screen** | the harness, end to end — and step 8 is when "reachable" first becomes true |
 | no existing test in `packages/sim` or `packages/net` changes | the diff. New files are added; not one line of the recorded-game suite moves |
+
+## What came out differently
+
+Written after building it. The appendix's two lead findings were both right and
+both live bugs — the roster UI was painted into a hidden element for the whole
+duration of every game, and `archive.attach` was clobbered three lines later so
+every archive this client wrote carried an empty chat log. It was also right
+that the world stream is a diff of hashed counters rather than anything a
+callback produces. Five things it did not have.
+
+**The journal's vocabulary was missing the commonest event.** The body lists "an
+annexation" first and the appendix takes the list at face value — but `ANNEXED`
+is bumped only when an empire *inherits* a fallen one's ground. Ordinary
+captures bump `TILES_TAKEN`, and nothing in the plan's vocabulary reads it. The
+first run of the two-peer test agreed perfectly on an **empty** stream, which is
+the most convincing way to discover that a log says nothing. `took` is now the
+first kind, and it is also the reason the panel needs a cap and a filter rather
+than a scrollback.
+
+**`onDirty` cannot even be the flush it looks like.** The appendix rules it out
+as a shutter, correctly, because it fires once per pump after as many as 240
+steps. What it does not say is that the same fact breaks the *adoption guard*: a
+differ armed on `onApplied` and fired on `onDirty` sees a step delta of up to
+240 on every ordinary pump, which is indistinguishable from a snapshot being
+adopted. So the diff-and-retally happens entirely inside `onApplied` — which
+makes it idempotent, which is what lets `onDirty` be chained harmlessly as a
+tail flush so the last step of a game is not left unjournaled.
+
+**Steps 10–12 were not blocked.** The order of work marks them "after 0011,
+0010, 0012" and "after 0009" — all of which had landed by the time this plan was
+built, so applications, vacancies, names, banners and the proposal sheet all
+shipped here rather than waiting.
+
+**The proposal sheet's split is what made it testable, and the plan's own
+verification asked for the wrong test.** "Renders identically on every peer" is
+a property this screen cannot have: the same section asks for a button whose
+state is whether *this* key has signed. `proposalBody` / `proposalChrome` is the
+appendix's shape and it is right; the tests then assert the narrower true thing
+— the derived half is byte-identical, the chrome differs, and the test names
+which fields are allowed to.
+
+**`escape` and `stamp` both had to leave the files that owned them.** Three
+panels now build markup from strings a stranger chose and two render game time;
+the appendix asks for the second and not the first. Neither is interesting, and
+both are the kind of thing that is a duplicated four-character replace until
+somebody adds a fifth panel with a subtly different one.
+
+One thing deliberately not done: the appendix's step 3 asks for the shop fix and
+its measurement, and the measurement only means anything in a real engine —
+`getComputedStyle` and a live `click` after a node swap have no equivalent in
+the hand-stubbed DOM the existing Controls test uses. It is a `*.browser.test.ts`
+for that reason, and it fails without the guard, which was checked rather than
+assumed.
 
 ## What this plan does not settle
 

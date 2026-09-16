@@ -44,3 +44,19 @@ simulation runs the seat's already-valid moves regardless. That is why:
   which changes the state bytes.
 
 See [what-is-hashed.md](what-is-hashed.md).
+
+## Half of an ejection is shared and half is not
+
+`onEjection(seat, atStep, reason, late)` delivers both halves on one callback,
+and only the first is the same on every peer:
+
+| Fact | Same everywhere? |
+|---|---|
+| a seat was ejected, and at which step | **yes** — a signed record at a fixed step |
+| *why* — `reason` | **no** — local by design: "the evidence that prompted it is whatever each peer happened to see, and a UI string is not worth a consensus field" |
+| `late` | **no** — how far this peer had got when it found out |
+
+So a log line reading "Dave was dropped for desyncing" is identical on no two
+screens. The [game log](../clients/web-client.md) puts the seat and the step in
+its shared stream and the reason in its session register, which is the
+distinction that register exists for.

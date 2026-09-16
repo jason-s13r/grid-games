@@ -18,6 +18,7 @@ import { MAX_SEATS, composeTeams } from "@tessera/net";
 import type { Lobby, LobbyPlayer } from "@tessera/net";
 import { empireTheme } from "./palette";
 import { escape } from "./escape";
+import { proposalBody, proposalChrome } from "./Proposal";
 
 export interface LobbyHandlers {
   /** Propose seating this key on our own empire. */
@@ -95,6 +96,9 @@ export class LobbyPanel {
     private readonly handlers: LobbyHandlers,
   ) {
     this.root.addEventListener("click", (event) => {
+      const sign = (event.target as HTMLElement).closest<HTMLElement>("[data-proposal='sign']");
+      if (sign?.dataset.id) return this.handlers.consent(sign.dataset.id);
+
       const button = (event.target as HTMLElement).closest<HTMLElement>("[data-lobby-action]");
       if (!button) return;
       const action = button.dataset.lobbyAction;
@@ -270,35 +274,36 @@ export class LobbyPanel {
    *  The proposal screen proper — the duration control, the vacancy rows, the
    *  profile editor, the revision history — is 0014. This is the sign button on
    *  the panel that already exists, and nothing more. */
+  /** Worlds on the table, as a shared sheet.
+   *
+   *  Two halves, and the split is the point. `proposalBody` is derived from the
+   *  proposal and nothing else, so it is identical on every peer and two players
+   *  are entitled to compare it. `proposalChrome` is this peer's — whether *this*
+   *  key has signed, and how long is left — and is allowed to differ.
+   *
+   *  Nobody's controls are privileged. 0009 removed the host role, so any player
+   *  may post a revision, and the only live count is how many people have agreed
+   *  to *this* revision of the world. */
   private tableBody(lobby: Lobby): string {
     const worlds = lobby.proposals();
     if (worlds.length === 0) return `<p class="hint">Nothing on the table yet.</p>`;
 
-    const rows = worlds
-      .map((world) => {
-        const n = world.signers.length;
-        const bots = world.proposal.simbots.length;
-        const vacant = world.proposal.vacancies;
-        const extra = [
-          bots ? `${bots} bot empire${bots === 1 ? "" : "s"}` : "",
-          vacant ? `${vacant} empire${vacant === 1 ? "" : "s"} left open` : "",
-        ]
-          .filter(Boolean)
-          .join(", ");
-        return `
-        <li class="lobby-seat">
-          <span class="lobby-who">${world.proposal.map.width}\u00d7${world.proposal.map.height}${
-            extra ? ` \u2014 ${escape(extra)}` : ""
-          }
-            <span class="lobby-tally">${n} signed${world.rev > 0 ? `, rev ${world.rev}` : ""}</span></span>
-          ${
-            world.mine
-              ? `<span class="lobby-tally">you signed</span>`
-              : `<button class="btn btn-small" data-lobby-action="consent"
-            data-proposal="${escape(world.id)}">Play this</button>`
-          }
-        </li>`;
-      })
+    const sheets = worlds
+      .map(
+        (world) => `
+        <div class="sheet">
+          ${proposalBody(world.proposal)}
+          ${proposalChrome(
+            {
+              mine: world.mine,
+              signed: world.signers.length,
+              rev: world.rev,
+              startsIn: Math.max(0, world.proposal.startedAt - Date.now()),
+            },
+            world.id,
+          )}
+        </div>`,
+      )
       .join("");
 
     return `
@@ -307,7 +312,7 @@ export class LobbyPanel {
       <p class="hint">A game on the table. Signing it is what seats you \u2014 the
       players are whoever signed, so nobody can put you in a game you did not
       agree to, and nobody else signing changes the world you did.</p>
-      <ul class="lobby-teams">${rows}</ul>`;
+      ${sheets}`;
   }
 
   private seatRow(player: LobbyPlayer, team: number, used: number): string {

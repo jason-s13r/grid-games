@@ -53,3 +53,30 @@ Both are seeded once at genesis by [`generate`](../../packages/sim/src/mapgen.ts
 The single map-wide sweep in the whole simulation is `upkeep`, once per 20 s of
 game time. Everything else — accrual, victory checks — is O(empires), not
 O(tiles). That is what makes a multi-day game's catch-up cheap.
+
+## The queue schedules; it does not announce
+
+`EventQueue` is often mistaken for an event bus, and building a reader's log on
+that mistake produces nothing: `runEvents` polls one event, calls `upkeep` or
+`spawnItem`, and drops it. Nor do the other obvious sources say anything —
+`applyMove` mutates state and adds tile indices to a set, `checkVictory` sets
+`alive = 0` in silence, and `Sim.advance` returns dirty tiles with no account of
+why any of them is dirty.
+
+**The reader's stream is a diff of hashed counters instead**
+(`sim/src/journal.ts`), and that is the stronger construction rather than the
+cheaper one: the outcomes are already in `empire.stats`, already in the snapshot
+and already in the hash, so two peers at one step derive the same lines without
+anything being emitted or agreed. See
+[what is hashed](../continuity/what-is-hashed.md).
+
+One thing the counters cannot say is **where**: a coin taken has no coordinates
+in `stats`, so the log says "Vermilion took a gold coin" and not which tile. A
+coordinate would have to come from a sim-side emitter, and that is a
+hashed-state change for a sentence.
+
+And one thing it can say without any: **upkeep is a metronome.**
+`scheduleUpkeep` pushes `from + rules.upkeepInterval` with no RNG draw in it, so
+the queue's head is readable before a step runs and "this is an upkeep step" is
+a fact of state. The population the sweep cost is the `popTotal` delta on
+exactly those steps.

@@ -108,3 +108,23 @@ the only thing that asks both, in the only order that is safe.
 refused, state left alone; real one accepted, lands on its step"; "a late peer
 resumes without being told"; "an unanswered resume request eventually plays from
 the top".
+
+## What a resumed peer can be told about the gap
+
+Nothing, and no amount of UI changes that.
+
+A peer far enough behind adopts a snapshot rather than replaying: the moves that
+built that state were broadcast before it was listening, so nobody will send
+them again and replaying from step 0 would derive a state that agrees with
+nobody. It therefore **never simulates the intervening steps**, and a
+[log](../clients/web-client.md) derived from step-to-step diffs has nothing to
+diff.
+
+Worse, a naive differ would produce one enormous fabricated line — *Vermilion
+annexed 1,412 tiles* — because `adopt` restores every counter at once. So the
+tally is **reset** across an adoption rather than diffed across it, and what the
+returning player gets is a marker and a number: "you were away for 8h 12m".
+
+A tab that stayed open is the other case, and it gets everything: it fast-
+forwards through every step, so the events are derived — in a burst, which is
+the load case the log's cap and batched layout read exist for.

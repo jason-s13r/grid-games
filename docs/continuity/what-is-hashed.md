@@ -41,3 +41,15 @@ no server has to be trusted not to believe a lying one. The
 and any peer whose stats differ by one fails the next
 [checkpoint](desync.md) within seconds. State that is not hashed does not exist;
 state that is hashed is compared.
+
+## Stats are hashed, and that is what the log is built on
+
+`empire.stats` and `member.stats` are inside the hash — sixteen counters each,
+encoded in the snapshot — because end-of-game figures should be consensus by
+construction rather than something a client reports and a server must trust.
+
+That buys something beyond the scoreboard: **a reader's event stream can be a
+diff of those counters**, and its determinism is not a property anybody has to
+arrange. Two peers at the same step hold the same counters, so they derive the
+same account of what happened. See
+[events, not ticks](../simulation/events-not-ticks.md).

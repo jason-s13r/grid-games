@@ -292,3 +292,58 @@ assigning everybody's flag would be the composer deciding somebody else's
 identity — and it rides the claim when we take over an empire nobody is playing.
 When somebody already has it, we get that empire's own colours and nothing stops
 the game.
+
+## The panels, and which column each is in
+
+The **left** column holds Map, Standings, Your seats, **People** and **Log**. The
+right column holds chat and nothing else, and is dropped entirely in a solo
+game — which is why the log is on the left: it is the one panel worth having in
+a solo game, because a SimBot annexing your capital at 3am is exactly the thing
+nothing else tells you.
+
+**People** is where the roster lives during a game: who has asked your empire
+for a seat, who is watching without one, and which empires nobody is playing.
+Before this it was rendered into the setup screen, which is `hidden` for the
+whole duration of a game — so the Agree button was rebuilt five times a second
+into a subtree with `display: none` on it, and the only route back to it was
+Leave, which drops the mesh. The content is unchanged; it is the reachability
+that is new.
+
+## The log, and its two registers
+
+**World events are identical on every peer.** They are a diff of counters that
+live inside the state hash — `stats.ts` put them there so that "end-of-game
+figures are consensus by construction" — so two players comparing this stream
+see the same lines in the same order, and nobody had to arrange it.
+
+**Session events are this tab's alone**: a transport reconnected, our hash
+disagreed with the majority, somebody was caught equivocating, a seat was
+dropped *and the reason we have for it*. They are drawn set back and italic,
+because a reader who cannot tell the registers apart will quote a session line
+at somebody who never saw it.
+
+The line between them runs through one callback. `onEjection` carries a seat and
+a step, which every peer agrees on, together with a `reason` that is local by
+design and a `late` flag that is how far this peer had got when it found out.
+The first half is a world event; the rest is not.
+
+**A reloaded tab gets a marker and a number, not a story.** It adopted a
+snapshot and never simulated the steps it missed — the moves that built that
+state were broadcast before it was listening, and nobody will send them again —
+so there is nothing to derive. "You were away for 8h 12m" is what this design
+can honestly say. Anything better has to come from a peer that was present, or
+from the archive.
+
+## The proposal sheet
+
+A game on the table, with no host role to privilege: any player may post a
+revision, and the sheet shows one live count — how many people have agreed to
+*this* revision of the world.
+
+**Signing is not agreeing.** A consent is the thing that puts you in the game, so
+the button is "Play this game" and a player who has not signed is not a
+dissenter — they are somebody who is currently not in it. It follows that a
+revision does not cost the reviser a signature, it costs everyone else their seat
+until they sign again, and a revision posted shortly before the start instant
+would drop anybody who does not see it in time. The countdown against `startedAt`
+is on the same screen as the edit controls for exactly that reason.
