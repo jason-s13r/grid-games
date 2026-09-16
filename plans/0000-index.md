@@ -1,9 +1,14 @@
 # Plan index
 
-Status of the series: **all fourteen built.** Built in the order
+Status of the series: **fourteen built, three planned.** Built in the order
 below; each plan leaves the tree green and is useful on its own. No plan adds authority anywhere — the
 sim, the hash contract, quorum signatures and archive verification are
 untouched, and everything stored anywhere is checked by whoever reads it.
+
+0001–0014 are the game. 0015–0017 are the first things in this repository with
+an address somebody else has to reach, and the discipline above is what they
+are hardest to keep — so each of the three is written around what its component
+is **not** allowed to decide.
 
 | # | Plan | Depends on | Size |
 |---|------|------------|------|
@@ -21,6 +26,9 @@ untouched, and everything stored anywhere is checked by whoever reads it.
 | 0012 ✅ | Names and direct messages — the social layer | — | 1–2 sessions |
 | 0013 ✅ | Banners — an empire you can play as again | 0009, 0010 | 1 session |
 | 0014 ✅ | The lobby rejig and the game log | 0009–0013 | 2 sessions |
+| 0015 ○ | The board — a service for rows nobody has to believe | 0007 | 1 session |
+| 0016 ○ | The archive store — a file nobody is trusted to have written | 0015, 0006 | 1–2 sessions |
+| 0017 ○ | The leaderboard — a table you can recompute | 0016 | 1 session |
 
 ## Why this order
 
@@ -36,6 +44,11 @@ untouched, and everything stored anywhere is checked by whoever reads it.
 - **0009 → 0014** is composition, arrival and identity, and 0014 is the screen
   that renders all of it. 0011 and 0012 depend on nothing and touch no
   simulation code, so they can be slotted anywhere.
+- **0015 → 0017** is one service, `apps/api`, built up over three plans. The
+  board is first because its wire contract is already pinned by
+  `packages/net/src/directory.ts` and `directory.test.ts` — there is nothing to
+  design, only a list of things the server must not do. 0016 brings the app its
+  storage and 0017 its only derived figure.
 
 0008 is the first plan to be split rather than built whole. Its own appendix
 recommended it — the replay scrubber is a worker and a snapshot ladder, and the
@@ -45,6 +58,26 @@ and joining it** — then **7–9, listing one and the two other create backends
 then **10–11, replay and the scoped leaderboard**. Three sittings, as its own
 appendix predicted, and each left the tree green. 0009–0014 depend on none of
 them.
+
+## The hosted service
+
+0015–0017 build one new app between them, and they exist because two of the
+three URLs the web client asks for point at software that does not exist: an
+address book and a host service. (The third, an archive URL, is answered by
+`apps/host` — but only for games that process is a peer in.) 0007 deferred the
+board's operational half in as many words — *"a public board will need a rate
+limiter and probably a cost. That is an operator's problem"* — and these are
+that operator's problem.
+
+`apps/host`'s managed-factory sibling is **not** here. 0006 calls it "an
+operational product" and `apps/web/src/net/factory.ts` says "nothing in this
+series builds a managed factory"; it is a fourth plan whenever somebody wants
+it.
+
+0016 opens with a fix rather than a feature: `readArchive` discards
+`{k:"claim"}` lines and stamps `format: 1`, so any game where somebody claimed
+a vacancy fails verification today with a misleading reason. It is a live bug
+in `tessera-observe`, not only a blocker for the service.
 
 Each plan carries its own argument. The two that span the series are written
 where they bite hardest: which changes owe a version bump, in 0001; what the
