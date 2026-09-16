@@ -1086,25 +1086,40 @@ a.btn {
   }
 }
 
-// The saved-game card. A file input is an ugly control and there is no dressing
-// it up here that a browser will not undo, so it is left plain and the sentence
-// above it does the work.
-.watch {
+// The saved-game card. A native file input is the one control on this screen
+// that cannot be made to match the others — `Browse… No file selected` is drawn
+// by the browser and is not stylable — so the input is taken out of the flow and
+// its label wears the button. The input stays in the DOM inside the label, which
+// is what keeps it focusable and keyboard-reachable.
+.file-btn {
+  display: inline-block;
+  margin-bottom: 8px;
+
   input[type="file"] {
-    font: inherit;
-    font-size: 12px;
-    width: 100%;
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    opacity: 0;
+    pointer-events: none;
+  }
+
+  // The focus ring belongs on the thing that looks like the button, not on a
+  // 1px input nobody can see.
+  &:focus-within {
+    background: #fff;
+    border-color: #b9b198;
+    outline: 2px solid #c9a531;
+    outline-offset: 1px;
   }
 }
 
 // Derived, never reported — so the refusals share the card with the table
-// rather than hiding behind it.
-.rank-card {
-  input[type="file"] {
-    font: inherit;
-    font-size: 12px;
-    width: 100%;
-  }
+// rather than hiding behind it. It sits under the picker that feeds it, ruled
+// off rather than boxed again: a card inside a card reads as two screens.
+.rank-mount {
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid var(--edge);
 
   textarea {
     resize: vertical;

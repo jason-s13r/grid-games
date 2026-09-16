@@ -925,7 +925,6 @@ pick<HTMLElement>("[data-standings]").addEventListener("click", (event) => {
 // the worker is never asked two questions at once.
 
 const scrubberEl = pick<HTMLElement>("[data-scrubber]");
-const watchFileEl = pick<HTMLInputElement>("[data-watch-file]");
 const watchProblemEl = pick<HTMLElement>("[data-watch-problem]");
 
 let replay: ReplaySession | undefined;
@@ -956,15 +955,6 @@ function askFor(step: number): void {
   scrubber.set({ kind: "seeking", step, total: reached });
   replay.seek(step);
 }
-
-watchFileEl.addEventListener("change", () => {
-  const file = watchFileEl.files?.[0];
-  // Cleared immediately so choosing the same file twice is two events. A file
-  // input that remembers its value silently ignores the second attempt, which
-  // looks exactly like a page that has stopped working.
-  watchFileEl.value = "";
-  if (file) void openSaved(file);
-});
 
 async function openSaved(file: File): Promise<void> {
   const say = (problem: string): void => {
@@ -1084,7 +1074,10 @@ function stopReplay(quietly = false): void {
 // `rankArchives`'s, and it happens in a worker because verifying a game means
 // replaying it and five three-day games is five full replays.
 
-const rankFilesEl = pick<HTMLInputElement>("[data-rank-files]");
+/** The only file picker on the screen. A saved game is one kind of file, and
+ *  two inputs for it were two answers to the same question — so this reads them
+ *  all, and how many there are decides what happens next. */
+const savedFilesEl = pick<HTMLInputElement>("[data-saved-files]");
 
 /** Files the player has opened this session. Kept as parsed archives rather than
  *  as `File`s, so opening a file that is not a saved game is refused where it
@@ -1103,11 +1096,30 @@ function sayRankable(): void {
 onSettingsChange(sayRankable);
 sayRankable();
 
-rankFilesEl.addEventListener("change", () => {
-  const files = [...(rankFilesEl.files ?? [])];
-  rankFilesEl.value = "";
-  void addFiles(files);
+savedFilesEl.addEventListener("change", () => {
+  const files = [...(savedFilesEl.files ?? [])];
+  // Cleared immediately so choosing the same file twice is two events. A file
+  // input that remembers its value silently ignores the second attempt, which
+  // looks exactly like a page that has stopped working.
+  savedFilesEl.value = "";
+  void openSavedFiles(files);
 });
+
+/** One picker, two jobs.
+ *
+ *  Opening a single game is a request to watch it; opening several is a request
+ *  to rank them. Either way every file is read and kept, so a game opened to
+ *  watch also counts toward the table — which is the behaviour two separate
+ *  pickers made impossible to explain. */
+async function openSavedFiles(files: File[]): Promise<void> {
+  if (files.length === 0) return;
+  const before = dropped.length;
+  await addFiles(files);
+  // Only watch a file that survived being read. `addFiles` has already named
+  // what was wrong with it, and saying so twice in two places for one file
+  // reads as two different failures.
+  if (files.length === 1 && dropped.length > before) await openSaved(files[0]!);
+}
 
 async function addFiles(files: File[]): Promise<void> {
   const refused: Refusal[] = [];

@@ -58,10 +58,10 @@ A `MemberKey` is unreadable and a `fingerprint(key)` is eight hex characters,
 which tells two strangers apart and is useless for playing with people you know.
 A [naming](signed-records.md) puts a word in front of it.
 
-**The suffix is not optional.** Nothing stops two players choosing `master5o1`
+**The suffix is not optional.** Nothing stops two players choosing `kestrel`
 and nothing should: uniqueness needs an authority to arbitrate, and there is no
 authority anywhere in this system by design. So the name is never shown alone —
-`master5o1#a3f19c04` is the rendering, the eight hex characters are the identity,
+`kestrel#a3f19c04` is the rendering, the eight hex characters are the identity,
 and **impersonation is made visible rather than prevented**. A chat line may
 abbreviate to the prefix where the seat colour already disambiguates; the roster,
 the rivals panel and every join or endorsement prompt show the full form.

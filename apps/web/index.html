@@ -235,44 +235,45 @@
             <div class="setup-foot" data-setup-foot></div>
           </section>
 
-          <!-- A file, not a service. The Save log button hands the player their
-               own copy of a game; this is the other end of it, and it checks
-               every signature and replays to the claimed hash before it shows
-               anything. See replay/Engine.ts. -->
-          <section class="card watch" data-watch>
-            <h2>Watch a saved game</h2>
-            <p class="card-tag">
-              Open a log saved with <strong>Save log</strong> &mdash; yours, or
-              one somebody sent you. Your browser checks every signature in it
-              and replays the whole game to see whether it reaches the state the
-              file claims, so nothing here is taken on anyone&rsquo;s word.
-            </p>
-            <div class="field field-stacked">
-              <label for="cfg-watch">Saved game</label>
-              <input id="cfg-watch" type="file" data-watch-file accept="application/json,.json" />
-            </div>
-            <p class="hint" data-watch-problem hidden></p>
-          </section>
+          <!-- One card, because a saved game is one kind of file and two
+               pickers for it was two answers to the same question. A file, not
+               a service: the Save log button hands the player their own copy of
+               a game and this is the other end of it, checking every signature
+               and replaying to the claimed hash before it shows anything.
 
-          <!-- Derived, never reported. Every figure in the table comes out of
-               hashed state after replaying a signed log, which is why the
-               refusals are on screen beside it: a leaderboard that silently
-               drops what it could not check is one nobody can audit. See
-               view/Leaderboard.ts. -->
-          <section class="card rank-card">
-            <div data-rank></div>
-            <!-- Outside the card's own root, which is replaced on every render:
-                 a file input that is rebuilt forgets what was chosen. -->
-            <div class="field field-stacked">
-              <label for="cfg-rank-files">Add saved games</label>
+               Opening one game watches it; opening several ranks them. Either
+               way every file is kept, so a game opened to watch also counts
+               toward the table below it. See replay/Engine.ts, view/Leaderboard.ts. -->
+          <section class="card saved" data-watch>
+            <h2>Saved games</h2>
+            <p class="card-tag">
+              Open logs saved with <strong>Save log</strong> &mdash; yours, or
+              ones somebody sent you. Your browser checks every signature and
+              replays each game to see whether it reaches the state the file
+              claims, so nothing here is taken on anyone&rsquo;s word.
+            </p>
+            <!-- A styled label over a hidden input: `Browse&hellip; No file
+                 selected` is the browser's own control and the one thing on
+                 this screen that cannot be made to match the rest. The input
+                 stays focusable and keyboard-reachable inside the label. -->
+            <label class="btn file-btn">
               <input
-                id="cfg-rank-files"
+                id="cfg-saved"
                 type="file"
                 multiple
-                data-rank-files
+                data-saved-files
                 accept="application/json,.json"
               />
-            </div>
+              <span>Open saved games&hellip;</span>
+            </label>
+            <p class="hint">
+              One game opens to watch. Several build the table below, along with
+              any archive URLs in <strong>Settings</strong>.
+            </p>
+            <p class="hint" data-watch-problem hidden></p>
+            <!-- Outside the leaderboard's own root, which is replaced on every
+                 render. -->
+            <div class="rank-mount" data-rank></div>
           </section>
 
           <!-- Folded away, because the normal state of these is "never touched".
@@ -295,7 +296,7 @@
                   class="lobby-code"
                   data-cfg="name"
                   maxlength="24"
-                  placeholder="master5o1"
+                  placeholder="kestrel"
                   spellcheck="false"
                   autocomplete="off"
                 />

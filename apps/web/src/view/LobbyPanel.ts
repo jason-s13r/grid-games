@@ -424,7 +424,7 @@ const option = (value: string, label: string, selected: boolean): string =>
 /** A player as a screen where a decision is made must show them.
  *
  *  **The fingerprint is not optional.** Nothing stops two players choosing
- *  `master5o1` and nothing should — uniqueness needs an authority to arbitrate,
+ *  `kestrel` and nothing should — uniqueness needs an authority to arbitrate,
  *  and there is no authority anywhere in this system by design. So the eight hex
  *  characters are the identity, the prefix is a convenience, and impersonation
  *  is made visible rather than prevented.

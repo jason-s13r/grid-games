@@ -87,9 +87,12 @@ export function view(mood: Mood): LeaderboardView {
   if (mood.kind === "unset") {
     return {
       ...empty,
+      // Says what is missing rather than what the button does: a control that
+      // is greyed out with no reason beside it is one people press twice and
+      // then stop trusting.
       label:
-        "Add archive URLs below, or open saved games, and this builds a table out of them. " +
-        "Nothing is counted until it has been replayed here.",
+        "Nothing to build from yet. Open saved games above, or add archive URLs " +
+        "in Settings. Nothing is counted until it has been replayed here.",
       working: false,
       canBuild: false,
     };

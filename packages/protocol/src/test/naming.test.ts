@@ -25,7 +25,7 @@ const naming = (over: Partial<Naming> = {}): Naming => ({
   seq: 0,
   empire: 1,
   member: 0,
-  name: "master5o1",
+  name: "kestrel",
   ...over,
 });
 
@@ -71,7 +71,7 @@ describe("a name is a claim only its own seat can make", () => {
 
 describe("what a reader does to a name before showing it", () => {
   it("keeps an ordinary name", () => {
-    expect(cleanName("master5o1")).toBe("master5o1");
+    expect(cleanName("kestrel")).toBe("kestrel");
   });
 
   // The one that matters. `escape()` replaces four characters and lets U+202E
@@ -133,7 +133,7 @@ describe("the display form", () => {
   // needs an authority to arbitrate, and there is no authority anywhere in this
   // system by design. So the suffix is not optional.
   it("always carries the fingerprint", () => {
-    expect(displayName("master5o1", "a3f19c04")).toBe("master5o1#a3f19c04");
+    expect(displayName("kestrel", "a3f19c04")).toBe("kestrel#a3f19c04");
   });
 
   it("is the bare fingerprint when there is no name", () => {
@@ -141,7 +141,7 @@ describe("the display form", () => {
   });
 
   it("makes two people with one name distinguishable", () => {
-    expect(displayName("master5o1", "a3f19c04")).not.toBe(displayName("master5o1", "b7c20d55"));
+    expect(displayName("kestrel", "a3f19c04")).not.toBe(displayName("kestrel", "b7c20d55"));
   });
 });
 

@@ -25,16 +25,16 @@ describe("names over a mesh", () => {
     const t = await table({ seats: [1, 1] });
     const [alice, bob] = seated(t);
 
-    await alice!.driver.rename("master5o1");
+    await alice!.driver.rename("kestrel");
     await bob!.driver.rename("neighbour");
     await settleNetwork(t);
 
     for (const peer of seated(t)) {
-      expect(peer.driver.nameOf(alice!.identity!.key)).toBe("master5o1");
+      expect(peer.driver.nameOf(alice!.identity!.key)).toBe("kestrel");
       expect(peer.driver.nameOf(bob!.identity!.key)).toBe("neighbour");
     }
     // Our own name is not news we hear from somebody else.
-    expect(alice!.driver.nameOf(alice!.identity!.key)).toBe("master5o1");
+    expect(alice!.driver.nameOf(alice!.identity!.key)).toBe("kestrel");
   });
 
   it("is cleaned on the way in, by the reader", async () => {
@@ -75,7 +75,7 @@ describe("names over a mesh", () => {
     });
     const [alice, bob] = seated(t);
 
-    await alice!.driver.rename("master5o1");
+    await alice!.driver.rename("kestrel");
     await settleNetwork(t);
     expect(bob!.driver.nameOf(alice!.identity!.key)).toBe("");
 
@@ -88,7 +88,7 @@ describe("names over a mesh", () => {
     await settleNetwork(t);
 
     expect(alice!.driver.nameOf(bob!.identity!.key)).toBe("neighbour");
-    expect(bob!.driver.nameOf(alice!.identity!.key)).toBe("master5o1");
+    expect(bob!.driver.nameOf(alice!.identity!.key)).toBe("kestrel");
   });
 
   it("tells a screen only when what it would render actually changed", async () => {
@@ -98,14 +98,14 @@ describe("names over a mesh", () => {
     const heard: string[] = [];
     bob!.driver.onNamed = (_key, name) => heard.push(name);
 
-    await alice!.driver.rename("master5o1");
+    await alice!.driver.rename("kestrel");
     await settleNetwork(t);
-    await alice!.driver.rename("master5o1");
+    await alice!.driver.rename("kestrel");
     await settleNetwork(t);
     await alice!.driver.rename("someone else");
     await settleNetwork(t);
 
-    expect(heard).toEqual(["master5o1", "someone else"]);
+    expect(heard).toEqual(["kestrel", "someone else"]);
   });
 
   it("a seatless peer cannot name itself, because nothing could check it", async () => {

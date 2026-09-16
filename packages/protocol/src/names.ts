@@ -77,7 +77,7 @@ export function cleanName(raw: unknown): string {
 
 /** How a name is shown, everywhere a decision is made.
  *
- *  Nothing stops two players choosing `master5o1`, and nothing should:
+ *  Nothing stops two players choosing `kestrel`, and nothing should:
  *  uniqueness would need an authority to arbitrate and there is no authority
  *  anywhere in this system by design. So the name is never shown alone. The
  *  eight hex characters are the identity, the prefix is a convenience, and
