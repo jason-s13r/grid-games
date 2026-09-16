@@ -77,3 +77,28 @@ makes end-of-game figures consensus by construction:
 [`summarise`](../../packages/sim/src/stats.ts#L58) reads them into an
 `EmpireSummary`, and the [leaderboard](../trust-and-verification/leaderboard.md)
 recomputes them by replay rather than accepting a reported number.
+
+## A profile somebody tuned by hand
+
+`BotChoice` is a preset name *or* a whole `BotProfile`, and widening it widened
+no trust. Every number in a profile is already bounded where it is **read**:
+
+- `popMax` is clamped to `rules.popMax` when the seat is created
+  ([`state.ts`](../../packages/sim/src/state.ts)) — a difficulty setting can
+  only ever hold a seat back;
+- a phase's rate is floored at `rules.botActionInterval` on every action
+  ([`sim.ts`](../../packages/sim/src/sim.ts), and again for headless bots), so
+  `rate: [0, 0]` cannot out-reflex anybody;
+- `coins` is a percentage.
+
+So the strongest profile anybody can write is an opponent rather than an
+exploit, it is in the genesis for every peer to read before agreeing to play,
+and a host who makes the bots brutal has made them brutal to their own empire
+too.
+
+`checkProfile(profile, rules)` is the early refusal — an empty phase set, a
+negative duration, a backwards rate, a ceiling above the rule. It lives in
+`specs.ts` rather than in a UI because there are three composers (the web panel,
+a host peer's plan file, a test) and a validation living in one of them is a
+validation the other two do not have. It **refuses and never clamps**: the two
+clamps above stay exactly where they are and remain the things that bind.

@@ -33,6 +33,7 @@ interface Verdict {
   moves: number;
   verified: number;    // moves that carried a signature this roster accepts
   problems: string[];  // everything wrong; empty when nothing is
+  consent: ConsentVerdict; // whether the players are on record as agreeing to this world
   winner: number;      // read off the replay, not the archive
   summary: EmpireSummary[];
 }
@@ -42,6 +43,30 @@ Four kinds of tampering are four distinct entries in `problems`: an **edited**
 move (`bad signature at step N`), an **invented** move (`unsigned move at step
 N`), a **removed** move (`hash mismatch`), and a **simply-asserted** outcome
 (also `hash mismatch`).
+
+### What consent adds
+
+An archive could always prove **what happened**. It could not prove that anybody
+**agreed to the rules it happened under** — which starts mattering the moment
+there is a [leaderboard](leaderboard.md) and a disputed game.
+
+`verdict.consent` has three states, and the third value is the point:
+
+```
+consent: 4 of 4 keyed seats signed this world   // checked
+consent: not stated                             // absent
+consent: claimed, and it does not check out     // failed
+```
+
+An unverified consent list is worse than none, because it looks like proof. A
+reader that cannot tell *checked* from *absent* would read every archive written
+before [co-signed genesis](../mesh/the-lobby.md) as an accusation, and every
+forged one as a fact.
+
+`absent` is deliberately **not** a problem: a record that claims nothing fails
+nothing. `failed` is one, and arrives through `problems` as `genesis: consent`
+by the ordinary `inspectGenesis` route — so this field adds the two verdicts
+that are not faults, and nothing else.
 
 ## Fragments
 

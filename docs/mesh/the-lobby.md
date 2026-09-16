@@ -16,7 +16,13 @@ seat it holds. Nothing after that needs a host at all.
 
 ## Phases
 
-`LobbyPhase` = `connecting | hosting | waiting | playing | failed`.
+`LobbyPhase` = `connecting | hosting | waiting | composing | starting | playing | failed`.
+
+`composing` means a world is on the table and nobody has sealed it. `starting`
+means a record is adopted and its instant has not arrived — the driver exists
+and sits at step 0, because a peer that waited would be a room nobody could
+reach during its own countdown; what waits is the word. `onStart` fires when the
+record is adopted, `onBegin` when the game is actually live.
 
 - `Lobby.open(identity, ref?, { id?, iceServers?, connect?, hosting?, expect? })` —
   static async; a transport arrives here on demand, and which one is decided by the
@@ -44,6 +50,80 @@ seat it holds. Nothing after that needs a host at all.
   reaching the host; a symmetric-NAT failure is silent (no error, the channel
   just never opens).
 
+## Composing together: propose, consent, seal, verify
+
+Composition used to be the one phase of Tessera that was not a signed record.
+One peer read its own UI state, sealed a genesis, broadcast it, and everybody
+else's only available response was refusal. Mid-game, adding one person to one
+empire needs a quorum; pre-game, composing the entire world was one unilateral
+act by whoever clicked first.
+
+**You sign the world, not the roster.** Everything else follows. Signing the
+plan deadlocks: every arrival changes the member list, changes the hash, and
+voids every signature already collected — and in a room where people drift in
+over an hour, settling is precisely what attracts the next joiner. So the signed
+object names nobody, and the roster is *derived from who signed it*.
+
+1. **`propose(proposal)`** — anybody may. A `Proposal` is seed, start instant,
+   map, rules, bot profiles and vacancy count, with every default resolved
+   before hashing. It travels as a `PROPOSAL` frame and a later `rev` from the
+   same proposer supersedes; a different proposer is a different proposal and
+   the screen shows both. Nothing arbitrates, because nothing has to — a
+   proposal nobody signs dies of that.
+2. **`consent(id)`** — sign `TAG_CONSENT ‖ proposalId` and broadcast a
+   `CONSENT` frame. One signature, and there is no second to collect.
+3. **`seal(id)`** — `composeGenesis(proposal, consents)`: signers in key order,
+   then vacancies, then SimBots. Then [`sealGenesis`](../protocol/genesis.md),
+   broadcast, adopt.
+4. **Everybody verifies.** `inspectGenesis` runs `checkConsent`, which
+   reconstructs the proposal from the record and rebuilds the whole record from
+   it. One comparison, not a list of field checks.
+
+**This is not a vote.** A vote binds the outvoted, and nothing in Tessera has
+ever bound a key that did not sign. Three players cannot impose a duration on a
+fourth; the fourth simply is not in that game. The consent set *is* the roster,
+so unanimity is not a threshold anybody clears — it is a tautology.
+
+### What a sealer demonstrably cannot do
+
+| | Caught by |
+|---|---|
+| change a rule, the map or the start time | the rebuild: it recomposes to different bytes |
+| seat a non-signer, or invent a player | each consent is verified against the proposal id |
+| reorder the roster | signers are sorted by key, and the order is checked |
+| swap a bot profile, or add a vacancy | the rebuild again |
+| **drop you quietly** | **your own client**, and nothing else — see below |
+
+Key order is not tidiness. `placeCapitals` positions capitals by empire index
+from the shared seed, so whoever orders the consent list decides whose capital
+lands where — a larger power than "deciding who was late", and not one the
+clerical-sealer argument grants.
+
+The last row is the one that cannot be stateless, and it is worth being exact
+about. Sealing a *subset* of the consents produces a record whose every
+signature covers the world it composes — which is what "deciding who was late"
+actually is, and the one power the sealer is granted. So a peer left out of a
+game it agreed to play would pass every check and quietly become an observer.
+The lobby holds every world it signed; a sealed record that recomposes to one of
+them without carrying our signature fails the lobby with its own sentence.
+
+### The start instant
+
+`startedAt` is a future wall-clock instant rather than `Date.now()`. Every peer
+derives its step number from it, so an agreed start time means everyone begins
+on the same step instead of whenever their `GENESIS` frame happened to land —
+and the deadline for consenting becomes a fact of the record rather than a
+convention in a UI. A record whose instant has not arrived sits in `starting`:
+the driver exists and the simulation is at step 0, where `targetStep` already
+clamps it.
+
+### The seed
+
+Random, not derived from the room code and the clock. A consent carries no game
+id, because there is no game — the proposal hash stands in that slot. That works
+only if a proposal cannot recur, so two identical-looking worlds in two rooms
+must be distinct objects or a consent could be lifted out of one into the other.
+
 ## Hosting: compose, seal, broadcast, then no authority
 
 [`host(plan: HostPlan)`](../../packages/net/src/lobby.ts):
@@ -60,7 +140,24 @@ seat it holds. Nothing after that needs a host at all.
 Teams are the host's to arrange **because the host composes the genesis** — and
 once it is sealed and broadcast, every peer verifies it for itself and the host
 has no further authority over anything. The host can leave; a peer that kept
-`sealed` re-sends `GENESIS` to a later joiner.
+`sealed` re-sends `GENESIS` to a later joiner. Proposals and the consents over
+them are re-sent the same way and for the same reason: in a persistent room the
+interesting arrival is somebody who was not there when the world went up, and
+somebody who cannot see a proposal cannot sign it.
+
+**This path still exists, and produces records that claim nothing.** A proposal
+names nobody, so one signer is one empire — and a plan of `[[a, b], [c]]` has no
+proposal that composes to it. Until the team picker is replaced, routing `host`
+through `composeGenesis` would silently drop a teammate, so the two paths sit
+side by side and a host-composed record reads `consent: not stated` rather than
+`checked`. That is a fact about the record, not a mark against it.
+
+**The lobby HELLO stops being load-bearing.** A hello proves nothing beyond
+"here is a key to seat me under" — an unproven claim, seated on trust, because
+the host was composing from `members`. On the consent path nothing is seated
+from `members` at all: a seat comes from a signature over the proposal id, which
+is a proof of possession by construction. `members` is a presence list for the
+screen.
 
 ## Reviving: play a record you did not compose
 

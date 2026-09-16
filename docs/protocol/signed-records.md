@@ -32,15 +32,17 @@ that arrived.
 | `SignedAmendment` | `amendment/1` | `empire, step, key, kind` + endorsement list | a [quorum](roster.md) of the empire's *existing* seats | "seat this key" — becomes a `ROSTER_AMEND` [move](../continuity/roster-amendments.md) locally |
 | `SignedClaim` | `claim/1` | `empire, key, step` | **the key it seats** | "I am taking this empire nobody has claimed" — becomes a `ROSTER_AMEND` [move](../gameplay/empires-and-seats.md) |
 | `SignedApplication` | `application/1` | `empire, key, step` | **the key that is asking** | "I would like a seat on this empire" — becomes nothing on its own; a member's agreement turns it into an amendment |
+| `SignedConsent` | `consent/1` | `key, proposalId` | **the key it seats** | "I will play this world" — the set of these *is* the roster of a [co-signed game](../mesh/the-lobby.md) |
 | `EquivocationProof` | — (each half is a `move/1`) | `{ a: SignedMove, b: SignedMove }` | carries two seat signatures | proof one seat signed two moves for one `(empire, member, step, seq)` — [equivocation](../continuity/equivocation.md) |
 | handshake | `hello/1` | both nonces (`NONCE_BYTES` = 16) | each side | mutual challenge-response — [joining](../continuity/joining.md) |
 
 ## Records that name their own key
 
 Most of the catalogue is signed by *a seat*: attribution runs through
-`roster.keyOf(empire, member)`, and the roster is what says which key that is. Two
-records cannot work that way, because the whole point of them is that the signer
-does not hold a seat yet — so they name their own key and are signed by it.
+`roster.keyOf(empire, member)`, and the roster is what says which key that is.
+Three records cannot work that way, because the whole point of them is that the
+signer does not hold a seat yet — so they name their own key and are signed by
+it.
 
 That makes them verifiable by a peer that has never heard of the signer, which is
 exactly the property needed: `verify(record.key, sig, bytes)`, with no roster
@@ -52,11 +54,27 @@ authorisation story in one sentence:
   nobody to ask — so it seats immediately, and "once only" is enforced against
   the roster by whoever applies it;
 - an **application** needs the agreement of the seats already there, so it seats
-  nothing by itself and only ever becomes an ordinary amendment.
+  nothing by itself and only ever becomes an ordinary amendment;
+- a **consent** needs nobody's agreement either, and seats nobody *yet* — it
+  agrees to a world, and the roster is composed from whoever agreed.
 
 A claim and an application are the same bytes with a different tag, and that is
 what the [domain tag](#the-three-properties) is for: a signature over one can
 never be replayed as the other.
+
+### The one record with no game id
+
+Every other record here carries the game id, so a signature over a move in one
+game cannot be replayed as the same move in another. A consent cannot: the game
+it consents to does not exist yet, and its id is the hash of a record that will
+be composed *out of* these signatures.
+
+The **proposal id stands in that slot**, in the same `preamble(tag, id)` the
+other records use, because it is doing the game id's whole job — naming one
+specific object so a signature over it means nothing anywhere else. That holds
+only because a proposal cannot recur: the seed is random rather than derived
+from a room code and a clock, so two identical-looking worlds in two rooms are
+distinct objects and a consent cannot be lifted out of one into the other.
 
 ## Readiness
 

@@ -39,10 +39,26 @@ no reason. See [population.md](population.md).
 |---|---|
 | `popMax` | population ceiling — the whole of strength |
 | `coins` | percent chance of grabbing an adjacent coin instead of following the phase |
-| `phases` | per-`BotMode` `{ steps, rate: [min, max] }` — the cycle |
+| `phases` | per-`BotMode` `{ steps, rate: [min, max] }` — the cycle. **A set of durations, not a sequence** |
 
 `BotMode` = `expand | attack | defend | fortify | heal | sleep`
-([`types.ts:218`](../../packages/sim/src/types.ts#L218)).
+([`types.ts`](../../packages/sim/src/types.ts)).
+
+**The order phases are written in means nothing.** `turnOf` builds its cycle
+from `MODES` ([`policy.ts`](../../packages/sim/src/policy.ts)), a fixed constant
+in exactly that order, and a genesis is canonicalised with its keys sorted — so
+a declared order could not survive the record even if the simulation honoured
+it. A profile is a set of durations. The three presets happen to declare their
+phases in `MODES` order, which is why nobody noticed the comment that promised
+otherwise.
+
+A hand-tuned profile goes into the genesis record like everything else, so a
+custom opponent is as checkable before the first move as a named difficulty is.
+`checkProfile(profile, rules)` refuses an empty phase set, a negative duration,
+a backwards click rate and a ceiling above `rules.popMax` — **it refuses and
+never clamps**, because the clamps that actually bind are elsewhere and stay
+there. What it buys is telling a composer before the record is broadcast, for
+the same reason `checkPlan` refuses early.
 
 ## turnOf — the phase, derived not stored
 

@@ -73,8 +73,17 @@ shows up in every player and not in the host.
 
 ## Composing the game
 
-A tab has a team picker; a process does not. Two modes, both explicit, because
+A tab has a team picker; a process does not. Three modes, all explicit, because
 there is no safe default number of players:
+
+- **`--propose <secs>`** puts a world on the table and seals in `<secs>` with
+  whoever signed it. This process composes nothing: a proposal names nobody, the
+  roster is the signatures, and the record that comes out carries them — so a
+  reader can check that its players agreed to play it. `empires` in the plan
+  file stops applying; everything else in the file (map, duration, bots,
+  vacancies) is the world being suggested. `--auto <n>` seals early once `n`
+  people have signed, and `--wait` does not apply — a proposed game carries its
+  own deadline, which everybody can read. See [the lobby](../mesh/the-lobby.md).
 
 - **`--plan <file>`** names the roster — empires of member keys, bots, map size,
   duration. It seals when every seated key is present, which is also the only
@@ -98,8 +107,9 @@ is one empire standing, and the game would end before anybody could arrive into
 the seat. `--auto 1 --vacancies 1` is refused for that reason, and says so. See
 [vacancies](../gameplay/empires-and-seats.md).
 
-When both are given, `--auto` wins and the plan file is the *settings* — bots, map,
-duration. A refusal from `checkPlan` is **fatal**, not retried: the reasons are
+`--propose` and `--plan`/`--auto` are alternatives: the first suggests a world
+and the others compose one. When `--auto` and `--plan` are both given, `--auto`
+wins and the plan file is the *settings* — bots, map, duration. A refusal from `checkPlan` is **fatal**, not retried: the reasons are
 structural (too few empires, a seat for somebody absent, an empire over the cap), so
 a host that composes again would be refused again while printing that it is waiting
 for players who have already arrived.

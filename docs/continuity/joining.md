@@ -1,24 +1,40 @@
 # Joining
 
-Five ways a peer arrives, all through the same [`Lobby`](../mesh/the-lobby.md):
+Six ways a peer arrives, all through the same [`Lobby`](../mesh/the-lobby.md):
 
-1. **At the start**, from the host's setup screen — the host composes and seals
-   the [genesis](../protocol/genesis.md).
-2. **Mid-game, as a reloading tab** — same identity, same seat, from
+1. **At the start, by signing** — somebody proposes a world, and signing it is
+   what seats you. The roster of a [co-signed genesis](../mesh/the-lobby.md)
+   *is* the set of signatures over it, so nobody can put you in a game you did
+   not agree to, and nobody else signing changes the world you did.
+2. **At the start, from somebody's setup screen** — the older path, where the
+   host composes and seals the [genesis](../protocol/genesis.md) and everybody
+   else's only response is refusal. Still how a game with teams in it is made.
+3. **Mid-game, as a reloading tab** — same identity, same seat, from
    `localStorage`.
-3. **Mid-game, invited** — an [observer](../concepts/peers-and-roles.md) until an
+4. **Mid-game, invited** — an [observer](../concepts/peers-and-roles.md) until an
    empire votes it a seat by [`ROSTER_AMEND`](roster-amendments.md). Somebody
    inside has to think of you.
-4. **Mid-game, by asking** — an observer *applies* to an empire, and the seats
+5. **Mid-game, by asking** — an observer *applies* to an empire, and the seats
    already there decide. Same `ROSTER_AMEND` and the same quorum; what is new is
    who may start one. See below.
-5. **Mid-game, by taking an empire nobody has** — a
+6. **Mid-game, by taking an empire nobody has** — a
    [vacancy](../gameplay/empires-and-seats.md), which needs nobody's permission
    because there is nobody to ask.
 
-Three and four reach the same place by different doors, and the difference is
+Four and five reach the same place by different doors, and the difference is
 worth stating: an invitation needs a member to think of you, an application needs
 one to agree with you.
+
+One and two differ in what the record can later prove. A signed world composes a
+record carrying the signatures that made it, so a reader can check that its
+players agreed to the rules they played under; a composed one carries nothing to
+check, and [reads `consent: not stated`](../trust-and-verification/verifying-an-archive.md).
+
+**Pre-game and mid-game arrival still differ**, and the gap is teams. One signer
+is one empire, because a signer choosing an empire is a signer who must re-sign
+when somebody else takes it — the never-settling proposal in miniature. A team
+forms after step 0 by [`ROSTER_AMEND`](roster-amendments.md), which is the
+mechanism that already exists.
 
 ## The handshake
 

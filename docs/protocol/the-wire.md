@@ -18,7 +18,7 @@ recognise. A peer can send whatever it likes; none of it should raise an
 exception on the receiving side. `decodeFrame` checks only *shape* — field-level
 checking belongs to the verifier, which re-derives the payload anyway.
 
-## The sixteen frame types
+## The eighteen frame types
 
 `FRAME` ([`wire.ts:25`](../../packages/protocol/src/wire.ts#L25)). Only `move`
 carries a move; the rest are how peers agree about moves, and none can change
@@ -38,10 +38,22 @@ state on its own.
 | `amendment` | `SignedAmendment` | rebroadcast as it gains endorsements |
 | `claim` | `SignedClaim` | somebody taking an empire nobody has claimed; one signature, no tally |
 | `application` | `SignedApplication` | somebody asking an empire for a seat; **re-sent on a slow timer**, because it never grows and so cannot be gossiped by growth |
+| `proposal` | `Proposal`, `rev`, `by` | a world somebody is suggesting. A later `rev` from the same `by` supersedes; a different `by` is a different proposal. `by` is **attribution, not authority** — nothing arbitrates, because a proposal nobody signs dies of that |
+| `consent` | `SignedConsent` | one signature over one proposal id. Not a tally: the set of these *is* the roster |
 | `equivocation` | `EquivocationProof` | a self-contained proof of cheating |
 | `snapshot?` | `step` | a request — the step is advisory |
 | `snapshot` | `step`, `hash`, `data` (base64url), `amendments?`, `claims?`, `drops?` | the world at a step |
 | `bye` | `reason?` | a peer leaving |
+
+### The one frame whose numbers are checked at the decoder
+
+`decodeFrame` normally checks only that there is *something* to verify, because
+field-level checking belongs to the verifier, which re-derives the payload
+anyway. `proposal` is the exception: it is the only frame whose contents get
+**hashed on arrival**, and `canonicalJson` throws on a non-finite number. Without
+a check here that throw sits inside a receive path, reachable by anyone who can
+send a frame. So a `proposal` whose `seed`, `startedAt` or `vacancies` is not a
+finite non-negative integer decodes to `null` and never reaches the hash.
 
 ## Adding a frame is additive, and that is checked in three places
 

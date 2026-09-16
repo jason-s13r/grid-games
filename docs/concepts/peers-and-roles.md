@@ -46,6 +46,21 @@ host's PeerJS peer id **is** the room code
   ordinary peer. It can leave and the game continues; a peer that kept the sealed
   record re-sends it to later joiners.
 
+### A sealer is not a host
+
+On the [co-signed path](../mesh/the-lobby.md) the composing half of that list
+goes away. A world is proposed by anybody, signed by whoever wants to play it,
+and the roster is *derived from the signatures* — so the peer that says "sealed"
+cannot change a rule, seat a non-signer, invent a player, reorder the roster or
+swap a bot profile. Every one of those either fails a signature check or fails
+the rebuild, at every peer that reads the record.
+
+What is left to a sealer is **deciding who was late**, which is the one power a
+doorman is supposed to have. Sealing is clerical. The one thing it can still do
+that nobody else can catch is seal a *subset* — which is what deciding who was
+late is — so a peer left out of a world it signed refuses the record itself,
+because only the peer that signed can notice its own absence.
+
 Because a room code is a peer id, a game is only reachable while *some* peer is
 online at a known id. That is why the [observer](../clients/observer.md) can
 claim a stable id with `--as` and become the durable door back into a game whose

@@ -12,6 +12,7 @@ interface Genesis {
   map: MapConfig;        // size and terrain counts
   rules: Rules;          // the whole balance sheet
   empires: EmpireSpec[]; // composition: control, seats, keys, bot profiles
+  consent?: SignedConsent[]; // who agreed to this world, before it was a game
 }
 ```
 
@@ -52,12 +53,51 @@ list of `GenesisProblem`s; empty means "this build can join this game".
 | `seats` | an empire with more than `min(maxSeats, SEAT_CEILING)` seats |
 | `rules` | `abandonWindow` below `MIN_ABANDON_WINDOW` (3 h), or a negative `joinWindow`/`endStep`. The abandonment window is the one rule a host could set to win outright — short enough and every opponent is "absent" before anyone moves |
 | `duplicate-key` | one key in two seats (unkeyed SimBot seats are skipped) |
+| `consent` | the record carries a consent list and it does not check out. **Absent is not a problem** — a record that claims nothing fails nothing, which is what keeps every archive written before consent existed green |
 
 The seat cap is checked **here as well as** on every
 [amendment](../continuity/roster-amendments.md), because a genesis is the one
 place an empire could be *born* oversized — and a peer that only checked
 amendments would join the unfair game and then faithfully enforce fairness for
 the rest of it.
+
+## consent, and why hashing it in is not circular
+
+A [co-signed genesis](../mesh/the-lobby.md) carries the signatures that composed
+it. `gameIdOf` strips only `gameId`, so the consent list is hashed into the game
+id like everything else — which is what stops a sealer adding, removing or
+reordering one after the fact.
+
+Verification is a **recomposition**, and it has to be. The obvious sketch —
+strip `gameId` and `consent`, rehash the residue, check each signature against
+it — cannot work, for the design's own reason: what remains still contains
+`empires`, which is *derived from* the consent set and is exactly the field a
+proposal is built not to contain. Hashing the residue hashes the roster, and the
+deadlock the world/roster split exists to avoid comes back in the verifier.
+
+So `checkConsent`:
+
+1. `proposalOf(genesis)` reconstructs the world — seed, start instant, map,
+   rules, bot profiles, vacancy count — by reading the roster's fixed layout
+   backwards: **signers in key order, then vacancies, then SimBots**. That order
+   is part of the format, not a convenience. A record it cannot have produced
+   returns `undefined`.
+2. Every consent is verified against `proposalId(proposal)`.
+3. `composeGenesis(proposal, consents)` rebuilds the whole record, and the two
+   are compared as canonical JSON.
+
+One comparison subsumes the entire list of things a sealer must not be able to
+do, and none of them needs its own branch. It is the discipline `SnapshotFrame`
+already uses: restore it, hash it, discard it if the number disagrees.
+
+The verdict is three-valued — `checked`, `absent`, `failed` — and never a
+boolean. An unverified consent list is worse than none because it looks like
+proof, and a reader told *these four keys signed this world* / *this record never
+said* / *it says so and it does not check out* cannot mistake one for another.
+
+**No protocol bump.** An old build hashes an unknown `consent` field into the
+same game id and computes identical state; it simply does not check it, which is
+what it does today. That is a security property degrading, not a divergence.
 
 ## Building one
 

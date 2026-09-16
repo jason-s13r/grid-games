@@ -1,6 +1,6 @@
 # 0009 — Composing a game together: a genesis everybody signed
 
-Status: draft
+Status: built (2026-09-16)
 Depends on: 0002 (durations to put in the proposal). Assumes 0006's host peer
 as the room; shares its claim record with 0010 and its banner picker with 0013.
 Branch: `composed-genesis`
@@ -645,6 +645,78 @@ exists.
 | `checkProfile` refuses an empty phase set, a negative duration and an over-cap `popMax` | `packages/sim/src/test/rules.test.ts` |
 | an archive says checked / absent / failed, and a tampered consent list says failed | `packages/net/src/test/archive.test.ts` |
 | nothing moved the hash | `sim/test/crossenv` and the recorded fixture; `packages/sim` is not in the diff |
+
+## What came out differently
+
+Written after building it. The appendix's lead finding was right and load-bearing
+— the body's "strip `gameId` and `consent`, rehash the residue" cannot work, the
+residue contains `empires`, and verification had to be a recomposition. Six
+things it did not have.
+
+**`simbots` cannot hold preset names, and the appendix's own resolution rule is
+why.** It argues at length that `map` and `rules` must be fully resolved before
+hashing, because `makeGenesis` merges the defaults and `proposalOf` could not
+know which fields were signed. Exactly the same is true of `simbots`, and the
+body's type is `readonly (Difficulty | BotProfile)[]`: `simbot("hard")` resolves
+to `DIFFICULTY.hard` on its way into the record, so a genesis shows a profile and
+never the word that produced it. A proposal naming `"hard"` is unrecoverable and
+every consent over it fails. The type is `readonly BotProfile[]`, and callers
+resolve before proposing. Caught by the identity test the appendix asked for, on
+its first run.
+
+**`protocol` belongs in the proposal.** `makeGenesis` stamps `PROTOCOL_VERSION`,
+so a recomposition on a later build would stamp a number the original record does
+not carry and every consent in it would stop verifying the day that number moves
+— the opposite of what 0001's supported set exists to produce. It is also the
+right shape on its own: which rule set a game runs under is exactly the kind of
+thing a signature should cover.
+
+**"A dropped signer" is not something `checkConsent` can refuse, and the
+verification table is wrong to list it.** Dropping a signer *and* their consent
+produces a smaller game whose every signature covers the world it composes —
+because that is what sealing a subset *is*, and the appendix's own table grants
+the sealer exactly that power under "deciding who was late". The two halves of
+the appendix contradict each other here; finding 3 has it right and the
+verification table does not. So the stateless verifier does not pretend to catch
+it, and the exclusion check in `Lobby` is not a nicety on top of a complete
+check — it is the only thing that catches it at all. The test that named this is
+kept, inverted, as the statement of the limit.
+
+**`Lobby.host` could not become a one-signer wrapper.** The appendix recommends
+it — "one composer, one verifier, one inverse" — and acknowledges the cost as
+teams regressing until 0010 returns them by pre-seal claiming. But 0010 landed
+*before* this plan rather than after, and its claim is a mid-game record, so the
+cover the recommendation was counting on does not exist. Meanwhile the web team
+picker is live and produces `[[a, b], [c]]`, which no proposal composes to: a
+proposal names nobody, so one signer is one empire, and routing `host` through
+`composeGenesis` would silently drop a teammate. Two paths it is, and the
+three-state verdict already names what the old one produces — `absent`. 0014
+retires it when it replaces the screen.
+
+**`onStart` fires at the seal, not at the start, and the appendix says both.**
+Finding 4 says `onStart` fires on the transition out of `starting`, and then says
+in the next sentence that "the driver may still be built early — it is the screen
+that must not claim the game is running." The second is right and the first
+cannot be: `onStart` *is* what builds the driver in this tree, so withholding it
+means a host peer sealing early for a later start has no driver, no archive, no
+reads and no door for the whole countdown — a room nobody can reach during its
+own opening. Caught by the headless test hanging for thirty seconds. So `onStart`
+fires on adoption, `phase` holds at `starting`, and `onBegin` is the moment a
+view swaps. The concern finding 4 was actually protecting is a screen concern,
+and the phase is what protects it.
+
+**`simbotFrom` already exists, and is called `simbot`.** The order of work has
+step 3 adding it; `simbot(level: BotChoice)` has taken a profile or a preset name
+since "a bot tuned by hand", and `tuneBot` already converts the units a person
+sets into the ones the simulation reads. Only `checkProfile` was missing. Worth
+recording because the appendix audited this file and read past it.
+
+Two smaller things. The `--wait` deadline is left to the composing path, because
+a proposed game carries its own deadline in the record and a second clock held by
+one process would be a worse version of it. And `checkConsent` returns a verdict
+rather than a boolean — the plan puts the three-way answer in `verifyArchive`,
+but the shape is wanted at every caller, and a function that can say `absent` has
+no business returning `true` for it.
 
 ## What this plan does not settle
 
