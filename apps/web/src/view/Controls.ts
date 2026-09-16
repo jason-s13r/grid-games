@@ -132,7 +132,7 @@ export class Controls {
     const pct = Math.round((member.popTimer / rules.popMax) * 100);
 
     this.els.hud.innerHTML = `
-      <span class="swatch" data-empire="${empire.id}"></span>
+      <span class="swatch" data-banner="${empireTheme(empire.id).id}"></span>
       <strong class="hud-name">${theme.name}</strong>
       ${isProtected(state, empire) ? '<span class="tag">protected</span>' : ""}
       <div class="meter" title="population timer">
@@ -257,7 +257,7 @@ export class Controls {
         // rendering — and it never shows as dead, because it was never alive.
         const vacant = isVacant(state.empires[e.id - 1]!);
         return `<div class="standing${!vacant && !e.alive ? " dead" : ""}${vacant ? " vacant" : ""}">
-          <span class="swatch" data-empire="${e.id}"></span>
+          <span class="swatch" data-banner="${empireTheme(e.id).id}"></span>
           <span class="standing-name">${t.name}${e.id === this.game.empire ? " (you)" : ""}</span>
           <span class="standing-tiles">${
             vacant && claimable

@@ -5,6 +5,7 @@
 // before this file existed.
 
 import type { BotMode, BotPhase, BotProfile, EmpireSpec, Rules } from "./types.js";
+import type { BannerId } from "./banners.js";
 import { CONTROL, MEMBER } from "./types.js";
 import { MODES } from "./policy.js";
 import { DEFAULT_RULES, STEPS_PER_SECOND } from "./constants.js";
@@ -14,8 +15,12 @@ import { DEFAULT_RULES, STEPS_PER_SECOND } from "./constants.js";
 const fromSeconds = (n: number): number => Math.round(n * STEPS_PER_SECOND);
 
 /** One empire of n human seats sharing its territory, each with its own timer. */
-export const humans = (n: number): EmpireSpec => ({
+export const humans = (n: number, banner?: BannerId): EmpireSpec => ({
   control: CONTROL.HUMAN,
+  // Omitted when unset, never `null`: `canonicalJson` drops `undefined` and
+  // keeps `null`, so the two spellings of "no banner" would hash differently
+  // while meaning the same thing.
+  ...(banner ? { banner } : {}),
   members: Array.from({ length: n }, () => ({ kind: MEMBER.HUMAN })),
 });
 
@@ -233,7 +238,8 @@ export type BotChoice = Difficulty | BotProfile;
  *  Its difficulty is in the genesis record like everything else about it, so
  *  "the bots were on hard" is a fact of the game rather than a thing somebody
  *  remembers afterwards. */
-export const simbot = (level: BotChoice = "steady"): EmpireSpec => ({
+export const simbot = (level: BotChoice = "steady", banner?: BannerId): EmpireSpec => ({
   control: CONTROL.SIMBOT,
+  ...(banner ? { banner } : {}),
   members: [{ kind: MEMBER.BOT, bot: typeof level === "string" ? DIFFICULTY[level] : level }],
 });

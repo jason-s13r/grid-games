@@ -15,6 +15,7 @@ import {
   Sim,
 } from "@tessera/sim";
 import { Roster, cleanName, displayName, fingerprint } from "@tessera/protocol";
+import { BANNERS, bannerById } from "@tessera/sim";
 import type { MemberKey } from "@tessera/protocol";
 import { Archive, Directory, Lobby, Lockstep, MAX_SEATS, parseRef, resolve } from "@tessera/net";
 import type { ArchivedGame, ConnectionRef, ResumePoint } from "@tessera/net";
@@ -24,7 +25,7 @@ import { ReplayDriver } from "./game/Replay";
 import { boardClick } from "./game/input";
 import { OnlineGame } from "./game/Online";
 import type { Driver } from "./game/Driver";
-import { myIdentity, myName, setMyName } from "./net/identity";
+import { myBanner, myIdentity, myName, setMyBanner, setMyName } from "./net/identity";
 import { Announcer, doorOf } from "./net/announce";
 import { mayCompose, roomStatus } from "./net/compose";
 import { askForRoom } from "./net/factory";
@@ -57,7 +58,7 @@ import { Minimap } from "./view/Minimap";
 import { Tabs } from "./view/Tabs";
 import { Controls } from "./view/Controls";
 import { Shell } from "./view/Shell";
-import { injectThemeCss, empireTheme } from "./view/palette";
+import { Flags, injectThemeCss, empireTheme, setFlags } from "./view/palette";
 import { MOVE } from "@tessera/sim";
 import type { Genesis } from "@tessera/sim";
 
@@ -226,6 +227,20 @@ nameEl.addEventListener("change", () => {
   void mesh?.rename(clean);
   panel.render();
 });
+
+/** The house this browser flies when it is free.
+ *
+ *  A preference and never a record: it goes into a plan we compose, and rides a
+ *  claim when we take an empire nobody is playing. Everybody else's banner is
+ *  theirs, and an empire that already has people in it is already flying one —
+ *  which is what makes "apply to Sping" name a house rather than request one. */
+const bannerEl = pick<HTMLSelectElement>('[data-cfg="banner"]');
+bannerEl.append(
+  new Option("No preference", ""),
+  ...BANNERS.map((banner) => new Option(banner.name, banner.id)),
+);
+bannerEl.value = myBanner();
+bannerEl.addEventListener("change", () => setMyBanner(bannerEl.value));
 
 const boardEl = pick<HTMLInputElement>('[data-cfg="board"]');
 const boardProblemEl = pick<HTMLElement>('[data-cfg="board-problem"]');
@@ -471,13 +486,33 @@ function startSolo(): void {
 /** Seal the game the form describes and broadcast it. Everything but the
  *  people comes off the shared form; the people are the panel's. */
 function startHosted(): void {
+  const empires = panel.seating.empires;
   void lobby?.host({
-    empires: panel.seating.empires,
+    empires,
     simbots: rivals.list,
     vacancies: vacancies(),
+    banners: bannersFor(empires),
     ...mapSize(),
     duration: duration(),
   });
+}
+
+/** Which house each empire flies, parallel to the composed order.
+ *
+ *  Only one entry is ever a *decision*: ours. Everything else falls back to the
+ *  index, which is what every record written before banners existed means, and
+ *  a game where the composer assigned everybody's flag would be the composer
+ *  deciding somebody else's identity — which is the whole thing 0009 spent a
+ *  plan removing. Our own is taken only when nothing else in the game has it. */
+function bannersFor(empires: MemberKey[][]): Array<string | undefined> {
+  const wanted = myBanner();
+  if (!wanted || !bannerById(wanted)) return [];
+  const me = lobby?.identity.key;
+  const mine = me ? empires.findIndex((keys) => keys.includes(me)) : -1;
+  if (mine < 0) return [];
+  const banners: Array<string | undefined> = empires.map(() => undefined);
+  banners[mine] = wanted;
+  return banners;
 }
 
 /** What the game as configured comes to, and why it cannot be started yet.
@@ -853,7 +888,10 @@ pick<HTMLElement>("[data-standings]").addEventListener("click", (event) => {
   if (taking) {
     // Nothing to report on success: the seat arrives on every peer at once,
     // when the step the claim named comes round, and `onSeated` is what says so.
-    void mesh.claim(Number(taking)).then((sent) => {
+    // The house we bring to an empire nobody is playing. Ignored if somebody
+    // already has it — the claim still seats us, because refusing a seat over a
+    // colour would let a squatter deny somebody a game.
+    void mesh.claim(Number(taking), myBanner() || undefined).then((sent) => {
       if (!sent) panel.setStatus("That empire cannot be taken.");
     });
     return;
@@ -1286,6 +1324,25 @@ function openChat(seat: { empire: number; member: number }): void {
  *  Recomputed rather than remembered: the roster changes underneath this — a
  *  vote carries, somebody arrives — and a cached answer would be wrong in
  *  exactly the moments it matters. The panel drops it when nothing changed. */
+/** Rebuild the per-game banner table and tell the views.
+ *
+ *  Genesis first, then claims in log order — the two ordered inputs every peer
+ *  has already verified, so every peer derives the same table. A peer that
+ *  missed a claim frame draws one empire under its index and everything else
+ *  correctly: degraded, never divergent, because nothing downstream of
+ *  `validate()` has ever seen a banner. */
+function rebindFlags(genesis: Genesis, driver?: Lockstep): void {
+  const flags = new Flags(genesis.empires);
+  for (const { empire, banner } of driver?.claimedBanners() ?? []) flags.fly(empire, banner);
+  setFlags(flags);
+  // The only view that caches colour. The DOM tiles carry the slug and the
+  // stylesheet is static, and the minimap reads the palette every frame.
+  if (mapImage) {
+    mapImage.recolour();
+    if (game) mapImage.paintAll(game.sim.state);
+  }
+}
+
 /** What to call a key, on a screen where somebody is about to decide something
  *  about it.
  *
@@ -1477,6 +1534,10 @@ async function begin(input?: string | JoinTarget): Promise<void> {
     // The claim becomes attributable. A seat re-asserts its name as a signed
     // record against this game id, and from here the driver's answer is the one
     // every screen prefers over the lobby's.
+    // Which house each empire flies in *this* game. Bound before anything is
+    // drawn: the views read the current binding, and the map image caches its
+    // colours from it.
+    rebindFlags(genesis, driver);
     if (seat) void driver.rename(myName());
     driver.onNamed = () => {
       panel.setRoster(rosterView(driver));

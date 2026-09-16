@@ -7,7 +7,7 @@
 
 import type { State } from "@tessera/sim";
 import { ITEM } from "@tessera/sim";
-import { TERRAIN_COLORS, ITEM_COLORS, empireTheme, rgb } from "./palette";
+import { MAX_EMPIRES, TERRAIN_COLORS, ITEM_COLORS, empireTheme, rgb } from "./palette";
 
 export class MapImage {
   readonly canvas: HTMLCanvasElement;
@@ -36,7 +36,20 @@ export class MapImage {
     for (const [key, hex] of Object.entries(ITEM_COLORS)) {
       this.itemRgb[Number(key)] = rgb(hex);
     }
-    for (let id = 1; id <= 8; id++) this.empireRgb[id] = rgb(empireTheme(id).c1);
+    // Sized from the table rather than from a hard-coded 8, which used to paint
+    // empires 7 and 8 as 1 and 2 while the main board painted them as nothing
+    // and the minimap disagreed with both.
+    this.recolour();
+  }
+
+  /** Rebind the cached colours to the banners now in force.
+   *
+   *  Cached rather than read per pixel, which is why this exists at all: the
+   *  other two layers ask the palette every time they draw. Sized from the
+   *  table rather than from a hard-coded 8. */
+  recolour(): void {
+    this.empireRgb = [];
+    for (let id = 1; id <= MAX_EMPIRES; id++) this.empireRgb[id] = rgb(empireTheme(id).c1);
   }
 
   paintAll(state: State): void {

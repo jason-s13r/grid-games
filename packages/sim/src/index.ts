@@ -38,6 +38,8 @@ export type { Mode, Turn } from "./policy.js";
 export { summarise } from "./stats.js";
 export type { EmpireSummary } from "./stats.js";
 export { Sim, makeGenesis, CLAIM, HEARTBEAT } from "./sim.js";
+export { BANNERS, MAX_EMPIRES, bannerAt, bannerById } from "./banners.js";
+export type { Banner, BannerId } from "./banners.js";
 export { DIFFICULTY, TUNING, checkProfile, humans, simbot, tuneBot } from "./specs.js";
 export type { BotChoice, BotTuning, Difficulty } from "./specs.js";
 export type { GenesisInit } from "./sim.js";

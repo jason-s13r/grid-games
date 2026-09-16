@@ -132,7 +132,9 @@ must be distinct objects or a consent could be lifted out of one into the other.
 
 [`host(plan: HostPlan)`](../../packages/net/src/lobby.ts):
 
-1. [`checkPlan`](#checkplan) — refuse a bad plan while the host can still fix it.
+1. [`checkPlan`](#checkplan) — refuse a bad plan while the host can still fix
+   it, including two empires flying one [banner](../gameplay/empires-and-seats.md)
+   and a game with more empires than there are banners.
 2. Build `EmpireSpec[]` — human empires are the people who are here (one seat per
    key); `plan.simbots: Difficulty[]` become whole [SimBot](../gameplay/bots.md)
    empires.

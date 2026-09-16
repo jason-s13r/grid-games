@@ -4,8 +4,8 @@
 // because it is the one part of team-picking that is neither DOM nor network:
 // a compaction and a validation, and both are worth being sure about.
 
-import { DEFAULT_RULES, SEAT_CEILING } from "@tessera/sim";
-import type { BotChoice } from "@tessera/sim";
+import { DEFAULT_RULES, MAX_EMPIRES, SEAT_CEILING, bannerById } from "@tessera/sim";
+import type { BannerId, BotChoice } from "@tessera/sim";
 import type { MemberKey } from "@tessera/protocol";
 
 export interface Seated {
@@ -74,6 +74,13 @@ export interface Plan {
    *  from a mistake — so an empty array stays the error it always was, and a
    *  vacancy stays a decision somebody made. Absent or 0 is today's game. */
   vacancies?: number;
+  /** Which house each empire flies, parallel to the composed empire order:
+   *  human empires, then vacancies, then SimBots.
+   *
+   *  SimBot empires need entries too — they are empires on the board and the
+   *  rivals panel already names them by theme. A slot may be empty, which means
+   *  fall back to the index. */
+  banners?: readonly (BannerId | undefined)[];
 }
 
 /** Seats one empire may hold, which is the genesis rule every peer will check
@@ -110,6 +117,26 @@ export function checkPlan(plan: Plan, expected: Iterable<MemberKey>): string {
   // this is the early refusal, while the host can still fix it.
   if (plan.empires.some((keys) => keys.length > MAX_SEATS)) {
     return `an empire may hold up to ${MAX_SEATS} seats`;
+  }
+
+  // Two empires wearing one flag is an unreadable board. Refused here first,
+  // while the composer can still fix it, and again in `inspectGenesis` — the
+  // two-place rule the seat cap already follows, for the same reason: a record
+  // is the one place a game can be born malformed.
+  const flown = new Set<string>();
+  for (const banner of plan.banners ?? []) {
+    if (banner === undefined) continue;
+    if (!bannerById(banner)) return `there is no banner called ${banner}`;
+    if (flown.has(banner)) return "two empires cannot fly the same banner";
+    flown.add(banner);
+  }
+
+  // A game with more empires than banners has empires nothing can draw
+  // distinguishably — and until this check existed, the main board drew them as
+  // nothing at all. Refused at composition rather than rendered wrong.
+  const total = plan.empires.length + plan.simbots.length + vacancies;
+  if (total > MAX_EMPIRES) {
+    return `a game can hold ${MAX_EMPIRES} empires, and that is ${total}`;
   }
 
   // One empire is last-empire-standing on the first step: a game nobody plays.

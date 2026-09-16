@@ -59,3 +59,29 @@ export function setMyName(name: string): string {
   }
   return clean;
 }
+
+const BANNER_STORE = "tessera.banner";
+
+/** The house this browser prefers to play as.
+ *
+ *  **Local preference, never a record.** "I always play as Sping" is a fact
+ *  about this browser and not about any game: reserving a banner across games
+ *  would need somebody to keep the reservation, and there is nobody. So the
+ *  client picks it automatically when it is free and says plainly when it is
+ *  not. */
+export function myBanner(): string {
+  try {
+    return localStorage.getItem(BANNER_STORE) ?? "";
+  } catch {
+    return "";
+  }
+}
+
+export function setMyBanner(id: string): void {
+  try {
+    if (id) localStorage.setItem(BANNER_STORE, id);
+    else localStorage.removeItem(BANNER_STORE);
+  } catch {
+    // A blocked store costs a preference, not the ability to fly a flag.
+  }
+}

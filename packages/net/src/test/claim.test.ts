@@ -295,3 +295,76 @@ describe("the order seats appear in", () => {
     expect(merged[1]).toBe(claim);
   });
 });
+
+describe("the house a claimant brings", () => {
+  // The half of banners worth having. A vacancy is not pre-branded, so a player
+  // who always plays as one house brings it to whichever empty empire they
+  // take — rather than hoping the composer happened to seal it.
+  it("rides the claim, and every peer derives the same table", async () => {
+    const t = await table({ seats: [1, 1], vacancies: 1, claimants: 1 });
+    const empire = 3;
+    const claimant = t.peers.find((peer) => peer.name.startsWith("c"))!;
+
+    expect(await claimant.driver.claim(empire, "rose")).toBe(true);
+    await settleNetwork(t);
+    await run(t, 40);
+
+    for (const peer of t.peers) {
+      const flown = peer.driver.claimedBanners();
+      expect(flown, peer.name).toContainEqual({ empire, banner: "rose" });
+    }
+    expect(agreed(t)).toBe(true);
+  });
+
+  // A banner is presentation, so a squatter must not be able to deny a seat
+  // over one. The later claim is refused as a *branding* and accepted as a
+  // *seating*.
+  it("a claim with a banner somebody already flies still seats the claimant", async () => {
+    const t = await table({ seats: [1, 1], vacancies: 2, claimants: 2 });
+    const [first, second] = t.peers.filter((peer) => peer.name.startsWith("c"));
+
+    expect(await first!.driver.claim(3, "rose")).toBe(true);
+    await settleNetwork(t);
+    expect(await second!.driver.claim(4, "rose")).toBe(true);
+    await settleNetwork(t);
+    await run(t, 60);
+
+    // Both are seated. That is the part that must not depend on a colour.
+    expect(first!.driver.seat?.empire).toBe(3);
+    expect(second!.driver.seat?.empire).toBe(4);
+    expect(agreed(t)).toBe(true);
+  });
+
+  // Nothing downstream of `validate()` has ever seen a banner, so a peer that
+  // missed the frame draws one empire under its index and agrees about
+  // everything else. Degraded, never divergent.
+  it("cannot move the hash", async () => {
+    const plain = await table({ seats: [1, 1], vacancies: 1, claimants: 1, seed: 909 });
+    const claimant = plain.peers.find((peer) => peer.name.startsWith("c"))!;
+    await claimant.driver.claim(3);
+    await settleNetwork(plain);
+    await run(plain, 60);
+
+    const flown = await table({ seats: [1, 1], vacancies: 1, claimants: 1, seed: 909 });
+    const other = flown.peers.find((peer) => peer.name.startsWith("c"))!;
+    await other.driver.claim(3, "rose");
+    await settleNetwork(flown);
+    await run(flown, 60);
+
+    expect(flown.peers[0]!.driver.sim.hash()).toBe(plain.peers[0]!.driver.sim.hash());
+  });
+
+  it("a forged banner does not survive, because the banner is signed", async () => {
+    const t = await table({ seats: [1, 1], vacancies: 1, claimants: 1 });
+    const claimant = t.peers.find((peer) => peer.name.startsWith("c"))!;
+    await claimant.driver.claim(3, "rose");
+    await settleNetwork(t);
+
+    // A relay rewriting the field breaks the signature, which is why it is in
+    // the signed bytes even though it is never hashed into state.
+    const signed = await signClaim(claimant.identity!, t.gameId, { empire: 3, step: 10, banner: "rose" });
+    const tampered = { ...signed, claim: { ...signed.claim, banner: "cobalt" } };
+    expect(await verifyClaim(t.gameId, tampered)).toBe(false);
+    expect(await verifyClaim(t.gameId, signed)).toBe(true);
+  });
+});

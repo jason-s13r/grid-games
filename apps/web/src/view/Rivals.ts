@@ -22,7 +22,7 @@
 // record, every number in it is bounded where it is read, and what was missing
 // was a way to say so without editing source.
 
-import { EMPIRE_THEMES, empireTheme } from "./palette";
+import { MAX_EMPIRES, empireTheme } from "./palette";
 import { TUNING, tuneBot } from "@tessera/sim";
 import type { BotChoice, BotMode, BotTuning, Difficulty } from "@tessera/sim";
 
@@ -195,7 +195,7 @@ export class Rivals {
    *  taken theirs. Two empires in one colour is not a harder game, only a
    *  board you cannot read. */
   private get room(): number {
-    return Math.max(0, EMPIRE_THEMES.length - this.first + 1);
+    return Math.max(0, MAX_EMPIRES - this.first + 1);
   }
 
   /** Drop any bot there is no longer a colour for. Returns whether it had to.

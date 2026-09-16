@@ -11,7 +11,7 @@ interface Genesis {
   startedAt: number;     // epoch ms — the origin for targetStep
   map: MapConfig;        // size and terrain counts
   rules: Rules;          // the whole balance sheet
-  empires: EmpireSpec[]; // composition: control, seats, keys, bot profiles
+  empires: EmpireSpec[]; // composition: control, seats, keys, bot profiles, banner
   consent?: SignedConsent[]; // who agreed to this world, before it was a game
 }
 ```
@@ -53,6 +53,7 @@ list of `GenesisProblem`s; empty means "this build can join this game".
 | `seats` | an empire with more than `min(maxSeats, SEAT_CEILING)` seats |
 | `rules` | `abandonWindow` below `MIN_ABANDON_WINDOW` (3 h), or a negative `joinWindow`/`endStep`. The abandonment window is the one rule a host could set to win outright — short enough and every opponent is "absent" before anyone moves |
 | `duplicate-key` | one key in two seats (unkeyed SimBot seats are skipped) |
+| `duplicate-banner` | two empires flying one house, a banner that is not in the table, or one written as `null` rather than omitted |
 | `consent` | the record carries a consent list and it does not check out. **Absent is not a problem** — a record that claims nothing fails nothing, which is what keeps every archive written before consent existed green |
 
 The seat cap is checked **here as well as** on every
@@ -60,6 +61,29 @@ The seat cap is checked **here as well as** on every
 place an empire could be *born* oversized — and a peer that only checked
 amendments would join the unfair game and then faithfully enforce fairness for
 the rest of it.
+
+## banner, and why the id is stored and never the name
+
+`EmpireSpec.banner` is an id the simulation never reads — the same standing as
+`MemberSpec.key`. It rides here because every peer must present the same board,
+not because anything computes with it.
+
+**The name would fork history.** Anything in the genesis is hashed into the game
+id forever, so the string "Vermilion" in a record means old archives say
+Vermilion after the house is renamed and new games say something else, and the
+two stop being comparable. The id makes a rename a one-line table edit that every
+archive picks up on its next replay.
+
+**It must be omitted, never `null`.** `canonicalJson` drops `undefined` and keeps
+`null`, so the two spellings of "no banner" would hash to different game ids
+while meaning exactly the same thing. `inspectGenesis` refuses the second.
+
+**An additive genesis field costs an old build nothing**, and the mechanical
+reason is worth stating: `canonicalJson` walks whatever object it is handed and
+sorts the keys it finds. It has no schema. So an older build handed a record
+carrying `banner` serialises the field it has never heard of, hashes it, and
+computes the *same game id* — it does not skip it and it does not choke. That
+would cost everything in a format encoding a fixed field list.
 
 ## consent, and why hashing it in is not circular
 

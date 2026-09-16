@@ -10,6 +10,7 @@ import {
   MIN_ABANDON_WINDOW,
   durationRules,
   hours,
+  MAX_EMPIRES,
   makeGenesis,
 } from "@tessera/sim";
 import type { Genesis, Rules } from "@tessera/sim";
@@ -232,5 +233,62 @@ describe("a game with empires nobody has claimed", () => {
       { control: CONTROL.HUMAN, members: undefined },
     ] as unknown as Genesis["empires"]);
     expect(await inspectGenesis(await sealGenesis(genesis))).toContain("members");
+  });
+});
+
+describe("banners in a sealed record", () => {
+  const game = (empires: Genesis["empires"]): Genesis =>
+    makeGenesis({ seed: 1, map: { width: 24, height: 24 }, empires });
+
+  const two = (a?: string, b?: string): Genesis["empires"] => [
+    { control: CONTROL.HUMAN, ...(a ? { banner: a } : {}), members: [{ kind: MEMBER.HUMAN, key: "k1" }] },
+    { control: CONTROL.HUMAN, ...(b ? { banner: b } : {}), members: [{ kind: MEMBER.HUMAN, key: "k2" }] },
+  ];
+
+  it("accepts a record whose empires fly different houses", async () => {
+    expect(await inspectGenesis(game(two("cobalt", "amber")))).toEqual([]);
+  });
+
+  it("accepts a record with no banners at all, which is every record so far", async () => {
+    expect(await inspectGenesis(game(two()))).toEqual([]);
+  });
+
+  // Two empires wearing one flag is an unreadable board, refused here as well
+  // as in `checkPlan` — the two-place rule the seat cap already follows.
+  it("refuses two empires flying one banner", async () => {
+    expect(await inspectGenesis(game(two("cobalt", "cobalt")))).toContain("duplicate-banner");
+  });
+
+  it("refuses a banner that is not in the table", async () => {
+    expect(await inspectGenesis(game(two("sping", "amber")))).toContain("duplicate-banner");
+  });
+
+  // `canonicalJson` drops `undefined` and keeps `null`, so a record spelling an
+  // absent banner as `null` would hash differently while meaning the same thing.
+  it("refuses a banner written as null", async () => {
+    const empires = two();
+    (empires[0] as { banner?: unknown }).banner = null;
+    expect(await inspectGenesis(game(empires))).toContain("duplicate-banner");
+  });
+
+  // The honest half of a bug that is not a repaint: `state.owner` is an
+  // `Int8Array`, so an id above 127 stores negative, every `owner > 0` test
+  // reads that territory as neutral, and `tilesOwned` only ever grows. The
+  // check used to advertise 255.
+  it("refuses more empires than the owner layer can hold", async () => {
+    const many = Array.from({ length: 128 }, (_, i) => ({
+      control: CONTROL.HUMAN,
+      members: [{ kind: MEMBER.HUMAN, key: `k${i}` }],
+    }));
+    expect(await inspectGenesis(game(many))).toContain("empires");
+  });
+
+  // And a cap that bites long before that one.
+  it("refuses more empires than there are banners", async () => {
+    const many = Array.from({ length: MAX_EMPIRES + 1 }, (_, i) => ({
+      control: CONTROL.HUMAN,
+      members: [{ kind: MEMBER.HUMAN, key: `k${i}` }],
+    }));
+    expect(await inspectGenesis(game(many))).toContain("empires");
   });
 });

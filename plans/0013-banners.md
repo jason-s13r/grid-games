@@ -1,7 +1,9 @@
 # 0013 — Banners: an empire you can play as again
 
-Status: draft
-Depends on: 0009 (the proposal is where one is chosen)
+Status: built (2026-09-16)
+Depends on: 0009 (the proposal is where one is chosen) and **0010** (the claim is
+where a vacancy's banner arrives) — the header said 0009 alone and the appendix
+corrects it
 Branch: `banners`
 
 ## The problem
@@ -531,6 +533,54 @@ about the palette and nothing else.
 | `inspectGenesis` refuses 128 empires | `genesis.test.ts` — one line, and it closes the aside |
 | *after 0010:* two claims for one banner resolve to the earlier in log order | `packages/net` — and the later claimant is still **seated** |
 | *after 0010:* a peer that missed a claim frame draws one empire under its index and agrees about everything else | `agreed(t)` stays true |
+
+## What came out differently
+
+Written after building it. The appendix's lead finding was right and worse than
+the body knew: a seventh empire's territory was drawn **invisible on the main
+board**, not painted as a duplicate. Five things it did not have.
+
+**Both halves shipped, because 0010 landed first.** The appendix says the
+dependency line is wrong — this needs 0009 *and* 0010, because the claimed half
+rides `Claim` — and recommends shipping sealed banners alone and leaving the
+rest as a paragraph for 0010 to pick up. 0010 landed two plans *before* this
+one, so `Claim` already existed and the split had nothing left to protect.
+Sealed and claimed banners are both here.
+
+**The banner is inside the signed bytes of a claim.** The body says it rides in
+the record "verified and gossiped, never hashed", and the encoder is where that
+sentence has to be made true rather than asserted. `encodeClaim` gained the
+field, so a relay rewriting a claimant's house breaks the signature — which is
+the point: never hashed into *state* is a different claim from not covered by a
+signature, and a field a relay can rewrite is a field a relay decides.
+
+**`empireTheme` stayed a global lookup, and that was the cheap answer.** The
+appendix has every view moving onto "per-game state, which has to be built from
+the genesis and handed to the view layer", and threads a `Flags` through seven
+files. But `empireTheme(id)` was *already* a module-level lookup keyed on a
+number, called from two dozen sites. What actually changes is what the answer
+depends on — a per-game table rather than a modulus — so the seam stays exactly
+where it was, the per-game part is one assignment when a game starts, and only
+`MapImage` (the one view that caches colour) needs telling.
+
+**The table grew to twelve here rather than in a later design exercise.** The
+appendix leaves "what a banner looks like beyond six" unsettled, and the refusal
+it asks for — a game with more empires than banners is refused at composition —
+would have capped games at six the moment it landed, which is *fewer* empires
+than the tree allows today. Six more houses, appended, with the first six
+untouched and pinned by the fixture.
+
+**The CSS keyed on the slug is what makes the stylesheet static again**, exactly
+as the appendix argues, and the browser test needed a negative control to be
+worth anything: `getComputedStyle` always returns *something*, so "every empire
+has a colour" only means anything alongside "a slug with no rule has none". That
+control is the assertion that actually encodes the old bug.
+
+Two smaller notes. `checkPlan`'s new empire cap counts bots and vacancies,
+because they are empires on the board and the old two-empire rule already
+counted them. And the 127 correction went in as the appendix asked — the free
+half, in `inspectGenesis`, with the comment rewritten to say that widening
+`owner` is a `LAYOUT_VERSION` move and its own plan.
 
 ## What this plan does not settle
 

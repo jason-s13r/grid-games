@@ -3,7 +3,7 @@
 // started with the wrong people on the wrong side.
 
 import { describe, expect, it } from "vitest";
-import { DEFAULT_RULES, SEAT_CEILING } from "@tessera/sim";
+import { DEFAULT_RULES, MAX_EMPIRES, SEAT_CEILING } from "@tessera/sim";
 import { MAX_SEATS, checkPlan, composeTeams } from "../teams.js";
 import type { Seated } from "../teams.js";
 
@@ -147,5 +147,51 @@ describe("the seat cap", () => {
   // sends the record to.
   it("is the rule the simulation will be enforcing", () => {
     expect(MAX_SEATS).toBe(Math.min(DEFAULT_RULES.maxSeats, SEAT_CEILING));
+  });
+});
+
+describe("banners, refused while the composer can still fix it", () => {
+  const here = ["a", "b"];
+  const plan = (over: Partial<Parameters<typeof checkPlan>[0]> = {}) => ({
+    empires: [["a"], ["b"]],
+    simbots: [],
+    ...over,
+  });
+
+  it("accepts a plan whose empires fly different houses", () => {
+    expect(checkPlan(plan({ banners: ["cobalt", "amber"] }), here)).toBe("");
+  });
+
+  it("accepts a plan with no banners, which is every plan so far", () => {
+    expect(checkPlan(plan(), here)).toBe("");
+  });
+
+  it("accepts an empty slot, which means fall back to the index", () => {
+    expect(checkPlan(plan({ banners: [undefined, "amber"] }), here)).toBe("");
+  });
+
+  it("refuses two empires flying one banner", () => {
+    expect(checkPlan(plan({ banners: ["cobalt", "cobalt"] }), here)).toContain("same banner");
+  });
+
+  it("refuses a banner that is not in the table", () => {
+    expect(checkPlan(plan({ banners: ["sping"] }), here)).toContain("no banner called");
+  });
+
+  // Until this check existed the main board drew a seventh empire's territory
+  // as nothing at all — the same colour as neutral ground — while the map image
+  // drew it as empire 1 and the minimap disagreed with both.
+  it("refuses a game with more empires than there are banners", () => {
+    const keys = Array.from({ length: MAX_EMPIRES + 1 }, (_, i) => `p${i}`);
+    const crowded = { empires: keys.map((key) => [key]), simbots: [] };
+    expect(checkPlan(crowded, keys)).toContain("empires");
+  });
+
+  it("counts bots and vacancies toward that cap, because they are empires too", () => {
+    const bots = Array.from({ length: MAX_EMPIRES - 1 }, () => "steady" as const);
+    expect(checkPlan({ empires: [["a"], ["b"]], simbots: bots }, here)).toContain("empires");
+    expect(
+      checkPlan({ empires: [["a"], ["b"]], simbots: [], vacancies: MAX_EMPIRES - 1 }, here),
+    ).toContain("empires");
   });
 });

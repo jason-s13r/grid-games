@@ -4,6 +4,8 @@
 // stays erasable-syntax only — it runs under Node's native type stripping and
 // under any bundler without a transform step.
 
+import type { BannerId } from "./banners.js";
+
 export type EmpireId = number; // 0 = neutral, 1..N = empire
 export type TileIndex = number;
 export type MemberIndex = number;
@@ -283,6 +285,18 @@ export type BotMode = "expand" | "attack" | "defend" | "fortify" | "heal" | "sle
 
 export interface EmpireSpec {
   control?: Control;
+  /** Which house this empire flies.
+   *
+   *  Presentation only: the simulation never reads it, exactly as it never
+   *  reads `MemberSpec.key`. Absent means fall back to the empire's index,
+   *  which is what every record written before this field existed does — and
+   *  the fallback **indexes rather than wrapping**, so appending a banner
+   *  cannot repaint an archived game.
+   *
+   *  Must be omitted when unset and never written as `null`: `canonicalJson`
+   *  drops `undefined` and keeps `null`, so the two spellings of "no banner"
+   *  would hash to different game ids while meaning the same thing. */
+  banner?: BannerId;
   members: MemberSpec[];
 }
 

@@ -8,6 +8,8 @@
 import {
   CONTROL,
   DEFAULT_RULES,
+  MAX_EMPIRES,
+  bannerById,
   MIN_ABANDON_WINDOW,
   SEAT_CEILING,
   playsProtocol,
@@ -64,7 +66,8 @@ export type GenesisProblem =
   | "duplicate-key"
   | "seats"
   | "rules"
-  | "consent";
+  | "consent"
+  | "duplicate-banner";
 
 /** Everything a peer checks before it agrees to play. Returns the problems it
  *  found; empty means the record is one this build can join.
@@ -87,9 +90,48 @@ export async function inspectGenesis(genesis: Genesis): Promise<GenesisProblem[]
     problems.push("empires");
     return problems;
   }
-  // Empire and member ids ride in single bytes of every signed move, and empire
-  // 0 means neutral, so the roster has to fit 1..255.
-  if (genesis.empires.length > 255) problems.push("empires");
+  // Empire ids ride in single bytes of every signed move, and empire 0 means
+  // neutral — but the binding constraint is narrower than that and this check
+  // used to advertise the wrong one.
+  //
+  // `state.owner` is an `Int8Array`, so an id above 127 stores as a negative
+  // number the moment it is written, and **that is a simulation bug rather than
+  // a repaint**: every `owner > 0` test then reads the tile as neutral, so the
+  // empire's territory is unowned to combat, upkeep, cascades and claiming;
+  // `setOwner`'s decrement is skipped on the next write so `tilesOwned` only
+  // ever grows; and `isProtected` and `checkVictory` both read that fictitious
+  // count. `state.winner` is `i8` too, so such an empire cannot even be recorded
+  // as having won.
+  //
+  // The real fix is widening the layer, which moves `LAYOUT_VERSION` and is its
+  // own plan. This is the free half: refuse the record rather than let a game
+  // reach the state where its rules and its board disagree inside one peer.
+  if (genesis.empires.length > 127) problems.push("empires");
+
+  // And a cap that bites long before that one: a game with more empires than
+  // there are banners has empires nothing can draw distinguishably. Refused at
+  // composition rather than rendered wrong — which is what the old modulo did,
+  // silently, and on the main board it rendered them as nothing at all.
+  if (genesis.empires.length > MAX_EMPIRES) problems.push("empires");
+
+  // Two empires wearing one flag is an unreadable board. Checked here as well
+  // as in `checkPlan`, for the same reason the seat cap is: a genesis record is
+  // the one place a game can be born malformed.
+  //
+  // `null` is refused along with a duplicate, and deliberately: `canonicalJson`
+  // drops `undefined` and keeps `null`, so a record spelling an absent banner
+  // as `null` would hash differently from one that omits it while meaning
+  // exactly the same thing.
+  const flown = new Set<string>();
+  for (const empire of genesis.empires) {
+    const banner = (empire as { banner?: unknown }).banner;
+    if (banner === undefined) continue;
+    if (typeof banner !== "string" || !bannerById(banner) || flown.has(banner)) {
+      problems.push("duplicate-banner");
+      continue;
+    }
+    flown.add(banner);
+  }
 
   // The abandonment window is the one rule a host could set to win outright: a
   // short enough window makes every opponent "absent" the first time it is the

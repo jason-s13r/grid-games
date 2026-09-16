@@ -563,6 +563,20 @@ export interface Claim {
   empire: number;
   key: MemberKey;
   step: number;
+  /** Which house the claimant brings.
+   *
+   *  **Presentation, and it is the half of banners that makes them worth
+   *  having.** A vacancy is not pre-branded, so a player who always plays as
+   *  one house brings it to whichever empty empire they take — rather than
+   *  hoping the composer happened to seal it.
+   *
+   *  It is in the signed record and **not** in the `Move` the record produces:
+   *  `claimMove` builds a fixed-width record whose every field is hashed, and
+   *  presentation must not travel there. The precedent is exact — a
+   *  `SnapshotFrame` already carries its amendments alongside the state for the
+   *  same reason. Verified and gossiped like the rest of the claim, and never
+   *  part of what the simulation computes. */
+  banner?: string;
 }
 
 export interface SignedClaim {
@@ -574,16 +588,23 @@ export interface SignedClaim {
 
 export function encodeClaim(gameId: string, claim: Claim): Uint8Array {
   const key = utf8(claim.key);
+  // Signed, though never hashed into state. A field a relay could rewrite
+  // without breaking the signature is a field a relay decides, and "who is
+  // flying which flag" is not a relay's to decide.
+  const banner = utf8(claim.banner ?? "");
   if (!u8(claim.empire) || claim.empire < 1 || !u32(claim.step)) {
     throw new Error("claim field out of range");
   }
   if (!u16(key.length) || key.length === 0) throw new Error("claim key is absurd");
+  if (!u16(banner.length)) throw new Error("claim banner is absurd");
 
-  const record = new Writer(9 + key.length)
+  const record = new Writer(11 + key.length + banner.length)
     .u32(claim.step)
     .u8(claim.empire)
     .u32(key.length)
     .raw(key)
+    .u16(banner.length)
+    .raw(banner)
     .finish();
   return concat(preamble(TAG_CLAIM, gameId), record);
 }

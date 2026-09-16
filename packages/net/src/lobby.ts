@@ -27,7 +27,7 @@ import {
   seedFrom,
   simbot,
 } from "@tessera/sim";
-import type { BotChoice, DurationRules, EmpireSpec, Genesis } from "@tessera/sim";
+import type { BannerId, BotChoice, DurationRules, EmpireSpec, Genesis } from "@tessera/sim";
 import {
   FRAME,
   Identity,
@@ -148,6 +148,10 @@ export interface HostPlan {
    *  running. A count rather than an empty entry in `empires`, so that an empty
    *  entry stays the mistake it always was. */
   vacancies?: number;
+  /** Which house each empire flies, parallel to the composed empire order.
+   *  Presentation only — the simulation never reads it — but it rides in the
+   *  genesis because every peer must present the *same* board. */
+  banners?: readonly (BannerId | undefined)[];
   width: number;
   height: number;
   /** Keys that are here and deliberately not playing — a host peer composing a
@@ -679,11 +683,24 @@ export class Lobby {
     // overnight — votes one in with ROSTER_AMEND once the game is running,
     // which every peer sees and the seat cap limits. The host composing seats
     // nobody else agreed to is precisely what that vote exists to prevent.
-    const empires: EmpireSpec[] = plan.empires.map((keys) => ({
-      control: CONTROL.HUMAN,
-      members: keys.map((key) => ({ kind: MEMBER.HUMAN, key })),
-    }));
-    for (const level of plan.simbots) empires.push(simbot(level));
+    // Parallel to the composed order below: human empires, then vacancies, then
+    // SimBots. A slot that is empty means fall back to the index, which is what
+    // every record written before banners existed means.
+    const banners = plan.banners ?? [];
+    let at = 0;
+    const flag = (): BannerId | undefined => banners[at++];
+
+    const empires: EmpireSpec[] = plan.empires.map((keys) => {
+      const banner = flag();
+      return {
+        control: CONTROL.HUMAN,
+        // Omitted when unset and never `null`: `canonicalJson` keeps `null` and
+        // drops `undefined`, so the two spellings would hash to different game
+        // ids while meaning the same thing.
+        ...(banner ? { banner } : {}),
+        members: keys.map((key) => ({ kind: MEMBER.HUMAN, key })),
+      };
+    });
     const vacancies = plan.vacancies ?? 0;
     // Empires the map generator will place and nobody has claimed. Territory
     // rather than players: they get a capital and separation from the shared
@@ -696,8 +713,14 @@ export class Lobby {
     // this record declines rather than desyncing — the outcome a version bump
     // exists to produce, which is why this needs none.
     for (let i = 0; i < vacancies; i++) {
+      // A vacancy is **not pre-branded**. Its banner arrives with whoever
+      // claims it, in the claim record, which is the difference between "you
+      // may play as Sping if the composer happened to seal Sping" and "you play
+      // as Sping, in whichever house is empty".
+      flag();
       empires.push({ control: CONTROL.HUMAN, members: [] });
     }
+    for (const level of plan.simbots) empires.push(simbot(level, flag()));
 
     const genesis = makeGenesis({
       seed: seedFrom(`${this.code}:${Date.now()}`),

@@ -111,3 +111,45 @@ seats" would otherwise cost nothing but processes. So:
 [PeerBots](bots.md)). `CONTROL.SIMBOT` — the empire is driven inside every peer's
 simulation from the shared RNG ([bots.md](bots.md)); a SimBot empire has one BOT
 seat and no keys, so nothing can be voted into it.
+
+## Banners: an empire is a house, not a position in an array
+
+An empire's identity used to be `EMPIRE_THEMES[(id - 1) % 6]` in the web client,
+so "I play as Vermilion" meant "I was seated first" and there was no way to be
+the same thing twice. A **banner** is the other shape: a house you belong to,
+available in a game or not, and yours when it is.
+
+**It is presentation and stays presentation.** The simulation has never read an
+empire's colours — `createState` copies no such field, `snapshot()` encodes no
+genesis field at all, and `hashState` cannot see one. What was missing is only
+that every peer must present the *same* board, so the binding rides in the one
+record every peer already agrees on byte for byte.
+
+Two ways a banner is bound, and the second is the one worth having:
+
+- **Sealed**, for empires that exist at genesis: `EmpireSpec.banner`, an id the
+  simulation ignores exactly as it ignores `MemberSpec.key`.
+- **Claimed**, for [vacancies](#): a vacancy is *not* pre-branded. Its banner
+  arrives with whoever claims it, in the signed claim record — the difference
+  between "you may play as Sping if the composer happened to seal Sping" and
+  "you play as Sping, in whichever house is empty".
+
+**The id is stored, never the name.** The genesis is hashed, so a display name
+in a record freezes into the game id forever and a later rename forks history:
+old archives say one thing, new games say another, and the two stop being
+comparable. With ids, a rename is a one-line edit to a table every archive picks
+up on its next replay.
+
+**Two empires cannot fly one flag.** Refused in `checkPlan` while the composer
+can still fix it, and again in `inspectGenesis` — the two-place rule the seat cap
+already follows. A *claimed* banner cannot be checked at either point, since it
+arrives hours later, so it is checked where it is applied: a claim naming a house
+somebody already flies is accepted as a **seating** and ignored as a
+**branding**. Refusing a whole claim over a colour would let a squatter deny
+somebody a seat, which is a far worse failure than a duplicate flag.
+
+**A game holds as many empires as there are banners**, and a game with more is
+refused at composition rather than drawn wrong. The fallback for an empire whose
+record says nothing **indexes rather than wrapping**, which is what makes growing
+the table a pure data change: a modulus would have turned empire 7 from one
+banner into another for every record ever written.

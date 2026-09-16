@@ -69,3 +69,32 @@ own population timer." See [gameplay/empires-and-seats.md](../gameplay/empires-a
 Member **keys** — the sim addresses seats by index; the [roster](../protocol/roster.md)
 maps index to key, outside the sim. Also: signatures, chat, camera, sockets. See
 [continuity/what-is-hashed.md](../continuity/what-is-hashed.md).
+
+## The real empire ceiling is 127, not 255
+
+`state.owner` is an `Int8Array`, one entry per tile, holding the empire id.
+`inspectGenesis` used to refuse only above 255, on the grounds that empire ids
+ride in single bytes of every signed move — true, and not the binding
+constraint.
+
+An id above 127 stores as a **negative number** the moment it is written, and
+that is a simulation bug rather than a repaint. Follow it:
+
+- every `owner > 0` test reads that tile as **neutral**, so the empire's
+  territory is unowned to combat, upkeep, cascades and claiming, and any
+  opponent may take it for free;
+- the next `setOwner` on that tile finds a negative `prev`, skips the decrement,
+  and `tilesOwned` **never comes back down**;
+- `isProtected` and `checkVictory` both read `tilesOwned`, so the empire sits on
+  a fictitious count that only grows and can satisfy a victory condition over
+  tiles drawn as empty;
+- `state.winner` is `i8` too, so such an empire cannot even be recorded as
+  having won.
+
+`inspectGenesis` now refuses above **127**, which is the free half of the fix:
+the record is declined rather than allowed to reach a state where the rules and
+the board disagree inside one peer. Widening `owner` to a `Uint8Array` is the
+real half, it moves `LAYOUT_VERSION`, and it is the only change in the series
+that would break a snapshot in flight — so it is its own plan.
+
+In practice the [banner](../gameplay/empires-and-seats.md) cap bites first.

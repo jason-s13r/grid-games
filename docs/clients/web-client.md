@@ -280,3 +280,15 @@ out to be mostly invisible characters says so there rather than nowhere.
 
 Renaming applies live. A naming is a signed record outside the hash, which is
 the whole point of it being there: it can change without anything else having to.
+
+## Your banner
+
+Set in Settings, kept in `localStorage`, and **local preference rather than a
+record**: reserving a house across games would need somebody to keep the
+reservation, and there is nobody.
+
+It is taken when this browser composes a game — for our own empire only, because
+assigning everybody's flag would be the composer deciding somebody else's
+identity — and it rides the claim when we take over an empire nobody is playing.
+When somebody already has it, we get that empire's own colours and nothing stops
+the game.

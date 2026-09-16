@@ -1246,7 +1246,7 @@ export class Lockstep {
    *  The step is this peer's own honest answer, the same `AMENDMENT_DELAY` an
    *  amendment uses, so every peer has time to hear it before anyone simulates
    *  it. */
-  async claim(empire: number): Promise<boolean> {
+  async claim(empire: number, banner?: string): Promise<boolean> {
     const identity = this.options.identity;
     if (!identity) return false;
     if (this.options.seat) return false; // already playing something
@@ -1256,6 +1256,9 @@ export class Lockstep {
     const signed = await signClaim(identity, this.gameId, {
       empire,
       step: this.sim.step + AMENDMENT_DELAY,
+      // The house the claimant brings. Omitted when unset so the signed bytes
+      // of a claim without one are what they always were.
+      ...(banner ? { banner } : {}),
     });
     await this.considerClaim(signed, true);
     return this.claimsHeld.has(`${empire}:${identity.key}`);
@@ -1462,6 +1465,23 @@ export class Lockstep {
         this.asked.delete(slot);
       }
     }
+  }
+
+  /** Banners brought by claimants, in the order the claims were accepted.
+   *
+   *  A side table and never state: every peer derives it from records it has
+   *  already verified, and derives it identically because those records are
+   *  ordered. A peer that missed a claim frame draws one empire under its index
+   *  and everything else correctly — degraded, never divergent, because nothing
+   *  downstream of `validate()` has ever seen it. */
+  claimedBanners(): Array<{ empire: number; banner: string }> {
+    return [...this.claimsHeld.values()]
+      // The same total order the driver applies them in, so two peers holding
+      // the same claims derive the same table. A race for one house resolves to
+      // the earlier record and the later empire keeps its index colours.
+      .sort(seatingOrder)
+      .filter((signed) => !!signed.claim.banner)
+      .map((signed) => ({ empire: signed.claim.empire, banner: signed.claim.banner! }));
   }
 
   /** A proposal this peer is holding for that empire and key, if any. */
