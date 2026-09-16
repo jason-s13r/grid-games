@@ -28,7 +28,7 @@ is **not** allowed to decide.
 | 0014 ✅ | The lobby rejig and the game log | 0009–0013 | 2 sessions |
 | 0015 ○ | The board — a service for rows nobody has to believe | 0007 | 1 session |
 | 0016 ○ | The archive store — a file nobody is trusted to have written | 0015, 0006 | 1–2 sessions |
-| 0017 ○ | The leaderboard — a table you can recompute | 0016 | 1 session |
+| 0017 ○ | The leaderboard — one table you can recompute, one you can audit | 0016 | 1–2 sessions |
 
 ## Why this order
 
@@ -78,6 +78,14 @@ it.
 `{k:"claim"}` lines and stamps `format: 1`, so any game where somebody claimed
 a vacancy fails verification today with a misleading reason. It is a live bug
 in `tessera-observe`, not only a blocker for the service.
+
+0016 keeps the last *n* archives rather than all of them, and keeps every
+game's *row* forever — a few hundred bytes against megabytes. That split is
+what gives 0017 two tables: a window over the archives still held, recomputable
+by anyone, and an all-time total accumulated one game at a time. The
+accumulation is exact rather than approximate, because every column of a
+`Standing` is a sum or a maximum and both are monoids; what it costs is not
+accuracy but auditability, and 0017 is mostly about narrowing that.
 
 Each plan carries its own argument. The two that span the series are written
 where they bite hardest: which changes owe a version bump, in 0001; what the

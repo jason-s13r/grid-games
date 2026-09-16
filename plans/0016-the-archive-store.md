@@ -155,10 +155,16 @@ Four gates, cheapest first:
    `moveLog`. Deliberately not verification — the web client keeps these
    separate for the same reason, so that "this is not a saved game" and "this
    saved game does not check out" are different sentences.
-3. **Do we have it?** `gameIdOf(genesis)` recomputed — never the `gameId` field
-   as posted — and looked up. A hit returns 200 and stops. This is the cheap
-   path and it is the common one, because two observers on one game is the
-   normal way to keep an archive safe rather than a corner case.
+3. **Do we have it, and is this one longer?** `gameIdOf(genesis)` recomputed —
+   never the `gameId` field as posted — and looked up. A hit whose `steps` is
+   no greater than what is already applied returns 200 and stops. This is the
+   cheap path and it is the common one, because two observers on one game is
+   the normal way to keep an archive safe rather than a corner case.
+
+   A hit claiming **more** steps goes on to gate 4: two honest archives of one
+   game can cover different amounts of it, and the longer one supersedes.
+   `steps` is only a claim until the replay confirms it, which is exactly why
+   this gate cannot decide anything on its own.
 4. **`verifyArchive`**, on a queue.
 
 ### Why verification is queued
@@ -204,7 +210,51 @@ create table archives (
 
 `verdict` holds the `summary` that `rankArchives` joins to seats, so 0017 can
 build a table from this one table without touching a blob. That is the whole
-point of doing it here.
+point of doing it here — and it is what lets the blob be thrown away while the
+game still counts. See §"Retention" below.
+
+## Retention: the store keeps the last N, and the row forever
+
+A store that kept every archive forever would grow without bound for nobody's
+benefit. A multi-day game is megabytes; most of them will never be fetched
+again after the week they were played.
+
+So the blob is evicted and **the row is not**:
+
+| | kept | size |
+|---|---|---|
+| the archive blob | the most recent `--keep` games, by `checked_at` | megabytes |
+| the `archives` row, verdict and `Counted` | forever | a few hundred bytes |
+
+`--keep <n>` defaults to something on the order of 500 games, and an operator
+can set it to whatever their disk is. Eviction is by `checked_at` rather than
+by the game's own `startedAt`, because a game uploaded late is new to this
+service whatever its age, and the store has no business deciding a game is
+uninteresting because it was played last year.
+
+An evicted game keeps its row, which means:
+
+- `GET /archives/:gameId` answers `410 { error: "no longer held", checkedAt }` —
+  a different thing from the `404` for a game never seen, and the distinction
+  matters to a reader deciding whether to look elsewhere;
+- the corpus still lists it, marked `held: false`;
+- 0017's window table drops it, because that table is defined as *over the
+  archives this service holds*;
+- 0017's all-time total keeps its contribution, because a monoid does not need
+  its inputs back.
+
+**Re-uploading an evicted game is a no-op, not a resurrection.** The dedupe
+check at gate 3 is on `gameId` against the `archives` table, which still has
+the row — so a file already counted is recognised and refused politely rather
+than verified again and double-counted. Whether a re-upload should *restore*
+the blob is an operator's call and the plan's answer is no: it would let
+anybody pin a game in the store forever by re-posting it, and the retention
+would stop meaning anything.
+
+The one exception is a game with `steps` greater than the copy already applied,
+which supersedes rather than duplicates — 0017 §"Two honest archives of one
+game can disagree" owns that rule, and it is a reason the ingest path cannot
+simply stop at gate 3.
 
 ## The read path
 
@@ -283,9 +333,10 @@ same mistake a leaderboard makes when it drops a row silently, and
 | 4 | `POST /archives`: the cap, the shape check, the dedupe, the staging blob | yes |
 | 5 | `ingest.ts`: the queue and `verifyArchive` | yes |
 | 6 | `GET /archives/:gameId`, with the content ETag | yes |
-| 7 | `GET /archives` — the corpus, and refusals | yes |
-| 8 | `test/archives.test.ts` | yes |
-| 9 | docs | yes |
+| 7 | `GET /archives` — the corpus, refusals, and what is no longer held | yes |
+| 8 | retention: `--keep`, the sweeper, and the `410` | yes |
+| 9 | `test/archives.test.ts` | yes |
+| 10 | docs | yes |
 
 Step 1 lands on its own and should be committed on its own: it fixes
 `tessera-observe` for a class of game that exists today, and it is not
@@ -322,6 +373,10 @@ replay it. Its worst honest power, as with the board, is to waste your time.
 | bytes out are bytes in | the same file, comparing the stored body to the posted one |
 | a refused game appears in the corpus with its problems | the same file |
 | the ETag is stable across requests for one game | the same file |
+| **an evicted game keeps its row, its verdict and its `Counted`** | the same file — the whole basis of 0017's all-time table |
+| an evicted game answers `410`, and one never seen answers `404` | the same file |
+| re-uploading an evicted game is refused as already counted | the same file |
+| a longer archive of an applied game is *not* refused by the dedupe gate | the same file — 0017 needs it to get through |
 | nothing moved the hash | `pnpm test`; `packages/sim` is not in the diff |
 
 The first row is the one that justifies the plan's order. Everything else here
@@ -330,11 +385,6 @@ nobody has seen, and it will be the oldest bug this service inherits if it is
 not fixed first.
 
 ## What this plan does not settle
-
-**Retention.** Nothing here expires an archive, and a public store will
-eventually need a policy. It is an operator's decision — the same category as
-0007's rate limiter — and the honest version of it is a sentence in the corpus
-response rather than a silent sweep.
 
 **Snapshots and resume points.** `FileArchive` writes `snapshots/` and
 `resume.json` beside the log, and this store takes neither. A resume point is
@@ -350,5 +400,12 @@ default is none and a multi-day game is a multi-megabyte download.
 `ARCHIVE_FORMAT` move and deliberately left it out — so a stored archive
 identifies its players by key and nothing here changes that. 0017 inherits it.
 
-**Who may delete.** An operator, by hand, with no endpoint. Fine for one
-service and not a model for anything.
+**Who may delete.** An operator, by hand, with no endpoint. Retention sweeps
+blobs on a rule; deleting a *row* — and with it a game's contribution to an
+all-time total — is a thing only a person can do, deliberately, and it is not
+reversible.
+
+**How big `--keep` should be.** The plan gives a default and no principle. The
+right number depends on what the window table is for, and that is 0017's
+question rather than this one: a window over 500 games and a window over 50 are
+different products and neither is wrong.

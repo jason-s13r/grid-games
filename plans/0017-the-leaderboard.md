@@ -1,4 +1,4 @@
-# 0017 — The leaderboard: a table you can recompute
+# 0017 — The leaderboard: one table you can recompute, one you can audit
 
 Status: planned
 Depends on: 0016 (the corpus it is over)
@@ -26,6 +26,21 @@ its reasons. A reader who wants to check it fetches those ids from
 `GET /archives/:gameId`, runs `rankArchives` locally, and gets the same table or
 finds out why not. The service's claim is therefore falsifiable by anybody, and
 a falsifiable claim is a different kind of object from a leaderboard.
+
+That works while the archives are there. 0016 does not keep them forever — a
+store that did would grow without bound for no one's benefit — so there are
+**two tables, and they are audited differently**:
+
+| | **Window** | **All-time** |
+|---|---|---|
+| over | the archives still held | every game ever applied |
+| derived by | replaying them | folding contributions already computed |
+| a stranger can | recompute it entirely | check any game they hold a copy of |
+| bounded by | 0016's retention | nothing |
+
+The window is the one in the paragraph above and nothing about it changes. The
+all-time table is new, and the rest of this plan is mostly about what it costs
+to have one.
 
 ## Scope is the honest part
 
@@ -55,8 +70,8 @@ fails silently: the table looks identical.
 |---|---|
 | `packages/net/src/rankings.ts` | split: verification and tallying become separable |
 | `packages/net/src/test/rankings.test.ts` | the two paths agree |
-| `apps/api/src/rank.ts` | the table, from the verdict cache |
-| `apps/api/src/serve.ts` | `GET /rankings` |
+| `apps/api/src/rank.ts` | the window table, and the all-time accumulator |
+| `apps/api/src/serve.ts` | `GET /rankings`, `GET /rankings/applied` |
 | `apps/web/src/net/rankings.ts` | new: fetch a hosted table instead of replaying locally |
 | `apps/web/src/view/Leaderboard.ts` | a mood for a table somebody else derived, and the scope sentence for it |
 | `docs/trust-and-verification/leaderboard.md` | the hosted table, and how to check it |
@@ -109,39 +124,168 @@ byte-identical, over the fixtures `rankings.test.ts` already builds.
 `Counted.seats`. The seat list is what makes `Counted` self-sufficient: the
 tally needs a key per `empire:member` and the verdict alone does not carry one.
 
-## The table, from the cache
+## The two tables
 
 ```
-GET /rankings?limit=&kind=
+GET /rankings?window=held            the recomputable one (default)
+GET /rankings?window=all             everything ever applied
   → {
       standings:  Standing[],
-      counted:    string[],        the corpus this table is over
+      counted:    string[] | null,   the corpus — a list for `held`, null for `all`
+      games:      number,            how many went into it
       unfinished: number,
       refused:    [ { index, game, problems } ],
       derivedAt:  <iso8601>,
-      scope:      "Over the archives this service holds — not every game ever played."
+      scope:      "<the sentence that bounds this table>"
     }
+
+GET /rankings/applied?cursor=        the all-time corpus, paged
+  → { applied: [ { gameId, steps, appliedAt } ], next? }
 ```
 
 The shape is `Leaderboard` from `packages/net/src/rankings.ts`, unchanged, plus
-two fields that only a *hosted* table needs: when it was derived, and the
-sentence that bounds it.
+three fields only a *hosted* table needs: how many games, when it was derived,
+and the sentence that bounds it.
 
-### Recompute, never accumulate
+`counted` is a list of ids for the window and `null` for all-time, because an
+all-time corpus is unbounded and shipping it inline would eventually be the
+largest response the service has. `GET /rankings/applied` is the paged form, and
+it is the thing that keeps the all-time table auditable at all.
 
-Standings are rebuilt from the `archives` table's cached verdicts. They are not
-incremented as uploads arrive.
+### Every column is a monoid, so accumulation is exact
 
-This costs more and it is the right trade. An accumulated total is a number
-only the server has ever held; a recomputed one is a pure function of the
-corpus, which means removing a bad archive removes its contribution completely
-and leaves no residue. It also means the service cannot drift from what a
-reader computes, because there is nothing to drift — the same inputs go through
-the same `standingsFrom`.
+The window table is recomputed. The all-time table is accumulated — a running
+total, added to when a new archive is applied, never rebuilt from the games it
+is over, because after 0016's retention most of those games are gone.
 
-The recompute is cheap precisely because 0016 cached the verdicts: no blob is
-read, no game is replayed, and the work is a fold over a few thousand rows. It
-runs on a timer and on ingest, and the result is stored with its `derivedAt`.
+That normally trades accuracy for cost. **Here it does not**, and the reason is
+worth checking rather than asserting. This is the whole of the fold
+(`rankings.ts:145`):
+
+```ts
+row.games++;
+if (verdict.winner === empire.id) row.wins++;
+row.moves      += member.moves;
+row.popSpent   += member.popSpent;
+row.tilesTaken += member.tilesTaken;
+row.bestMove    = Math.max(row.bestMove,    member.bestSingleMove);
+row.bestCascade = Math.max(row.bestCascade, member.largestCascade.tiles);
+row.peakTiles   = Math.max(row.peakTiles,   empire.peakTiles);
+```
+
+Five sums and three maxima. Both operations are associative and commutative
+with an identity — 0 and 0 — so the order games arrive in cannot change the
+answer, and a total folded one game at a time equals the same total folded all
+at once. `kind` is the only field that is not arithmetic, and it is a sticky
+flag rather than a value: `if (seat.kind !== MEMBER.BOT) row.kind = seat.kind`
+means *ever held a non-bot seat*, which is a logical OR and a monoid too.
+
+So an accumulated all-time table is **equal** to the table a recompute would
+produce, not an approximation of it. Nothing is estimated, nothing decays, and
+no figure is a sample. That is the licence for the design and it should be
+stated in the docs page, because "running total" reads like a compromise and
+this one is not.
+
+The sort is unaffected: it runs over the folded rows at the end, exactly as it
+does today.
+
+### The dedupe key is the game id, not the archive's bytes
+
+This is the one thing that would silently break the accumulator, so it comes
+before the schema.
+
+An idempotent accumulator needs to know what it has already applied. The
+obvious key is a hash of the uploaded file. **It is the wrong one.** Two
+observers archiving one game produce two different files — different message
+sets, different `steps`, different byte counts — that both verify and describe
+the same game. Keyed on file bytes they are two rows; keyed on `gameId` they
+are one.
+
+`gameId` is a SHA-256 over the canonical genesis, so it identifies the *game*
+and is exactly what `rankArchives` already dedupes on (`seen.has(id)` at
+`rankings.ts:136`, with the comment that two observers on one game is the
+normal way to keep an archive safe). The applied-set is keyed the same way, and
+`docs/trust-and-verification/leaderboard.md` already says why.
+
+### Two honest archives of one game can disagree
+
+They cannot disagree about anything they both cover — the hash is over the
+replay — but one may stop earlier. An observer that closed its laptop at step
+40,000 and one that ran to 120,000 both produce a verifiable archive of the
+same game with different `steps` and different totals, and neither is wrong.
+
+`rankArchives` resolves this by first-wins, and for a table recomputed from a
+pile of files that is harmless. Baked into a permanent accumulator it is not:
+whichever copy happened to be uploaded first becomes the game's contribution
+forever.
+
+So the applied-set stores the contribution, not just the fact:
+
+```sql
+create table applied (
+  game_id      text        primary key,   -- the game, not the file
+  steps        bigint      not null,       -- how far this copy got
+  contribution jsonb       not null,       -- the Counted rows this game added
+  applied_at   timestamptz not null
+);
+```
+
+and a later archive of a game already applied, with a **greater `steps`**,
+subtracts the old contribution and adds the new. Sums subtract cleanly. Maxima
+do not — a max cannot be un-maxed without the values behind it — so those three
+columns are recomputed for the affected keys from their stored contributions,
+which is a query over that key's rows rather than a replay of anything.
+
+`contribution` is small: a handful of seats, ten numbers each. A few hundred
+bytes per game against megabytes of archive, which is the trade that makes all
+of this work — **0016 evicts the blob and keeps the row.**
+
+### What this costs, said plainly
+
+Accuracy costs nothing. Auditability costs something, and the plan should not
+pretend otherwise.
+
+While a game's archive is held, anyone can fetch it and check that the service
+applied it correctly. Once 0016 has evicted the blob, that game's contribution
+is **the service's own word**. Nobody can re-derive it from nothing, and a
+service that fabricated a row for a game that never existed could not be caught
+by arithmetic.
+
+Three things narrow that, and together they are most of the way back:
+
+1. **The applied-set is published.** `GET /rankings/applied` lists every
+   `gameId` ever counted, with its `steps` and its contribution. The fold is
+   therefore checkable by anybody: the totals are a pure function of a list the
+   service publishes, and an arithmetic error is visible without holding a
+   single archive.
+2. **Anyone who kept a copy can audit their own game.** A player who saved the
+   log, or a second observer who archived the same session, can replay it and
+   compare their `Counted` to the published contribution. That is not a
+   theoretical audience — two observers on one game is the normal arrangement.
+3. **`gameId` is still a hash.** A fabricated entry needs a genesis that hashes
+   to it, and the contribution must be consistent with a game that record could
+   produce. It is not free fiction; it is fiction that has to survive anyone
+   who bothers to ask for the archive back.
+
+What remains, and what the scope sentence has to carry: **an evicted game's
+existence is unfalsifiable by a stranger who never held it.** That is a real
+reduction from the window table, and it is the price of an all-time figure in a
+system with no index of finished games.
+
+### The two scope sentences
+
+The window keeps the one the web client already uses, because it is still true:
+
+> Over the archives this service holds — not every game ever played.
+
+All-time needs its own, and it has to say the quiet part:
+
+> Over every game applied here since <date>. Archives for older games are no
+> longer held, so those figures can be checked against the published list of
+> what was counted, but not replayed from here.
+
+A hosted leaderboard that quietly drops either qualifier is the failure mode,
+and it fails silently — the table looks identical.
 
 ### `refused` is served, not swallowed
 
@@ -235,16 +379,21 @@ the code that does it has to stay.
 |---|---|---|
 | 1 | `rankings.ts`: `Counted`, `standingsFrom`, `rankArchives` rebuilt on it | yes — no caller changes |
 | 2 | the equivalence test: both paths, byte-identical | yes |
-| 3 | `rank.ts`: fold the verdict cache into a table, on a timer | yes |
-| 4 | `GET /rankings`, with `counted`, `refused`, `scope`, `derivedAt` | yes |
-| 5 | `apps/web/src/net/rankings.ts`: fetch a hosted table | yes |
-| 6 | `Leaderboard.ts`: the mood, and the sentence that names the host | yes |
-| 7 | the agreement test: the service's table against a local `rankArchives` | yes |
-| 8 | docs | yes |
+| 3 | `rank.ts`: the window table, folded from held archives on a timer | yes |
+| 4 | `GET /rankings?window=held` | yes |
+| 5 | the `applied` table, and the accumulator: apply, supersede, never double | yes |
+| 6 | `GET /rankings?window=all` and `GET /rankings/applied` | yes |
+| 7 | `apps/web/src/net/rankings.ts`: fetch a hosted table | yes |
+| 8 | `Leaderboard.ts`: the mood, the two windows, the sentence that names the host | yes |
+| 9 | the agreement tests (below) | yes |
+| 10 | docs | yes |
 
-Step 1 is the one to review rather than write. It touches a file two shipped
-callers depend on, and the only thing standing between "a refactor" and "a
-change in what the table says" is step 2.
+Steps 1 and 5 are the two to review rather than write. Step 1 touches a file
+two shipped callers depend on, and the only thing between "a refactor" and "a
+change in what the table says" is step 2. Step 5 is the only place in this
+service where a number is kept rather than derived, and step 9 is what keeps it
+honest — build an all-time table by accumulation and a window table by
+recomputation over the *same* games, and require them to be identical.
 
 ## Docs
 
@@ -268,20 +417,28 @@ defence is that the corpus is published, so selection is visible.
 |---|---|
 | `standingsFrom` and `rankArchives` produce identical tables | `packages/net/src/test/rankings.test.ts` |
 | the existing rankings suite still passes unchanged | the same file — the refactor's real test |
-| **the hosted table equals a local `rankArchives` over the same corpus** | `apps/api/src/test/rankings.test.ts` |
+| **the window table equals a local `rankArchives` over the same corpus** | `apps/api/src/test/rankings.test.ts` |
+| **an accumulated all-time table equals a recomputed one over the same games** | the same file — the monoid claim, checked rather than argued |
+| the order games are applied in does not change the all-time table | the same file, applying the same set in three orders |
 | a refused archive is absent from `counted` and present in `refused` | the same file |
 | a second copy of one game does not double a key's `games` | the same file |
+| a second copy keyed on different *bytes* still does not double it | the same file — the dedupe key is the game id |
+| a longer archive of an applied game supersedes it, sums and maxima both | the same file |
 | a SimBot seat contributes no row | the same file |
-| removing an archive from the corpus removes its contribution entirely | the same file — the argument for recomputing |
-| the response carries `counted`, so a reader can fetch and re-derive | the same file, by actually doing it |
+| evicting an archive leaves the all-time table unchanged | the same file |
+| evicting an archive removes it from the window table entirely | the same file |
+| the applied-set is complete enough to re-derive the all-time table | the same file, folding `GET /rankings/applied` and comparing |
+| the window response carries `counted`, so a reader can fetch and re-derive | the same file, by actually doing it |
 | the web client renders the host's name in the scope line | `apps/web/src/test/leaderboard.test.ts` |
 | the local path still works with no service configured | the same file |
 | nothing moved the hash | `pnpm test`; `packages/sim` is not in the diff |
 
-The third row is the plan. Everything else is machinery around it: if the
-service's table and a table anyone can compute from the service's own published
-corpus ever disagree, the endpoint is a claim rather than a derivation and the
-whole argument for hosting it is gone.
+The first two rows are the plan. If the window table and a table anyone can
+compute from the service's own published corpus ever disagree, the endpoint is
+a claim rather than a derivation and the argument for hosting it is gone. And
+if accumulation and recomputation ever disagree over the same games, the monoid
+argument is wrong somewhere and the all-time table is an estimate — which is a
+different product, and not one worth shipping.
 
 ## What this plan does not settle
 
@@ -295,15 +452,23 @@ membership before it means anything. The shape exists (`counted` is the
 corpus), so a slice is not hard; it is just four more things that can silently
 mislead, and none of them is needed to put a table on screen.
 
-**Completeness.** The service ranks what it holds. Nothing makes a host peer
-upload, nothing notices a game that ended and was never archived, and no
-sentence in this plan claims otherwise. The scope line is the whole answer and
-it is why it is a deliverable.
+**Completeness.** The service ranks what it holds and what it was given.
+Nothing makes a host peer upload, nothing notices a game that ended and was
+never archived, and no sentence in this plan claims otherwise. The two scope
+lines are the whole answer and it is why they are deliverables.
 
-**Cost at scale.** A fold over cached verdicts is cheap; the ingest replays
-that fill the cache are not, and the corpus only grows. 0016's queue is the
-place that bites first, and a service that becomes popular will need a
-different answer there before it needs one here.
+**An all-time table cannot be repaired.** If a bug in the accumulator, or an
+archive that should never have been applied, gets into the total, the only
+honest fix is to refold the applied-set from the beginning — which works
+exactly as long as `contribution` was stored correctly, and not at all if the
+bug was in what was stored. The window table has no such failure mode, because
+it is a pure function of files that still exist. Keeping the applied-set
+forever is what makes the repair possible; nothing makes it certain.
+
+**Cost at scale.** A fold over held archives is cheap and the accumulator is
+cheaper; the ingest replays are not, and they do not get shorter as the corpus
+grows. 0016's queue is the place that bites first, and a service that becomes
+popular will need a different answer there before it needs one here.
 
 **The `index` field.** It is a position in an input list, which is meaningful
 to a local caller and not across a wire. It is kept so `Leaderboard` does not
