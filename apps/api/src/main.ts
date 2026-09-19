@@ -20,8 +20,15 @@
 
 import { parseArgs } from "node:util";
 import { Board, LIMITS } from "./board.js";
-import { MemoryArchives, MemoryStore, PostgresArchives, PostgresStore } from "./db.js";
+import {
+  MemoryArchives,
+  MemoryStore,
+  PostgresApplied,
+  PostgresArchives,
+  PostgresStore,
+} from "./db.js";
 import { DEFAULT_KEEP, Ingest } from "./ingest.js";
+import { MemoryApplied, Rankings } from "./rank.js";
 import { FileBlobs } from "./store.js";
 import { serve } from "./serve.js";
 
@@ -38,7 +45,8 @@ Options:
   --archives <dir>     where verified archives are kept; omitted, the store is
                        off and its routes 404
   --keep <n>           how many archives keep their file (default ${DEFAULT_KEEP});
-                       every game keeps its row forever
+                       every game keeps its row, and its contribution to the
+                       all-time table, forever
   --sweep <secs>       how often expired rows are deleted (default 30)
   --quiet              only complain
   --help
@@ -107,19 +115,26 @@ async function run(): Promise<void> {
   // The store is opt-in. A board on its own is a whole deployment, and an
   // operator who wants one should not be made to find a disk for archives.
   let ingest: Ingest | undefined;
+  let rankings: Rankings | undefined;
   if (values.archives) {
     const blobs = new FileBlobs(values.archives);
     await blobs.open();
-    ingest = new Ingest({
-      archives: postgres ? new PostgresArchives(postgres.pool) : new MemoryArchives(),
-      blobs,
-      keep: number(values.keep, "--keep") ?? DEFAULT_KEEP,
-      say,
-    });
-    say(`archives ${values.archives}, keeping ${number(values.keep, "--keep") ?? DEFAULT_KEEP}`);
+    const keep = number(values.keep, "--keep") ?? DEFAULT_KEEP;
+    const archives = postgres ? new PostgresArchives(postgres.pool) : new MemoryArchives();
+    const applied = postgres ? new PostgresApplied(postgres.pool) : new MemoryApplied();
+    rankings = new Rankings({ archives, applied });
+    ingest = new Ingest({ archives, blobs, rankings, keep, say });
+    say(`archives ${values.archives}, keeping ${keep}`);
   }
 
-  const server = serve({ board, ...(ingest ? { ingest } : {}), bind: values.bind, port, say });
+  const server = serve({
+    board,
+    ...(ingest ? { ingest } : {}),
+    ...(rankings ? { rankings } : {}),
+    bind: values.bind,
+    port,
+    say,
+  });
 
   // Reads exclude expired rows anyway, so this is not what makes an answer
   // fresh — it is what stops the table growing without bound.

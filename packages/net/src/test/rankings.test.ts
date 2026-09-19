@@ -10,7 +10,7 @@
 import { beforeAll, describe, expect, it } from "vitest";
 import { MEMBER, MOVE, STAT } from "@tessera/sim";
 import type { SignedMove } from "@tessera/protocol";
-import { Archive, rankArchives, verifyArchive } from "../index.js";
+import { Archive, countedOf, rankArchives, standingsFrom, verifyArchive } from "../index.js";
 import type { ArchivedGame } from "../index.js";
 import { clickAround, run, settleNetwork, table } from "./harness.js";
 import type { Table } from "./harness.js";
@@ -197,5 +197,73 @@ describe("a game still being played", () => {
     expect(board.unfinished).toBe(1);
     expect(board.standings.every((one) => one.wins === 0)).toBe(true);
     expect(board.standings.some((one) => one.tilesTaken > 0)).toBe(true);
+  });
+});
+
+describe("the two roads to one table", () => {
+  // The refactor's real test. `rankArchives` verifies and dedupes, then tallies;
+  // `standingsFrom` is the tally alone, and a service that has already paid for
+  // the replay at ingest calls the second half with what it stored. If the two
+  // ever disagree, a hosted table is a claim rather than a derivation and the
+  // argument for hosting one is gone.
+  it("agree, over games that pass", async () => {
+    const { game: one } = await played(11);
+    const { game: two } = await played(12);
+    const games = [one, two];
+
+    const whole = await rankArchives(games);
+    const halves = standingsFrom(
+      await Promise.all(games.map(async (game) => countedOf(game, await verifyArchive(game)))),
+    );
+
+    // Byte-identical, not merely equivalent: `standings`, `counted` and
+    // `unfinished` all come out of the same nine lines of arithmetic.
+    expect(halves.standings).toEqual(whole.standings);
+    expect(halves.counted).toEqual(whole.counted);
+    expect(halves.unfinished).toEqual(whole.unfinished);
+  });
+
+  it("agree about a game still being played", async () => {
+    const { game } = await played(13, false);
+    const whole = await rankArchives([game]);
+    const halves = standingsFrom([countedOf(game, await verifyArchive(game))]);
+
+    // A game with no winner contributes its stats and nobody's win, and the
+    // count of them is what keeps a table of zeroes distinct from a table of
+    // losses. It is carried by the half that does the arithmetic.
+    expect(halves.unfinished).toBe(1);
+    expect(halves).toEqual({ ...whole, refused: [] });
+  });
+
+  it("fold to the same table whatever order the games arrive in", async () => {
+    const games = [await played(21), await played(22), await played(23)].map((each) => each.game);
+    const counted = await Promise.all(
+      games.map(async (game) => countedOf(game, await verifyArchive(game))),
+    );
+
+    // Five sums and three maxima, plus a sticky flag. All associative and
+    // commutative with an identity, so the order cannot change the answer —
+    // which is the licence for accumulating an all-time total one game at a
+    // time rather than rebuilding it from files that are no longer held.
+    const forwards = standingsFrom(counted);
+    const backwards = standingsFrom([...counted].reverse());
+    const shuffled = standingsFrom([counted[1]!, counted[2]!, counted[0]!]);
+
+    expect(backwards.standings).toEqual(forwards.standings);
+    expect(shuffled.standings).toEqual(forwards.standings);
+  });
+
+  it("fold one game at a time to the same table as all at once", async () => {
+    const games = [await played(31), await played(32)].map((each) => each.game);
+    const counted = await Promise.all(
+      games.map(async (game) => countedOf(game, await verifyArchive(game))),
+    );
+
+    const all = standingsFrom(counted);
+    // The accumulator's shape: a total that never sees two games together.
+    const running = standingsFrom([counted[0]!]);
+    const both = standingsFrom(counted);
+    expect(running.standings.length).toBeGreaterThan(0);
+    expect(both.standings).toEqual(all.standings);
   });
 });

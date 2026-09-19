@@ -15,8 +15,9 @@
 // about who they are changes what the file proves.
 
 import { gameIdOf } from "@tessera/protocol";
-import { verifyArchive } from "@tessera/net";
+import { countedOf, verifyArchive } from "@tessera/net";
 import type { ArchivedGame, Verdict } from "@tessera/net";
+import type { Rankings } from "./rank.js";
 import type { Blobs } from "./store.js";
 import { contentHash } from "./store.js";
 
@@ -77,6 +78,11 @@ export type Accepted =
 export interface IngestOptions {
   archives: Archives;
   blobs: Blobs;
+  /** Told about every game that verifies, so a game's contribution to the
+   *  totals is computed at the one moment the verdict and the file are both in
+   *  hand. After eviction neither is, and the contribution is all that is
+   *  left — which is the whole basis of an all-time table. */
+  rankings?: Rankings;
   keep?: number;
   now?: () => number;
   /** Reported rather than swallowed: a verification that threw is a bug in this
@@ -87,6 +93,7 @@ export interface IngestOptions {
 export class Ingest {
   private readonly archives: Archives;
   private readonly blobs: Blobs;
+  private readonly rankings: Rankings | undefined;
   private readonly keep: number;
   private readonly now: () => number;
   private readonly say: (line: string) => void;
@@ -99,6 +106,7 @@ export class Ingest {
   constructor(options: IngestOptions) {
     this.archives = options.archives;
     this.blobs = options.blobs;
+    this.rankings = options.rankings;
     this.keep = options.keep ?? DEFAULT_KEEP;
     this.now = options.now ?? (() => Date.now());
     this.say = options.say ?? (() => {});
@@ -226,6 +234,10 @@ export class Ingest {
       steps: verdict.steps,
       checkedAt: this.now(),
     });
+    // Here rather than anywhere later: `countedOf` needs the genesis and the
+    // seatings to turn a summary's member indices into keys, and after eviction
+    // this service no longer has them.
+    await this.rankings?.apply(gameId, verdict.steps, countedOf(game, verdict));
     await this.evict();
   }
 

@@ -32,6 +32,7 @@ import { askForRoom } from "./net/factory";
 import { ReplaySession } from "./replay/session";
 import { rankInWorker } from "./work/rank";
 import { fetchArchive, isArchive, urlsFrom } from "./net/archives";
+import { fetchTable, hostOf } from "./net/rankings";
 import {
   checkBoardUrl,
   checkFactoryUrl,
@@ -302,6 +303,23 @@ rankEl.addEventListener("change", () => {
   saveSettings({ rankFrom: urls });
 });
 
+const tableEl = pick<HTMLInputElement>('[data-cfg="rank-service"]');
+const tableProblemEl = pick<HTMLElement>('[data-cfg="rank-service-problem"]');
+tableEl.value = settings().rankService;
+
+tableEl.addEventListener("change", () => {
+  const text = tableEl.value.trim();
+  const problem = checkBoardUrl(text);
+
+  tableProblemEl.textContent = problem;
+  tableProblemEl.hidden = !problem;
+  tableProblemEl.classList.toggle("lobby-problem", !!problem);
+  if (problem) return;
+
+  if (text === settings().rankService) return;
+  saveSettings({ rankService: text });
+});
+
 // --- the address book --------------------------------------------------------
 //
 // One card, its own root, its own listener. What it shows is `Directory.list()`,
@@ -384,16 +402,6 @@ function sayListable(mode: SetupMode): void {
   listFieldEl.hidden = mode !== "host" || !url;
   if (listFieldEl.hidden) listEl.checked = false;
   if (url) boardHostEl.textContent = hostOf(url);
-}
-
-/** The board's host, or the whole string if it will not parse — which it will,
- *  because `checkBoardUrl` refused to save anything that would not. */
-function hostOf(url: string): string {
-  try {
-    return new URL(url).host;
-  } catch {
-    return url;
-  }
 }
 
 /** Knock on a row's doors, and do whatever the answer turns out to be.
@@ -1090,7 +1098,11 @@ const leaderboard = new LeaderboardCard(pick<HTMLElement>("[data-rank]"), {
 
 function sayRankable(): void {
   const sources = settings().rankFrom.length + dropped.length;
-  leaderboard.set(sources > 0 ? { kind: "idle", sources } : { kind: "unset" });
+  if (sources > 0) return leaderboard.set({ kind: "idle", sources });
+  // A configured service is something to press the button for even with no
+  // files and no archive URLs, because fetching a table needs neither.
+  if (settings().rankService) return leaderboard.set({ kind: "idle", sources: 0 });
+  leaderboard.set({ kind: "unset" });
 }
 
 onSettingsChange(sayRankable);
@@ -1146,7 +1158,28 @@ async function addFiles(files: File[]): Promise<void> {
 }
 
 async function buildTable(): Promise<void> {
+  const service = settings().rankService;
   const urls = settings().rankFrom;
+
+  // With a service configured and nothing local to replay, fetch the table
+  // rather than deriving one — six multi-megabyte downloads and six full
+  // replays is minutes, and a hosted table is one request.
+  //
+  // The local path wins when there is anything local, because a file the player
+  // opened is a file they asked to see counted, and a service's table cannot
+  // contain it. That is also how somebody checks a hosted table: fetch its
+  // corpus, open the files, and press the button again.
+  if (service && urls.length === 0 && dropped.length === 0) {
+    leaderboard.set({ kind: "reading", done: 0, total: 1 });
+    try {
+      const table = await fetchTable(service);
+      leaderboard.set({ kind: "hosted", table, host: hostOf(service), window: "held" });
+    } catch (error) {
+      leaderboard.set({ kind: "problem", message: (error as Error).message });
+    }
+    return;
+  }
+
   const sources: Array<{ source: string; game: ArchivedGame }> = [...dropped];
   const unreadable: Refusal[] = [];
 

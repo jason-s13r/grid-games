@@ -217,11 +217,43 @@ enumerates its rooms, so a base URL alone cannot be fetched from. What is stored
 is the archive URL itself — which is also what a person actually has, because it
 is what they were sent.
 
+### Two ways to get a table, and which sentence goes under each
+
+With a **leaderboard service** configured and nothing local to replay,
+[`net/rankings.ts`](../../apps/web/src/net/rankings.ts) fetches the table instead
+of deriving one — six multi-megabyte downloads and six full replays is minutes,
+and a hosted table is one request. The local path wins whenever there *is*
+anything local, because a file the player opened is a file they asked to see
+counted and a service's table cannot contain it.
+
+The honesty is the whole of the change, and it is one line:
+
+| | sentence |
+|---|---|
+| this browser derived it | *Over the archives this browser was given — not every game ever played.* |
+| a service derived it | *api.example: Over the archives this service holds — not every game ever played.* |
+
+The second is the **service's own** `scope` field with the host in front of it,
+not a sentence this client wrote: the service knows what its table is over and
+this client does not, and a client supplying its own qualifier would be guessing
+on the reader's behalf. Rendering the two identically is the failure mode and it
+fails silently — the table looks the same either way.
+
+Refusals are rendered for a hosted table too, named by game id rather than by
+file, because `index` is a position in an input list and means nothing across a
+wire. A hosted leaderboard has more to hide than a local one and exactly the same
+obligation.
+
+The local path is not removed and must not be: it is how somebody *checks* a
+hosted table. Fetch the ids in `counted`, open those files above, press the
+button, and compare. See [the leaderboard](../trust-and-verification/leaderboard.md#hosted-two-tables-audited-differently).
+
 ## Settings
 
-`src/net/settings.ts` — three entries in `localStorage["tessera.settings"]`,
+`src/net/settings.ts` — four entries in `localStorage["tessera.settings"]`,
 beside the identity, **all empty by default**: the address book, a host service,
-and the archive URLs a leaderboard reads. Read once at start and written on
+the archive URLs a leaderboard reads, and a leaderboard service to fetch a table
+from instead of deriving one. Read once at start and written on
 change; a settings object that can change under a render is a bug waiting for a
 screenshot. Empty means *absent*, not *broken*: with no factory URL the third
 create button is not on the screen at all.

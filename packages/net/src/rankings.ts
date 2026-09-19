@@ -17,11 +17,11 @@
 // way to keep an archive safe.
 
 import { MEMBER } from "@tessera/sim";
-import type { MemberKind } from "@tessera/sim";
+import type { EmpireSummary, MemberKind } from "@tessera/sim";
 import { Roster } from "@tessera/protocol";
 import type { MemberKey, Seat } from "@tessera/protocol";
 import { verifyArchive } from "./archive.js";
-import type { ArchivedGame } from "./archive.js";
+import type { ArchivedGame, Verdict } from "./archive.js";
 import { mergeSeatings, seatingOf } from "./seating.js";
 
 /** One key's record across every game counted.
@@ -105,42 +105,71 @@ function blank(key: MemberKey, kind: MemberKind): Standing {
   };
 }
 
-/** Rank a pile of archives.
+/** One verified game, reduced to what the tally needs.
+ *
+ *  Small enough to store — a summary and a seat list, no log and no state, a few
+ *  hundred bytes against an archive's megabytes. That size difference is the
+ *  whole reason this type exists separately: a service can throw the archive
+ *  away and keep a game's contribution to a total forever.
+ *
+ *  It is also what makes the two halves below separable. Verifying is a full
+ *  replay; tallying is nine lines of arithmetic. Anything that has already paid
+ *  for the first should not have to pay for it again to redo the second. */
+export interface Counted {
+  gameId: string;
+  /** Zero for a game that has not ended. Off the replay, never off the file. */
+  winner: number;
+  summary: readonly EmpireSummary[];
+  /** The seats somebody signed for, by `empire:member`. A SimBot holds no key
+   *  and so is not here — the players are exactly the seats with one.
+   *
+   *  Here rather than derived on demand because the verdict alone does not carry
+   *  a key: the summary addresses members by index, and the index-to-key map is
+   *  a fact about the genesis and the seatings, which a stored `Counted` no
+   *  longer has beside it. */
+  seats: ReadonlyArray<{ empire: number; member: number; key: MemberKey; kind: MemberKind }>;
+}
+
+/** A verified game, reduced. Verification is the caller's — this is the cheap
+ *  half, and calling it on a game that has not passed `verifyArchive` would be
+ *  counting a file nobody checked. */
+export function countedOf(game: ArchivedGame, verdict: Verdict): Counted {
+  const seats = [];
+  for (const [at, seat] of seatsByIndex(game)) {
+    const [empire, member] = at.split(":");
+    seats.push({ empire: Number(empire), member: Number(member), key: seat.key, kind: seat.kind });
+  }
+  return { gameId: game?.genesis?.gameId ?? "unknown", winner: verdict.winner, summary: verdict.summary, seats };
+}
+
+/** The arithmetic, with the verification already done. Pure, synchronous, and
+ *  the only opinion in it is the sort.
  *
  *  Ordering is wins, then tiles taken, then the best single move, then the key
  *  itself so that two identical records still come out in the same order on
  *  every machine that computes the table. Nothing here is weighted or tuned:
- *  every column is a count taken from hashed state, and the sort is the only
- *  opinion in the file.
+ *  every column is a count taken from hashed state, and a rating nobody can
+ *  explain is a table nobody can check.
  *
- *  Give it every archive you have, including several of the same game. It
- *  verifies each and counts each game once. */
-export async function rankArchives(games: Iterable<ArchivedGame>): Promise<Leaderboard> {
+ *  Every column is also a **monoid** — five sums and three maxima, plus one
+ *  sticky flag — so the order games arrive in cannot change the answer, and a
+ *  total folded one game at a time equals the same total folded all at once.
+ *  That is what lets a running total be *equal* to a recomputed table rather
+ *  than an approximation of it. */
+export function standingsFrom(
+  counted: Iterable<Counted>,
+  refused: Leaderboard["refused"] = [],
+): Leaderboard {
   const rows = new Map<MemberKey, Standing>();
-  const counted: string[] = [];
-  const refused: Leaderboard["refused"] = [];
-  const seen = new Set<string>();
+  const ids: string[] = [];
   let unfinished = 0;
 
-  let index = -1;
-  for (const game of games) {
-    index++;
-    const id = game?.genesis?.gameId ?? "unknown";
-    const verdict = await verifyArchive(game);
-    if (!verdict.ok) {
-      refused.push({ index, game: id, problems: verdict.problems });
-      continue;
-    }
-    if (seen.has(id)) {
-      refused.push({ index, game: id, problems: ["already counted from another archive"] });
-      continue;
-    }
-    seen.add(id);
-    counted.push(id);
-    if (!verdict.winner) unfinished++;
+  for (const game of counted) {
+    ids.push(game.gameId);
+    if (!game.winner) unfinished++;
 
-    const seats = seatsByIndex(game);
-    for (const empire of verdict.summary) {
+    const seats = new Map(game.seats.map((seat) => [`${seat.empire}:${seat.member}`, seat]));
+    for (const empire of game.summary) {
       for (const member of empire.members) {
         const seat = seats.get(`${empire.id}:${member.index}`);
         // A SimBot holds no key, so there is nobody to credit. That is the
@@ -150,10 +179,12 @@ export async function rankArchives(games: Iterable<ArchivedGame>): Promise<Leade
 
         let row = rows.get(seat.key);
         if (!row) rows.set(seat.key, (row = blank(seat.key, seat.kind)));
+        // A logical OR, and a monoid too: *ever held a non-bot seat*. A key that
+        // has played as both is a person who also ran night cover.
         if (seat.kind !== MEMBER.BOT) row.kind = seat.kind;
 
         row.games++;
-        if (verdict.winner === empire.id) row.wins++;
+        if (game.winner === empire.id) row.wins++;
         row.moves += member.moves;
         row.popSpent += member.popSpent;
         row.tilesTaken += member.tilesTaken;
@@ -172,5 +203,35 @@ export async function rankArchives(games: Iterable<ArchivedGame>): Promise<Leade
       (a.key < b.key ? -1 : a.key > b.key ? 1 : 0),
   );
 
-  return { standings, counted, unfinished, refused };
+  return { standings, counted: ids, unfinished, refused };
+}
+
+/** Rank a pile of archives: verify and dedupe, then tally what survives.
+ *
+ *  Give it every archive you have, including several of the same game. It
+ *  verifies each and counts each game once — two observers on one game is the
+ *  normal way to keep an archive safe, not a corner case. */
+export async function rankArchives(games: Iterable<ArchivedGame>): Promise<Leaderboard> {
+  const survived: Counted[] = [];
+  const refused: Leaderboard["refused"] = [];
+  const seen = new Set<string>();
+
+  let index = -1;
+  for (const game of games) {
+    index++;
+    const id = game?.genesis?.gameId ?? "unknown";
+    const verdict = await verifyArchive(game);
+    if (!verdict.ok) {
+      refused.push({ index, game: id, problems: verdict.problems });
+      continue;
+    }
+    if (seen.has(id)) {
+      refused.push({ index, game: id, problems: ["already counted from another archive"] });
+      continue;
+    }
+    seen.add(id);
+    survived.push(countedOf(game, verdict));
+  }
+
+  return standingsFrom(survived, refused);
 }

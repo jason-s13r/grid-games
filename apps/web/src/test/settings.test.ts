@@ -64,7 +64,7 @@ describe("the settings store", () => {
   beforeEach(() => resetSettings());
 
   it("starts empty", () => {
-    expect(settings()).toEqual({ board: "", factory: "", rankFrom: [] });
+    expect(settings()).toEqual({ board: "", factory: "", rankFrom: [], rankService: "" });
   });
 
   it("keeps what was written and leaves the rest alone", () => {

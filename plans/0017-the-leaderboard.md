@@ -1,6 +1,6 @@
 # 0017 — The leaderboard: one table you can recompute, one you can audit
 
-Status: planned
+Status: built
 Depends on: 0016 (the corpus it is over)
 Branch: `hosted-rankings`
 

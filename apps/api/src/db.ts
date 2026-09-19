@@ -15,6 +15,7 @@
 import { Pool } from "pg";
 import type { Row, Store } from "./board.js";
 import type { ArchiveRow, Archives, Corpus, Status } from "./ingest.js";
+import type { Applied, AppliedStore } from "./rank.js";
 
 export const SCHEMA = `
 create table if not exists rows (
@@ -45,6 +46,14 @@ create table if not exists archives (
 );
 create index if not exists archives_checked on archives (checked_at desc);
 create index if not exists archives_status on archives (status);
+
+create table if not exists applied (
+  game_id      text        primary key,
+  steps        bigint      not null,
+  contribution jsonb       not null,
+  applied_at   timestamptz not null
+);
+create index if not exists applied_at on applied (applied_at);
 `;
 
 export class PostgresStore implements Store {
@@ -394,4 +403,89 @@ const asArchive = (kept: Kept): ArchiveRow => ({
   problems: kept.problems ?? [],
   checkedAt: kept.checked_at?.getTime() ?? null,
   evictedAt: kept.evicted_at?.getTime() ?? null,
+});
+
+
+/** Every game ever counted, with what it contributed.
+ *
+ *  Keyed on the game id and never on a hash of the file: two observers archiving
+ *  one game produce two different files that both verify and describe the same
+ *  game, and keyed on bytes they would be two rows and a doubled `games` for
+ *  every key in that game.
+ *
+ *  Kept forever, because it is what makes the all-time table auditable at all —
+ *  the totals are a pure function of this list, published at
+ *  `GET /rankings/applied`, so an arithmetic error is visible to anybody without
+ *  holding a single archive. It is also the only repair path: a bug that gets
+ *  into a total is fixed by refolding this from the beginning, which works
+ *  exactly as long as `contribution` was stored correctly and not at all if the
+ *  bug was in what was stored. */
+export class PostgresApplied implements AppliedStore {
+  constructor(private readonly pool: Pool) {}
+
+  async put(row: Applied): Promise<void> {
+    await this.pool.query(
+      `insert into applied (game_id, steps, contribution, applied_at)
+       values ($1, $2, $3, $4)
+       on conflict (game_id) do update set
+         steps = excluded.steps,
+         contribution = excluded.contribution,
+         applied_at = excluded.applied_at`,
+      [row.gameId, row.steps, JSON.stringify(row.contribution), new Date(row.appliedAt)],
+    );
+  }
+
+  async get(gameId: string): Promise<Applied | undefined> {
+    const found = await this.pool.query<Contribution>(
+      `select game_id, steps, contribution, applied_at from applied where game_id = $1`,
+      [gameId],
+    );
+    return found.rows[0] ? asApplied(found.rows[0]) : undefined;
+  }
+
+  async all(): Promise<Applied[]> {
+    const found = await this.pool.query<Contribution>(
+      `select game_id, steps, contribution, applied_at from applied order by applied_at asc`,
+    );
+    return found.rows.map(asApplied);
+  }
+
+  async page(limit: number, cursor?: string): Promise<{ rows: Applied[]; next?: string }> {
+    const params: unknown[] = [];
+    let where = "true";
+    if (cursor) {
+      params.push(cursor);
+      where = `game_id > $${params.length}`;
+    }
+    params.push(limit + 1);
+    const found = await this.pool.query<Contribution>(
+      `select game_id, steps, contribution, applied_at from applied
+       where ${where} order by game_id asc limit $${params.length}`,
+      params,
+    );
+    const rows = found.rows.slice(0, limit).map(asApplied);
+    const more = found.rows.length > limit;
+    return { rows, ...(more && rows.length > 0 ? { next: rows[rows.length - 1]!.gameId } : {}) };
+  }
+
+  async since(): Promise<number | null> {
+    const found = await this.pool.query<{ first: Date | null }>(
+      `select min(applied_at) as first from applied`,
+    );
+    return found.rows[0]?.first?.getTime() ?? null;
+  }
+}
+
+interface Contribution {
+  game_id: string;
+  steps: string;
+  contribution: Applied["contribution"];
+  applied_at: Date;
+}
+
+const asApplied = (row: Contribution): Applied => ({
+  gameId: row.game_id,
+  steps: Number(row.steps),
+  contribution: row.contribution,
+  appliedAt: row.applied_at.getTime(),
 });

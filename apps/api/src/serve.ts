@@ -21,6 +21,7 @@ import { DEFAULT_LIMIT } from "@tessera/net";
 import type { Answer, Board } from "./board.js";
 import { ARCHIVE_CAP, summarise } from "./ingest.js";
 import type { Ingest, Status } from "./ingest.js";
+import type { Rankings, Window } from "./rank.js";
 
 /** A body bigger than this is a body no honest announcer sends: a `Listing`
  *  carries a genesis and a handful of witnesses and costs a few kilobytes.
@@ -44,6 +45,8 @@ export interface ServeOptions {
   /** Absent, and the archive routes 404. A board on its own is a whole
    *  deployment and 0015 shipped one. */
   ingest?: Ingest;
+  /** The two tables, which exist only where there is a corpus to be over. */
+  rankings?: Rankings;
   bind: string;
   port: number;
   say: (line: string) => void;
@@ -78,6 +81,10 @@ export function serve(options: ServeOptions): Server {
     if (path[0] === "archives" && options.ingest) {
       return archives(options.ingest, request, response, path.slice(1), query);
     }
+    if (path[0] === "rankings" && options.rankings) {
+      if (request.method !== "GET") return end(response, 405, { error: "read only" });
+      return rankings(options.rankings, response, path.slice(1), query);
+    }
     if (path[0] !== "games") return end(response, 404, { error: "not found" });
     const rest = path.slice(1);
 
@@ -107,6 +114,9 @@ export function serve(options: ServeOptions): Server {
     options.say(`board    http://${options.bind}:${options.port}/games`);
     if (options.ingest) {
       options.say(`archives http://${options.bind}:${options.port}/archives`);
+    }
+    if (options.rankings) {
+      options.say(`table    http://${options.bind}:${options.port}/rankings`);
     }
   });
   return server;
@@ -196,6 +206,39 @@ async function archives(
 
 const isStatus = (value: string | null): value is Status =>
   value === "checking" || value === "held" || value === "refused";
+
+/** The two tables, and the list that makes the second one checkable.
+ *
+ *  Both responses carry `scope`, which is a deliverable rather than copy: a
+ *  hosted leaderboard that quietly drops the qualifier is the failure mode, and
+ *  it fails silently, because the table looks identical either way. */
+async function rankings(
+  tables: Rankings,
+  response: ServerResponse,
+  path: readonly string[],
+  query: string | undefined,
+): Promise<void> {
+  const asked = new URLSearchParams(query ?? "");
+
+  if (path[0] === "applied") {
+    const page = await tables.page(
+      limitOf(query, CORPUS_LIMIT, CORPUS_LIMIT),
+      asked.get("cursor") ?? undefined,
+    );
+    return end(response, 200, page);
+  }
+  if (path.length > 0) return end(response, 404, { error: "not found" });
+
+  const window: Window = asked.get("window") === "all" ? "all" : "held";
+  const table = await tables.table(window);
+  return end(response, 200, {
+    ...table,
+    // Null rather than an empty list for all-time, so a reader cannot mistake
+    // "not shipped inline, fetch /rankings/applied" for "nothing was counted".
+    counted: window === "all" ? null : table.counted,
+    derivedAt: new Date(table.derivedAt).toISOString(),
+  });
+}
 
 /** The answer envelope, for both GETs.
  *

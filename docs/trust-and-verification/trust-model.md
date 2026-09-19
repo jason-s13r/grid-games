@@ -75,6 +75,20 @@ it. The corpus it publishes is over what was sent to it and claims nothing about
 completeness: nothing makes a peer upload, and nothing notices a game that ended
 and was never archived.
 
+## A hosted leaderboard
+
+Its power is **selection**: which archives it holds, which it refused, and what it
+left out of its corpus. It has none over the figures, because every one of them
+is recomputed from a file whose hash the reader checks — so the defence is that
+the corpus is published, which makes selection visible.
+
+The window table ships the ids it counted and a reader can fetch those files and
+re-derive it. The all-time table cannot be replayed once the files are evicted;
+what is published instead is the applied-set, so the totals are a pure function of
+a list anybody can fetch, and an arithmetic error is visible without holding a
+single archive. What remains, and the scope sentence has to carry it: an evicted
+game's existence is unfalsifiable by a stranger who never held it.
+
 ## The broker
 
 PeerJS's public broker does [signalling only](../mesh/webrtc-mesh.md) — it

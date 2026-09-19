@@ -18,6 +18,8 @@ import { MEMBER } from "@tessera/sim";
 import type { Leaderboard as Table, Standing } from "@tessera/net";
 import { shortKey, view } from "../view/Leaderboard";
 import { isArchive, urlsFrom } from "../net/archives";
+import { fetchTable, hostOf } from "../net/rankings";
+import type { HostedTable } from "../net/rankings";
 
 const standing = (over: Partial<Standing> = {}): Standing => ({
   key: "MCowBQYDK2VwAyEAabcdefghijklmnop",
@@ -163,5 +165,106 @@ describe("what counts as a saved game before any of that", () => {
       "https://a.example/x",
       "https://b.example/y",
     ]);
+  });
+});
+
+describe("a table somebody else derived", () => {
+  const hosted = (over: Partial<HostedTable> = {}): HostedTable => ({
+    standings: [standing()],
+    counted: ["abc123", "def456"],
+    unfinished: 0,
+    refused: [],
+    games: 2,
+    derivedAt: "2026-09-19T00:00:00.000Z",
+    scope: "Over the archives this service holds — not every game ever played.",
+    ...over,
+  });
+
+  it("names the host in the scope line, so a reader sees whose claim it is", () => {
+    const shown = view({ kind: "hosted", table: hosted(), host: "api.example", window: "held" });
+    // The failure mode is silent: a hosted table and a local one look identical
+    // if nothing says which is which, and only one of them is this browser's
+    // own derivation.
+    expect(shown.scope).toContain("api.example");
+    expect(shown.scope).toContain("not every game ever played");
+    expect(shown.from).toBe("hosted");
+  });
+
+  it("uses the service's own sentence rather than one of its own", () => {
+    const all = hosted({
+      counted: null,
+      scope: "Over every game applied here since 2026-01-01. Archives for older games are no longer held.",
+    });
+    const shown = view({ kind: "hosted", table: all, host: "api.example", window: "all" });
+    // The service knows what its table is over and this client does not. A
+    // client supplying its own qualifier would be guessing for the reader.
+    expect(shown.scope).toContain("no longer held");
+    expect(shown.label).toContain("all-time");
+  });
+
+  it("renders a hosted table's refusals too", () => {
+    const shown = view({
+      kind: "hosted",
+      table: hosted({ refused: [{ index: 0, game: "deadbeefcafe0001", problems: ["hash mismatch"] }] }),
+      host: "api.example",
+      window: "held",
+    });
+    // A hosted leaderboard has more to hide than a local one and exactly the
+    // same obligation. `index` means nothing across a wire, so the game id is
+    // what names it.
+    expect(shown.refusals).toHaveLength(1);
+    expect(shown.refusals[0]!.source).toContain("deadbeefcafe");
+    expect(shown.refusals[0]!.problems).toEqual(["hash mismatch"]);
+  });
+
+  it("keeps the local sentence on a table this browser built", () => {
+    const shown = view({ kind: "table", table: table(), names: ["a.json"], unreadable: [] });
+    expect(shown.scope).toContain("this browser was given");
+    expect(shown.from).toBe("local");
+  });
+});
+
+describe("reading a table off a service", () => {
+  const answer = (body: unknown, status = 200): typeof fetch =>
+    async () => new Response(JSON.stringify(body), { status });
+
+  it("asks for the window it was told to", async () => {
+    const seen: string[] = [];
+    const watching: typeof fetch = async (input) => {
+      seen.push(String(input));
+      return new Response(JSON.stringify({ standings: [], counted: [], refused: [], scope: "x" }));
+    };
+    await fetchTable("https://api.example/", "all", watching);
+    // The trailing slash is stripped, as `Directory` strips it, so a URL a
+    // person typed and one they pasted reach the same place.
+    expect(seen[0]).toBe("https://api.example/rankings?window=all");
+  });
+
+  it("refuses something that is not a table rather than rendering it", async () => {
+    await expect(fetchTable("https://api.example", "held", answer({ hello: "there" }))).rejects.toThrow(
+      /not answer with a table/,
+    );
+  });
+
+  it("turns an opaque failure into something a player can read", async () => {
+    const blocked: typeof fetch = () => Promise.reject(new TypeError("Failed to fetch"));
+    // A CORS refusal and a service that is down are the same event from inside
+    // a page, and `TypeError: Failed to fetch` is not a message.
+    await expect(fetchTable("https://api.example", "held", blocked)).rejects.toThrow(
+      /may not allow this page to read it/,
+    );
+  });
+
+  it("says the status when a service answers with one", async () => {
+    await expect(
+      fetchTable("https://api.example", "held", answer({}, 503)),
+    ).rejects.toThrow(/answered 503/);
+  });
+
+  it("names a host without its path or scheme", () => {
+    expect(hostOf("https://api.example/some/where?x=1")).toBe("api.example");
+    // A string that will not parse is shown as typed rather than dropped: the
+    // player wrote it, and hiding it would make the table look like nobody's.
+    expect(hostOf("not a url")).toBe("not a url");
   });
 });

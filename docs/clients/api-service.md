@@ -217,6 +217,31 @@ already guards the network it is on, not a header this client cannot send.
 multi-room, but `apps/host/src/main.ts` hosts exactly one game, so N games means
 N processes on N ports. The board is what makes that invisible to a player.
 
+# The leaderboard
+
+```
+GET /rankings?window=held        the recomputable table (default)
+GET /rankings?window=all         everything ever applied
+GET /rankings/applied?cursor=    the all-time corpus, paged
+```
+
+Both tables are `Leaderboard`'s shape plus three fields only a hosted table
+needs: `games`, `derivedAt`, and `scope` — the sentence that bounds it. `counted`
+is the list of ids for the window and `null` for all-time, because an all-time
+corpus is unbounded and shipping it inline would eventually be the largest
+response this service has.
+
+The window table ships its corpus so a reader can falsify it: fetch the ids in
+`counted` from `GET /archives/:gameId`, run `rankArchives` over them, and get the
+same table or find out why not. Refusals are served rather than swallowed.
+
+Everything else about the two tables — why an accumulated total is exact rather
+than approximate, why the dedupe key is the game id and not the file's bytes,
+what auditability costs once a file has been evicted, and why there are no
+accounts — is on [the leaderboard
+page](../trust-and-verification/leaderboard.md#hosted-two-tables-audited-differently),
+because it is an argument about the table rather than about this service.
+
 # The archive store
 
 An archive today lives wherever the process that wrote it happens to be. A host

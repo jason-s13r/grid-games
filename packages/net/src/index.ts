@@ -6,8 +6,8 @@ export { Archive, ARCHIVE_FORMAT, verifyArchive, consentLine, seatsOf } from "./
 export type { ArchivedGame, ArchiveOptions, ArchiveRecord, ArchiveSource, Verdict } from "./archive.js";
 export { WorldLog } from "./worldlog.js";
 export type { LogEvent, WorldLogOptions } from "./worldlog.js";
-export { rankArchives } from "./rankings.js";
-export type { Leaderboard, Standing } from "./rankings.js";
+export { countedOf, rankArchives, standingsFrom } from "./rankings.js";
+export type { Counted, Leaderboard, Standing } from "./rankings.js";
 export { rosterAt, verifyResumePoint } from "./resume.js";
 export { Directory, verifyWrite, BOARD_TIMEOUT_MS, CAPS, DEFAULT_LIMIT } from "./directory.js";
 export type {

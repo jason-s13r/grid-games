@@ -34,9 +34,14 @@ export interface Settings {
    *  scoped to files the player drops on it, because there is no index of
    *  finished games anywhere to read instead. */
   rankFrom: string[];
+  /** A service that publishes a table it derived. Empty is the normal state and
+   *  the local path is what runs then — and the local path stays whatever is
+   *  here, because checking a hosted table means replaying its corpus in this
+   *  browser. */
+  rankService: string;
 }
 
-const EMPTY: Settings = { board: "", factory: "", rankFrom: [] };
+const EMPTY: Settings = { board: "", factory: "", rankFrom: [], rankService: "" };
 
 /** Whatever was in the cupboard, shaped. Every field is checked rather than
  *  spread, because what comes out of local storage is a string somebody else's
@@ -66,6 +71,7 @@ function load(): Settings {
     rankFrom: Array.isArray(one.rankFrom)
       ? one.rankFrom.filter((entry): entry is string => typeof entry === "string")
       : [],
+    rankService: typeof one.rankService === "string" ? one.rankService : "",
   };
 }
 

@@ -52,6 +52,21 @@ domain-tagged payloads; every ECDH-derived secret goes through HKDF with its own
 tag ([`secrets.ts:50`](../../packages/protocol/src/secrets.ts#L50)). Neither can
 be made to produce something the other would accept.
 
+## A key is still the only identity, hosted or not
+
+A [hosted leaderboard](../trust-and-verification/leaderboard.md#hosted-two-tables-audited-differently)
+holds every archive somebody uploaded to it and therefore every key in them, and
+it changes nothing on this page. It shows `fingerprint(key)` and nothing else: it
+does not join keys into people, does not offer a profile, does not let anybody
+claim a key, and does not accept a display name.
+
+That is a deliberate refusal rather than a missing feature. An accounts system is
+an authority — it decides which keys are the same person, and every figure
+downstream of that decision is a number only the server can compute, which
+nothing in this repository can check. If binding several keys to one person is
+ever wanted, the shape is a self-signed record a reader verifies, exactly as
+every other identity claim here works.
+
 ## name#fingerprint
 
 A `MemberKey` is unreadable and a `fingerprint(key)` is eight hex characters,

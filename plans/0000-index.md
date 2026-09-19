@@ -1,6 +1,6 @@
 # Plan index
 
-Status of the series: **sixteen built, one planned.** Built in the order
+Status of the series: **seventeen built.** Built in the order
 below; each plan leaves the tree green and is useful on its own. No plan adds authority anywhere — the
 sim, the hash contract, quorum signatures and archive verification are
 untouched, and everything stored anywhere is checked by whoever reads it.
@@ -8,7 +8,8 @@ untouched, and everything stored anywhere is checked by whoever reads it.
 0001–0014 are the game. 0015–0017 are the first things in this repository with
 an address somebody else has to reach, and the discipline above is what they
 are hardest to keep — so each of the three is written around what its component
-is **not** allowed to decide.
+is **not** allowed to decide. All three are one app, `apps/api`, and each of its
+three halves ships mostly as a list of refusals.
 
 | # | Plan | Depends on | Size |
 |---|------|------------|------|
@@ -28,7 +29,7 @@ is **not** allowed to decide.
 | 0014 ✅ | The lobby rejig and the game log | 0009–0013 | 2 sessions |
 | 0015 ✅ | The board — a service for rows nobody has to believe | 0007 | 1 session |
 | 0016 ✅ | The archive store — a file nobody is trusted to have written | 0015, 0006 | 1–2 sessions |
-| 0017 ○ | The leaderboard — one table you can recompute, one you can audit | 0016 | 1–2 sessions |
+| 0017 ✅ | The leaderboard — one table you can recompute, one you can audit | 0016 | 1–2 sessions |
 
 ## Why this order
 

@@ -15,6 +15,7 @@
 
 import { MEMBER } from "@tessera/sim";
 import type { Leaderboard as Table, Standing } from "@tessera/net";
+import type { HostedTable, Window } from "../net/rankings";
 
 export interface Refusal {
   /** The URL or filename it came from. `rankArchives` refuses by position,
@@ -31,6 +32,9 @@ export type Mood =
   | { kind: "reading"; done: number; total: number }
   | { kind: "checking"; games: number }
   | { kind: "table"; table: Table; names: string[]; unreadable: Refusal[] }
+  /** A table this browser did not derive. It skips straight here — no reading,
+   *  no replay — and the whole of what it costs is the sentence underneath. */
+  | { kind: "hosted"; table: HostedTable; host: string; window: Window }
   | { kind: "problem"; message: string };
 
 export interface Row {
@@ -45,13 +49,21 @@ export interface Row {
 
 export interface LeaderboardView {
   label: string;
-  /** What the table is over, said out loud. Empty when there is no table. */
+  /** What the table is over, said out loud. Empty when there is no table.
+   *
+   *  A table this browser derived keeps "the archives this browser was given";
+   *  a table a service derived gets the service's own sentence with the host
+   *  named in front of it, because a reader should be able to see whose claim
+   *  they are looking at. Rendering the two identically is the failure mode,
+   *  and it fails silently. */
   scope: string;
   rows: Row[];
   refusals: Refusal[];
   working: boolean;
   /** Whether pressing the button would do anything. */
   canBuild: boolean;
+  /** Which table is on screen. `local` when this browser replayed the files. */
+  from: "local" | "hosted";
 }
 
 const escape = (text: string): string =>
@@ -82,7 +94,7 @@ export function rowsOf(standings: readonly Standing[]): Row[] {
 }
 
 export function view(mood: Mood): LeaderboardView {
-  const empty = { rows: [], refusals: [], scope: "" };
+  const empty = { rows: [], refusals: [], scope: "", from: "local" as const };
 
   if (mood.kind === "unset") {
     return {
@@ -127,6 +139,35 @@ export function view(mood: Mood): LeaderboardView {
     return { ...empty, label: mood.message, working: false, canBuild: true };
   }
 
+  if (mood.kind === "hosted") {
+    const { table, host, window } = mood;
+    return {
+      label:
+        table.games === 0
+          ? `${host} has counted nothing.`
+          : `${plural(table.games, "game")} counted by ${host}${
+              window === "all" ? ", all-time" : ""
+            }.`,
+      // The service's own sentence, with the host in front of it. Taken from
+      // the response rather than written here: the service knows what its table
+      // is over and this client does not, and a client that supplied its own
+      // qualifier would be guessing on the reader's behalf.
+      scope: `${host}: ${table.scope}`,
+      rows: rowsOf(table.standings),
+      // Rendered either way. A hosted leaderboard has more to hide than a local
+      // one and exactly the same obligation.
+      refusals: table.refused.map((one) => ({
+        // `index` is a position in an input list, which means nothing across a
+        // wire. `game` is the field that survives the trip.
+        source: `game ${one.game.slice(0, 12)}`,
+        problems: one.problems,
+      })),
+      working: false,
+      canBuild: true,
+      from: "hosted",
+    };
+  }
+
   const { table, names, unreadable } = mood;
   const refusals: Refusal[] = [
     ...unreadable,
@@ -156,6 +197,7 @@ export function view(mood: Mood): LeaderboardView {
     refusals,
     working: false,
     canBuild: true,
+    from: "local",
   };
 }
 

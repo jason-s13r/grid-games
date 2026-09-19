@@ -377,6 +377,31 @@
                 anywhere, so a table here is over what you have and says so.
               </p>
 
+              <!-- The second route to a table: somebody else's, fetched rather
+                   than derived. Used only when there is nothing local to
+                   replay, because a file the player opened is a file they asked
+                   to see counted. See net/rankings.ts. -->
+              <div class="field field-stacked">
+                <label for="cfg-rank-service">Leaderboard service</label>
+                <input
+                  id="cfg-rank-service"
+                  class="lobby-code"
+                  data-cfg="rank-service"
+                  placeholder="https://api.example"
+                  spellcheck="false"
+                  autocomplete="off"
+                />
+                <p class="hint" data-cfg="rank-service-problem" hidden></p>
+              </div>
+              <p class="hint">
+                A service that keeps finished games and publishes the table it
+                derived from them, so a table costs one request instead of
+                replaying every log in this tab. It is a claim rather than your
+                own derivation, and the table says whose — it also publishes the
+                games it counted, so you can fetch those, open them above, and
+                get the same table here or find out why not.
+              </p>
+
               <p class="hint">
                 A service that starts a room for you and keeps it open while you
                 are asleep, so a long game does not end when you close the tab.
