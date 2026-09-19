@@ -12,9 +12,9 @@ import { join } from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { CONTROL, MEMBER, MOVE, Sim, makeGenesis, hex } from "@tessera/sim";
 import type { Genesis, Move } from "@tessera/sim";
-import { Identity, sealGenesis, signMove } from "@tessera/protocol";
+import { Identity, claimMove, sealGenesis, signClaim, signMove } from "@tessera/protocol";
 import type { SignedMove } from "@tessera/protocol";
-import { verifyArchive } from "@tessera/net";
+import { ARCHIVE_FORMAT, verifyArchive } from "@tessera/net";
 import { FileArchive, readArchive } from "../store.js";
 
 /** A short game one seat actually played, signed as the mesh would have signed
@@ -243,5 +243,98 @@ describe("a game this peer jumped into the middle of", () => {
     const verdict = await verifyArchive(game);
     expect(verdict.ok).toBe(false);
     expect(verdict.problems.join(" ")).toMatch(/begins at step 40/);
+  });
+});
+
+describe("a game somebody claimed a vacancy in", () => {
+  let dir: string;
+  let sim: Sim;
+
+  beforeAll(async () => {
+    dir = await mkdtemp(join(tmpdir(), "tessera-claim-"));
+
+    const seated = await Identity.generate();
+    const arriving = await Identity.generate();
+    // Empire 2 is left empty on purpose — a vacancy, which is the entire point
+    // of 0010 and the case this archive has to survive.
+    const genesis = await sealGenesis(
+      makeGenesis({
+        seed: 7,
+        startedAt: 0,
+        map: { width: 24, height: 24 },
+        empires: [
+          { control: CONTROL.HUMAN, members: [{ kind: MEMBER.HUMAN, key: seated.key }] },
+          { control: CONTROL.HUMAN, members: [] },
+        ],
+      }),
+    );
+
+    sim = new Sim(genesis);
+    const file = new FileArchive({ dir, genesis, source: sim });
+    await file.open();
+
+    const AT = 8;
+    const claim = await signClaim(arriving, genesis.gameId!, { empire: 2, step: AT });
+    let seq = 0;
+
+    for (let step = 0; step < 30; step++) {
+      const moves: Move[] = [];
+      const signed: SignedMove[] = [];
+      if (step === AT) {
+        // The record and the move it produces, exactly as the driver writes
+        // them: the claim on its own line, and the roster-amend move unsigned in
+        // the log, because there was no existing seat to attribute it to.
+        file.archive.claim(claim);
+        moves.push(claimMove(claim.claim, seq++));
+      }
+      if (step === 20) {
+        // A move from the seat the claim created. This is the one that fails
+        // when the claim is lost: the roster is rebuilt without the seat, the
+        // signature is attributed to nobody, and the report names a bad
+        // signature rather than a reader that threw a record away.
+        const move: Move = { step, empire: 2, member: 0, seq: seq++, type: MOVE.HEARTBEAT, x: 0, y: 0 };
+        const envelope = await signMove(arriving, genesis.gameId!, move);
+        moves.push(envelope.move);
+        signed.push(envelope);
+      }
+      file.archive.applied(step, moves, signed);
+      sim.advance(moves);
+    }
+
+    await file.close();
+  });
+
+  afterAll(async () => {
+    await rm(dir, { recursive: true, force: true });
+  });
+
+  it("reads the claim back off disk", async () => {
+    const game = await readArchive(dir);
+    // `Archive.record` has written a `{k:"claim"}` line since 0010 and
+    // `readArchive` had no branch for it, so every game with a vacancy in it
+    // lost its claims on the way out — silently, because the file was never
+    // missing them.
+    expect(game.claims).toHaveLength(1);
+    expect(game.claims?.[0]?.claim.empire).toBe(2);
+  });
+
+  it("reports the format it actually wrote", async () => {
+    const game = await readArchive(dir);
+    // Stamped `1` while the writer was at `ARCHIVE_FORMAT = 2`. The two bugs
+    // covered for each other: `verifyArchive` refuses a v1 file carrying
+    // claims, and the claims had already been discarded, so the guard written
+    // for exactly this file could never fire.
+    expect(game.format).toBe(ARCHIVE_FORMAT);
+  });
+
+  it("and verifies, roster and hash both", async () => {
+    const verdict = await verifyArchive(await readArchive(dir));
+    // Today this reports `bad signature at step 20 from 2:0` and a hash
+    // mismatch — which reads as a tampered archive rather than as a reader that
+    // dropped a record. `tessera-observe verify`, `tessera-observe rank` and
+    // `tessera-host import` are all wrong about these files.
+    expect(verdict.problems).toEqual([]);
+    expect(verdict.ok).toBe(true);
+    expect(verdict.hash).toBe(hex(sim.hash()));
   });
 });

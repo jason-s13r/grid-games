@@ -14,7 +14,7 @@
 
 import { appendFile, mkdir, readFile, readdir, rename, writeFile } from "node:fs/promises";
 import { join } from "node:path";
-import { Archive, encodeSnapshot, decodeSnapshot } from "@tessera/net";
+import { ARCHIVE_FORMAT, Archive, encodeSnapshot, decodeSnapshot } from "@tessera/net";
 import type {
   ArchivedGame,
   ArchiveRecord,
@@ -181,7 +181,7 @@ export class FileArchive {
     }
 
     const head: ArchiveHead = {
-      format: 1,
+      format: ARCHIVE_FORMAT,
       gameId: this.options.genesis.gameId ?? "",
       from: this.from,
       ...(this.jumps.length > 0 ? { gaps: [...this.jumps] } : {}),
@@ -256,7 +256,11 @@ export async function readArchive(dir: string): Promise<ArchivedGame & { from: n
   const log = await readFile(join(dir, LOG), "utf8").catch(() => "");
 
   const game: ArchivedGame & { from: number } = {
-    format: 1,
+    // The writer's number, not a literal. Stamping 1 while `Archive.toJSON`
+    // stamped 2 made `verifyArchive`'s guard for a v1 file carrying claims
+    // unfireable — the claims had already been dropped below, so the count was
+    // 0 and the check passed on a file it was written for.
+    format: head.format ?? ARCHIVE_FORMAT,
     genesis,
     moveLog: [],
     amendments: [],
@@ -277,6 +281,12 @@ export async function readArchive(dir: string): Promise<ArchivedGame & { from: n
     }
     if (record.k === "move") game.moveLog.push(record.entry);
     else if (record.k === "amend") game.amendments.push(record.amendment);
+    // A claim is not an amendment — they verify by completely different rules —
+    // and a reader with no branch for one silently rebuilt the roster without
+    // the seat it created. Every move that seat ever signed then failed
+    // attribution, and the report named a bad signature and a hash mismatch:
+    // a file that looked tampered with rather than a record thrown away.
+    else if (record.k === "claim") (game.claims ??= []).push(record.claim);
     else if (record.k === "chat") game.messages.push(record.message);
   }
 
