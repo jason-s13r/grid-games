@@ -1,6 +1,6 @@
 # 0016 — The archive store: a file nobody is trusted to have written
 
-Status: planned
+Status: built
 Depends on: 0015 (the app), 0006 (the host peer that writes archives)
 Branch: `archive-store`
 

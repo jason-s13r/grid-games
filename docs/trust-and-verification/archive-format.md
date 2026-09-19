@@ -113,3 +113,36 @@ response to a [reconnected socket](../mesh/socket-transport.md), and a
 [host peer](../clients/host-peer.md) runs for days across every blink there is. A
 host that has adopted once holds a fragment and says so — which is why running two
 is redundancy for replayability and not only for the door.
+
+## Kept somewhere other than where it was written
+
+An archive lives wherever the process that wrote it happens to be, which is not a
+place anyone else can fetch it from a week later. The
+[archive store](../clients/api-service.md#the-archive-store) is one place that
+holds them, and it is worth reading as an application of this page rather than an
+extension of it.
+
+**The content address is the key.** `genesis.gameId` is a SHA-256 over the
+canonical record, so a store cannot hold two different files under one id without
+one of them failing verification, and a second upload of a game it already has is
+a no-op rather than a duplicate. The store recomputes that id and never takes the
+`gameId` field as posted.
+
+**It stores what passes and publishes what does not.** Uploading is open to
+anyone, because nothing about who sent a file changes what the file proves: the
+store runs `verifyArchive` — the same check on this page, and the same one a
+reader runs — and keeps only what survives it. A refusal keeps its `problems` and
+throws the file away, and the refusal is listed, because a store that hid what it
+could not check would be making the same mistake a leaderboard makes when it
+drops a row silently.
+
+**Bytes in, bytes out.** An archive served back is the file that was posted: not
+re-serialised, not key-sorted, not stripped of fields the store does not
+recognise. The `hash` here is over the replay rather than over the JSON, so
+re-serialising would not break verification — which is exactly why the discipline
+has to be stated rather than left to an implementation.
+
+**It promises nothing about completeness.** Nothing makes a peer upload, and
+nothing notices a game that ended and was never archived. A store's corpus is
+over what was sent to it, and it holds only the most recent `--keep` files —
+every game keeps its row, which is a few hundred bytes, and loses its megabytes.

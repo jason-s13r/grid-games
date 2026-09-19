@@ -1,6 +1,6 @@
 # Plan index
 
-Status of the series: **fifteen built, two planned.** Built in the order
+Status of the series: **sixteen built, one planned.** Built in the order
 below; each plan leaves the tree green and is useful on its own. No plan adds authority anywhere — the
 sim, the hash contract, quorum signatures and archive verification are
 untouched, and everything stored anywhere is checked by whoever reads it.
@@ -27,7 +27,7 @@ is **not** allowed to decide.
 | 0013 ✅ | Banners — an empire you can play as again | 0009, 0010 | 1 session |
 | 0014 ✅ | The lobby rejig and the game log | 0009–0013 | 2 sessions |
 | 0015 ✅ | The board — a service for rows nobody has to believe | 0007 | 1 session |
-| 0016 ○ | The archive store — a file nobody is trusted to have written | 0015, 0006 | 1–2 sessions |
+| 0016 ✅ | The archive store — a file nobody is trusted to have written | 0015, 0006 | 1–2 sessions |
 | 0017 ○ | The leaderboard — one table you can recompute, one you can audit | 0016 | 1–2 sessions |
 
 ## Why this order

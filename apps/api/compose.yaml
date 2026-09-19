@@ -1,10 +1,11 @@
-# A board and the database under it.
+# A board, an archive store, and the database under both.
 #
 #   docker compose -f apps/api/compose.yaml up --build
 #
 # The board then answers at http://127.0.0.1:8081/games, which is the string to
 # paste into the web client's Settings — with the path, because `Directory`'s
-# base *is* the games collection.
+# base *is* the games collection. The store is at /archives, and an archive URL
+# there goes in the settings field beside it.
 #
 # Bound to loopback on purpose. Everything here is HTTP and the browser needs
 # https:// for a page served from anywhere else, so a public board wants a
@@ -38,6 +39,13 @@ services:
       - 0.0.0.0
       - --database
       - postgres://tessera:tessera@db:5432/tessera
+      - --archives
+      - /var/lib/tessera/archives
+    volumes:
+      # A multi-day game is megabytes and only the most recent --keep of them
+      # are held, so this is bounded — by a number an operator picks, not by
+      # anything the service knows. Every game keeps its row either way.
+      - archives:/var/lib/tessera/archives
     ports:
       - "127.0.0.1:8081:8081"
     depends_on:
@@ -47,3 +55,4 @@ services:
 
 volumes:
   rows:
+  archives:

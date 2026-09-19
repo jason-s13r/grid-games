@@ -76,6 +76,20 @@ is meaningless (the moves that built the starting state are missing), and
 `verifyArchive` says so in `problems` rather than in the mismatch it is about to
 produce.
 
+## A hosted store runs this check; it does not replace it
+
+An [archive store](../clients/api-service.md#the-archive-store) replays every file
+on the way in and keeps only what passes. That is the same `verifyArchive` on this
+page, run by a service instead of by you, and it is what lets the store accept
+uploads from anyone without knowing who they are.
+
+It is **not** an alternative to checking. A store can refuse to give you a file
+and can give you nothing at all; what it cannot do is give you a *different* game,
+because the id is a hash of the record and you recompute it, or an altered one,
+because you replay it. So the reason to verify a file you fetched from a store is
+the same as the reason to verify one a friend sent you, and the answer is the same
+command.
+
 ## As a command
 
 `tessera-observe verify <dir | file.json>` ([observer](../clients/observer.md))

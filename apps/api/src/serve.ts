@@ -19,6 +19,8 @@ import { createServer } from "node:http";
 import type { IncomingMessage, Server, ServerResponse } from "node:http";
 import { DEFAULT_LIMIT } from "@tessera/net";
 import type { Answer, Board } from "./board.js";
+import { ARCHIVE_CAP, summarise } from "./ingest.js";
+import type { Ingest, Status } from "./ingest.js";
 
 /** A body bigger than this is a body no honest announcer sends: a `Listing`
  *  carries a genesis and a handful of witnesses and costs a few kilobytes.
@@ -33,8 +35,15 @@ export const WRITE_CAP = 512_000;
  *  in practice. */
 export const MAX_LIMIT = 500;
 
+/** A page of the corpus. Smaller than the board's, because a corpus is paged
+ *  with a cursor rather than truncated. */
+export const CORPUS_LIMIT = 100;
+
 export interface ServeOptions {
   board: Board;
+  /** Absent, and the archive routes 404. A board on its own is a whole
+   *  deployment and 0015 shipped one. */
+  ingest?: Ingest;
   bind: string;
   port: number;
   say: (line: string) => void;
@@ -66,6 +75,9 @@ export function serve(options: ServeOptions): Server {
       return end(response, 200, { service: "tessera-api", ok: true });
     }
 
+    if (path[0] === "archives" && options.ingest) {
+      return archives(options.ingest, request, response, path.slice(1), query);
+    }
     if (path[0] !== "games") return end(response, 404, { error: "not found" });
     const rest = path.slice(1);
 
@@ -93,9 +105,97 @@ export function serve(options: ServeOptions): Server {
 
   server.listen(options.port, options.bind, () => {
     options.say(`board    http://${options.bind}:${options.port}/games`);
+    if (options.ingest) {
+      options.say(`archives http://${options.bind}:${options.port}/archives`);
+    }
   });
   return server;
 }
+
+/** The store's three routes.
+ *
+ *  `GET /archives/:gameId` must satisfy `fetchArchive` in the web client, which
+ *  sends `accept: application/json` and a 30 s deadline and nothing else. So:
+ *  a JSON content type, the CORS header set above, and a body under
+ *  `ARCHIVE_CAP`. No conditional request ever arrives — the client sends no
+ *  `If-None-Match` — but the ETag is served anyway for anything else that
+ *  fetches this, and it is the archive's own content hash rather than a live
+ *  step, so it is correct forever. */
+async function archives(
+  ingest: Ingest,
+  request: IncomingMessage,
+  response: ServerResponse,
+  path: readonly string[],
+  query: string | undefined,
+): Promise<void> {
+  if (request.method === "POST" && path.length === 0) {
+    const body = await collect(request, ARCHIVE_CAP);
+    if (body === TOO_LARGE) return end(response, 413, { error: "that is more than a game" });
+    const answer = await ingest.accept(body as Buffer);
+    switch (answer.kind) {
+      case "queued":
+        return end(response, 202, { gameId: answer.gameId, status: "checking" });
+      case "held":
+        return end(response, 200, { gameId: answer.gameId, status: "held" });
+      case "refused":
+        return end(response, 422, { gameId: answer.gameId, problems: answer.problems });
+      default:
+        return end(response, 400, { error: "that is not a saved game" });
+    }
+  }
+
+  if (request.method !== "GET") return end(response, 405, { error: "not a method this store takes" });
+
+  if (path.length === 0) {
+    // The plain index that makes a hosted table recomputable by a stranger: the
+    // list of what this service holds, so anyone can fetch the same files and
+    // derive the same numbers. It makes no claim about completeness — there is
+    // no index of finished games anywhere, and this one is over what was
+    // uploaded to it.
+    const asked = new URLSearchParams(query ?? "");
+    const status = asked.get("status");
+    const corpus = await ingest.list({
+      limit: limitOf(query, CORPUS_LIMIT, CORPUS_LIMIT),
+      ...(asked.get("cursor") ? { cursor: asked.get("cursor")! } : {}),
+      ...(isStatus(status) ? { status } : {}),
+    });
+    return end(response, 200, {
+      archives: corpus.rows.map(summarise),
+      ...(corpus.next ? { next: corpus.next } : {}),
+    });
+  }
+
+  if (path.length > 1) return end(response, 404, { error: "not found" });
+  const found = await ingest.read(decodeURIComponent(path[0]!));
+  switch (found.kind) {
+    case "held": {
+      if (request.headers["if-none-match"] === found.tag) {
+        response.setHeader("ETag", found.tag);
+        return end(response, 304, null);
+      }
+      // Bytes out are bytes in. Not re-serialised, not key-sorted, not stripped
+      // of anything — the file is handed back exactly as it was posted.
+      response.setHeader("Content-Type", "application/json");
+      response.setHeader("ETag", found.tag);
+      response.writeHead(200);
+      response.end(found.body);
+      return;
+    }
+    case "checking":
+      return end(response, 202, { status: "checking" });
+    case "refused":
+      return end(response, 422, { status: "refused", problems: found.problems });
+    case "gone":
+      // A different thing from the 404 below, and the distinction matters to a
+      // reader deciding whether to look elsewhere for a copy.
+      return end(response, 410, { error: "no longer held", checkedAt: found.checkedAt });
+    default:
+      return end(response, 404, { error: "never seen here" });
+  }
+}
+
+const isStatus = (value: string | null): value is Status =>
+  value === "checking" || value === "held" || value === "refused";
 
 /** The answer envelope, for both GETs.
  *
@@ -110,36 +210,46 @@ function done(response: ServerResponse, answer: Answer): void {
   end(response, answer.status, answer.body);
 }
 
-function limitOf(query: string | undefined): number {
+function limitOf(query: string | undefined, fallback = DEFAULT_LIMIT, most = MAX_LIMIT): number {
   const asked = Number(new URLSearchParams(query ?? "").get("limit"));
-  if (!Number.isFinite(asked) || asked <= 0) return DEFAULT_LIMIT;
-  return Math.min(Math.floor(asked), MAX_LIMIT);
+  if (!Number.isFinite(asked) || asked <= 0) return fallback;
+  return Math.min(Math.floor(asked), most);
 }
 
 const TOO_LARGE = Symbol("too large");
 const NOT_JSON = Symbol("not json");
 
-/** A write body, read through a cap. A caller that sends 200 and then never
- *  stops is a caller that fills this process's memory while `json()` waits
- *  politely for the end — the same attack a hostile board runs on the client,
- *  pointed the other way. */
+/** A board write, parsed. */
 async function read(request: IncomingMessage): Promise<unknown> {
+  const body = await collect(request, WRITE_CAP);
+  if (body === TOO_LARGE) return TOO_LARGE;
+  try {
+    return JSON.parse((body as Buffer).toString("utf8"));
+  } catch {
+    return NOT_JSON;
+  }
+}
+
+/** The bytes, through a cap. A caller that sends 200 and then never stops is a
+ *  caller that fills this process's memory while `json()` waits politely for
+ *  the end — the same attack a hostile board runs on the client, pointed the
+ *  other way, and it has to bite while the body is arriving rather than after. */
+async function collect(
+  request: IncomingMessage,
+  cap: number,
+): Promise<Buffer | typeof TOO_LARGE> {
   let size = 0;
   const chunks: Buffer[] = [];
   for await (const chunk of request) {
     const part = chunk as Buffer;
     size += part.byteLength;
-    if (size > WRITE_CAP) {
+    if (size > cap) {
       request.destroy();
       return TOO_LARGE;
     }
     chunks.push(part);
   }
-  try {
-    return JSON.parse(Buffer.concat(chunks).toString("utf8"));
-  } catch {
-    return NOT_JSON;
-  }
+  return Buffer.concat(chunks);
 }
 
 function end(response: ServerResponse, status: number, body: unknown): void {

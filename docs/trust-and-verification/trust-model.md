@@ -59,6 +59,22 @@ it is true for a board run by a stranger; a hosted one is not more trustworthy
 for being hosted, and if it ever needed to be, the client would have been
 simplified somewhere it should not have been.
 
+## An archive store
+
+A store of finished games can withhold a file, serve an old copy of a game two
+observers archived differently, refuse to answer, and learn which games a reader
+asks for. What it cannot do is give you a **different** game, because the id is a
+hash of the genesis record and the reader recomputes it, or an **altered** one,
+because the reader replays it. Its worst honest power, as with the board, is to
+waste your time.
+
+It is not trusted to have verified anything either. A store replays every file on
+the way in and keeps only what passes, which is what lets it accept uploads from
+anyone — but that check is the reader's own check run early, not a substitute for
+it. The corpus it publishes is over what was sent to it and claims nothing about
+completeness: nothing makes a peer upload, and nothing notices a game that ended
+and was never archived.
+
 ## The broker
 
 PeerJS's public broker does [signalling only](../mesh/webrtc-mesh.md) — it

@@ -1,16 +1,25 @@
 # The API service
 
-`apps/api` — `tessera-api`. A board: rows nobody has to believe.
+`apps/api` — `tessera-api`. A board of rows nobody has to believe, and a store
+of files nobody is trusted to have written.
 
 Two of the three URLs the web client asks for pointed at software that did not
-exist. This is the first of them. It stores what it is given, expires what is not
-refreshed, and checks exactly one signature — not to decide whether a game is
-real, but to stop anyone clearing somebody else's row.
+exist. This process answers both, and they are separate features of one
+deployment: `--archives` turns the store on, and without it only the board runs.
 
-It is not a default. `settings().board` stays empty until somebody types a URL,
+Neither is a default. `settings().board` stays empty until somebody types a URL,
 because a board shipped in the client would be the single piece of
-centralisation this design has avoided. Running a board and shipping its address
-are two decisions, and only the first is made by standing this up.
+centralisation this design has avoided. Running a service and shipping its
+address are two decisions, and only the first is made by standing this up.
+
+The two halves share a discipline and it is the reason the pages below are mostly
+lists of refusals. **Nothing here is an authority.** The board stores what it is
+given and checks one signature — not to decide whether a game is real, but to
+stop anyone clearing somebody else's row. The store replays what it is sent and
+keeps what passes — the same check a stranger would run, which is why it needs to
+know nothing about who sent it.
+
+# The board
 
 ## Running one
 
@@ -31,6 +40,10 @@ tessera-api --bind 127.0.0.1 --port 8081 --database postgres://…
 `--database` is optional and rows live in memory without it, which is useful for
 a development board and useless for anything else; the process says so on
 startup rather than letting an operator find out at the first restart.
+
+`--archives <dir>` turns the store on and the archive routes 404 without it. A
+board on its own is a whole deployment, and an operator who wants one should not
+be made to find a disk for archives.
 
 A browser fetching this from a page served elsewhere needs `https://`, so a
 public board wants a certificate and a reverse proxy in front of the process.
@@ -203,3 +216,157 @@ already guards the network it is on, not a header this client cannot send.
 **One game per process.** `RoomBus` and the host peer's `serve()` are both
 multi-room, but `apps/host/src/main.ts` hosts exactly one game, so N games means
 N processes on N ports. The board is what makes that invisible to a player.
+
+# The archive store
+
+An archive today lives wherever the process that wrote it happens to be. A host
+peer serves `GET /room/:code/archive` for the games *it is a peer in* and 404s
+everything else; an observer writes directories on somebody's laptop; a browser
+tab offers **Save log** and hands the player a file. All three produce the same
+artifact and none is a place anyone else can fetch it from a week later.
+
+The web client's `Archive URLs` setting says so in its own help text — *"There is
+no index of finished games anywhere, so a table here is over what you have and
+says so."* This is an index. It is not *the* index, and the difference is the
+whole of the next section.
+
+## Why this is safe to build
+
+An archive is **self-proving**. `verifyArchive` re-hashes the genesis, rebuilds
+the roster from it, walks every amendment and claim, checks every signature
+against the roster as it stood, replays the whole log and compares the result to
+the hash the file claims. A file that survives that was produced by the game it
+says it was.
+
+So the store does not need to know who uploaded anything. No accounts, no API
+keys, no trusted set of host peers: it runs the same check a stranger would run
+and stores only what passes. That is the only design here that does not quietly
+introduce an authority, and it is available because 0005 and 0006 did the work of
+making an archive checkable by somebody who was not there.
+
+`genesis.gameId` is a SHA-256 over the canonical record, so **the content address
+is the key**. A second upload of a game already held is a no-op rather than a
+duplicate, and the store cannot hold two different files under one id without one
+of them failing verification.
+
+## The routes
+
+```
+POST /archives            an ArchivedGame, as JSON
+  → 202 { gameId, status: "checking" }     queued for replay
+  → 200 { gameId, status: "held" }         already have it
+  → 400                                    not a saved game
+  → 413                                    over the cap
+  → 422 { gameId, problems: [ … ] }        verifyArchive refused it
+
+GET  /archives/:gameId    the file, exactly as it was posted
+  → 200  with an ETag that is the archive's own content hash
+  → 202  still being replayed
+  → 410  { error: "no longer held", checkedAt }
+  → 422  { status: "refused", problems }
+  → 404  never seen here
+
+GET  /archives?limit=&cursor=&status=      the corpus
+  → { archives: [ { gameId, steps, winner, bytes, checkedAt, status, held } ], next? }
+```
+
+Uploading is open to anyone. The uploader is not identified, not signed and not
+recorded, because nothing about who they are changes what the file proves.
+
+Four gates, cheapest first: the size cap (64 MB, the client's own `ARCHIVE_CAP`,
+cut off while the body is arriving rather than after); the shape check, which is
+deliberately not verification, so that "this is not a saved game" and "this saved
+game does not check out" stay different sentences; the dedupe, on the
+**recomputed** id and never the `gameId` field as posted; and then the replay.
+
+### Why the replay is queued
+
+`fastForward` advances once per step over the whole map and `STEPS_PER_SECOND` is
+12, so a ten-day game is on the order of ten million steps, plus one ECDSA verify
+per move and per message. That cannot run on a request thread. The upload is
+accepted, a row is written `status = checking`, and a worker picks it up; `202`
+with the game id lets the caller poll.
+
+A refusal keeps the `problems` and **deletes the file**. The store holds verified
+games; a file that failed is a row saying so, which is what makes the refusal
+auditable without making the store a dump. Refusals are listed under
+`?status=refused` with their reasons, for the same reason a leaderboard must not
+silently drop what it could not check.
+
+## Retention: the file goes, the row does not
+
+| | kept | size |
+|---|---|---|
+| the archive itself | the most recent `--keep` games, by when they were checked | megabytes |
+| its row and verdict | forever | a few hundred bytes |
+
+Eviction is by `checkedAt` rather than by the game's own `startedAt`: a game
+uploaded late is new to this service whatever its age, and the store has no
+business deciding a game is uninteresting because it was played last year.
+
+An evicted game keeps its row, so `GET /archives/:gameId` answers `410` rather
+than `404` — a different thing from a game never seen, and the distinction
+matters to a reader deciding whether to look elsewhere for a copy — and the
+corpus still lists it, marked `held: false`.
+
+**Re-uploading an evicted game is a no-op, not a resurrection.** Restoring the
+file would let anybody pin a game in the store forever by re-posting it, and the
+retention would stop meaning anything. The one exception is a copy with *more*
+steps: two honest archives of one game can cover different amounts of it — an
+observer that closed its laptop at step 40,000 and one that ran to 120,000 both
+produce a verifiable archive of the same game — and the longer one supersedes.
+
+## What the store does not do
+
+- **It does not rewrite an archive.** Bytes in, bytes out: not re-serialised, not
+  key-sorted, not stripped of fields this build does not recognise. The `hash` in
+  the file is over the replay rather than over the JSON, so re-serialising would
+  not break verification — which is exactly why the discipline has to be stated
+  rather than left to the implementation.
+- **It does not merge two archives of one game.** They are the same game.
+- **It does not decide a winner.** `verdict.winner` comes out of the replay.
+- **It does not accept an amendment, a correction or a takedown.** The store is
+  append-only from the outside. An operator can delete; nobody else can, and
+  there is no endpoint for it.
+- **It refuses a fragment** (`from > 0`) outright, because `verifyArchive` cannot
+  replay it from the start.
+
+## The ETag is the archive's hash, not a step
+
+A stored archive is immutable once verified, so `content_hash` is a tag that is
+correct forever. Worth contrasting with `apps/host`, which tags
+`GET /room/:code/archive` on `room.status().step` — the driver's current step,
+moving twelve times a second. For a running game that tag never repeats, so the
+cache in front of it never hits and every request re-reads the directory and
+re-stringifies megabytes. That is a defect in the host peer rather than a
+difference in design.
+
+## Where the bytes live
+
+`Blobs` is three methods — put, get, remove — and the routes have no opinion
+about what is under them. The shipped implementation is a directory, which
+`compose.yaml` mounts as a volume; an S3-compatible backend is a fourth
+implementation of the same interface and nothing above it changes.
+
+## What the store does not settle
+
+**Snapshots and resume points.** `FileArchive` writes `snapshots/` and
+`resume.json` beside the log and this store takes neither. A resume point is
+served by a host peer for a *live* game and belongs with the board row that
+points at it; snapshots are a replay accelerator and their absence costs only
+time.
+
+**Compression.** Archives are JSON and they are megabytes. `Content-Encoding` is
+a transport concern and nothing here specifies one, so a multi-day game is a
+multi-megabyte download.
+
+**Names.** `ArchivedGame` holds no names — adding them is an `ARCHIVE_FORMAT`
+move — so a stored archive identifies its players by key and nothing here changes
+that.
+
+**Who may delete.** An operator, by hand, with no endpoint. Retention sweeps
+files on a rule; deleting a *row* is a thing only a person can do, deliberately,
+and it is not reversible.
+
+**Completeness.** Nothing makes a host peer upload and nothing notices a game
+that ended and was never archived. The corpus is over what was sent here.

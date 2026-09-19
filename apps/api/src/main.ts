@@ -20,10 +20,13 @@
 
 import { parseArgs } from "node:util";
 import { Board, LIMITS } from "./board.js";
-import { MemoryStore, PostgresStore } from "./db.js";
+import { MemoryArchives, MemoryStore, PostgresArchives, PostgresStore } from "./db.js";
+import { DEFAULT_KEEP, Ingest } from "./ingest.js";
+import { FileBlobs } from "./store.js";
 import { serve } from "./serve.js";
 
-const USAGE = `tessera-api — the board: rows nobody has to believe
+const USAGE = `tessera-api — a board nobody has to believe, and a store nobody is
+                trusted to have written to
 
   tessera-api [options]
 
@@ -32,9 +35,18 @@ Options:
   --port <n>           default 8081
   --database <url>     postgres://… — omitted, rows live in memory and die
                        with this process
+  --archives <dir>     where verified archives are kept; omitted, the store is
+                       off and its routes 404
+  --keep <n>           how many archives keep their file (default ${DEFAULT_KEEP});
+                       every game keeps its row forever
   --sweep <secs>       how often expired rows are deleted (default 30)
   --quiet              only complain
   --help
+
+An upload is open to anyone. The uploader is not identified, not signed and not
+recorded, because nothing about who they are changes what the file proves: an
+archive is replayed on the way in, and only what passes is stored. A refusal
+keeps its reasons and throws the file away.
 
 A row is a lease, not a registration. An announcer that is killed, unplugged or
 segfaulted withdraws nothing, and the TTL is what stops this filling with doors
@@ -56,6 +68,8 @@ const { values } = parseArgs({
     bind: { type: "string", default: "127.0.0.1" },
     port: { type: "string", default: "8081" },
     database: { type: "string" },
+    archives: { type: "string" },
+    keep: { type: "string" },
     sweep: { type: "string" },
     quiet: { type: "boolean", default: false },
     help: { type: "boolean", default: false },
@@ -90,7 +104,22 @@ async function run(): Promise<void> {
   const store = postgres ?? new MemoryStore();
   const board = new Board({ store });
 
-  const server = serve({ board, bind: values.bind, port, say });
+  // The store is opt-in. A board on its own is a whole deployment, and an
+  // operator who wants one should not be made to find a disk for archives.
+  let ingest: Ingest | undefined;
+  if (values.archives) {
+    const blobs = new FileBlobs(values.archives);
+    await blobs.open();
+    ingest = new Ingest({
+      archives: postgres ? new PostgresArchives(postgres.pool) : new MemoryArchives(),
+      blobs,
+      keep: number(values.keep, "--keep") ?? DEFAULT_KEEP,
+      say,
+    });
+    say(`archives ${values.archives}, keeping ${number(values.keep, "--keep") ?? DEFAULT_KEEP}`);
+  }
+
+  const server = serve({ board, ...(ingest ? { ingest } : {}), bind: values.bind, port, say });
 
   // Reads exclude expired rows anyway, so this is not what makes an answer
   // fresh — it is what stops the table growing without bound.

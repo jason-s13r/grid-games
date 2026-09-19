@@ -132,6 +132,15 @@ resume point against its [witnesses](../continuity/resume-points.md), an archive
 cached per flush and answers `If-None-Match` with a 304, because a multi-day log is
 megabytes of JSON parsing per request and a poller should cost nothing.
 
+**The ETag is a defect.** It is tagged on `room.status().step` — the driver's
+current step, which moves twelve times a second — so for a running game the tag
+never repeats, the cache is never hit, and every request re-reads the directory
+and re-stringifies megabytes. The cache is doing nothing for exactly the games it
+was written for. The
+[archive store](api-service.md#the-etag-is-the-archives-hash-not-a-step) tags a
+stored archive on its own content hash, which is correct forever; a live archive
+has no such number, but the flush counter would at least repeat between flushes.
+
 `:code` is looked up in the map of rooms this process is a peer in, and never joined
 to a path. The relay is **closed by default** to rooms this process is not in — an
 open relay is a different product, `--open-relay` says so out loud — and a joiner

@@ -14,6 +14,7 @@
 
 import { Pool } from "pg";
 import type { Row, Store } from "./board.js";
+import type { ArchiveRow, Archives, Corpus, Status } from "./ingest.js";
 
 export const SCHEMA = `
 create table if not exists rows (
@@ -27,10 +28,27 @@ create table if not exists rows (
 );
 create index if not exists rows_expiry on rows (expires_at);
 create index if not exists rows_owner on rows (owner);
+
+create table if not exists archives (
+  game_id      text        primary key,
+  content_hash text        not null,
+  format       integer     not null,
+  steps        bigint      not null,
+  state_hash   text        not null,
+  winner       integer,
+  verdict      jsonb,
+  bytes        bigint      not null,
+  status       text        not null,
+  problems     jsonb       not null default '[]',
+  checked_at   timestamptz,
+  evicted_at   timestamptz
+);
+create index if not exists archives_checked on archives (checked_at desc);
+create index if not exists archives_status on archives (status);
 `;
 
 export class PostgresStore implements Store {
-  constructor(private readonly pool: Pool) {}
+  constructor(readonly pool: Pool) {}
 
   static open(url: string): PostgresStore {
     return new PostgresStore(new Pool({ connectionString: url }));
@@ -218,4 +236,162 @@ const asRow = (record: Stored): Row => ({
   listing: record.listing,
   expiresAt: record.expires_at.getTime(),
   updatedAt: record.updated_at.getTime(),
+});
+
+/** The corpus, in the same two shapes the board's rows come in.
+ *
+ *  `evictable` is the whole of retention: the blob goes and the row stays. A row
+ *  is a few hundred bytes against megabytes, and that split is what lets a table
+ *  be recomputed over what is still held while a total keeps a contribution from
+ *  a game whose file is long gone. */
+export class PostgresArchives implements Archives {
+  constructor(private readonly pool: Pool) {}
+
+  async head(gameId: string): Promise<ArchiveRow | undefined> {
+    const found = await this.pool.query<Kept>(`${SELECT} where game_id = $1`, [gameId]);
+    return found.rows[0] ? asArchive(found.rows[0]) : undefined;
+  }
+
+  async put(row: ArchiveRow): Promise<void> {
+    await this.pool.query(
+      `insert into archives
+         (game_id, content_hash, format, steps, state_hash, winner, verdict, bytes,
+          status, problems, checked_at, evicted_at)
+       values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
+       on conflict (game_id) do update set
+         content_hash = excluded.content_hash,
+         format = excluded.format,
+         steps = excluded.steps,
+         state_hash = excluded.state_hash,
+         winner = excluded.winner,
+         verdict = excluded.verdict,
+         bytes = excluded.bytes,
+         status = excluded.status,
+         problems = excluded.problems,
+         checked_at = excluded.checked_at,
+         evicted_at = excluded.evicted_at`,
+      [
+        row.gameId,
+        row.contentHash,
+        row.format,
+        row.steps,
+        row.stateHash,
+        row.winner,
+        row.verdict === null ? null : JSON.stringify(row.verdict),
+        row.bytes,
+        row.status,
+        JSON.stringify(row.problems),
+        row.checkedAt === null ? null : new Date(row.checkedAt),
+        row.evictedAt === null ? null : new Date(row.evictedAt),
+      ],
+    );
+  }
+
+  async list(filter: { limit: number; cursor?: string; status?: Status }): Promise<Corpus> {
+    // Keyset rather than offset: the corpus grows at the head, and an offset
+    // page would repeat or skip a row every time something was ingested
+    // mid-read. One row over the limit is fetched to decide whether to hand
+    // back a cursor at all.
+    const where = ["true"];
+    const params: unknown[] = [];
+    if (filter.status) {
+      params.push(filter.status);
+      where.push(`status = $${params.length}`);
+    }
+    if (filter.cursor) {
+      params.push(filter.cursor);
+      where.push(`game_id > $${params.length}`);
+    }
+    params.push(filter.limit + 1);
+    const found = await this.pool.query<Kept>(
+      `${SELECT} where ${where.join(" and ")} order by game_id asc limit $${params.length}`,
+      params,
+    );
+    const rows = found.rows.slice(0, filter.limit).map(asArchive);
+    const more = found.rows.length > filter.limit;
+    return { rows, ...(more && rows.length > 0 ? { next: rows[rows.length - 1]!.gameId } : {}) };
+  }
+
+  async evictable(keep: number): Promise<ArchiveRow[]> {
+    const found = await this.pool.query<Kept>(
+      `${SELECT} where status = 'held' and evicted_at is null
+       order by checked_at desc offset $1`,
+      [keep],
+    );
+    return found.rows.map(asArchive);
+  }
+
+  async checking(): Promise<ArchiveRow[]> {
+    const found = await this.pool.query<Kept>(`${SELECT} where status = 'checking'`);
+    return found.rows.map(asArchive);
+  }
+}
+
+export class MemoryArchives implements Archives {
+  private readonly kept = new Map<string, ArchiveRow>();
+
+  async head(gameId: string): Promise<ArchiveRow | undefined> {
+    return this.kept.get(gameId);
+  }
+
+  async put(row: ArchiveRow): Promise<void> {
+    this.kept.set(row.gameId, row);
+  }
+
+  async list(filter: { limit: number; cursor?: string; status?: Status }): Promise<Corpus> {
+    const all = [...this.kept.values()]
+      .filter((row) => (filter.status ? row.status === filter.status : true))
+      .filter((row) => (filter.cursor ? row.gameId > filter.cursor : true))
+      .sort((a, b) => (a.gameId < b.gameId ? -1 : a.gameId > b.gameId ? 1 : 0));
+    const rows = all.slice(0, filter.limit);
+    const more = all.length > filter.limit;
+    return { rows, ...(more && rows.length > 0 ? { next: rows[rows.length - 1]!.gameId } : {}) };
+  }
+
+  async evictable(keep: number): Promise<ArchiveRow[]> {
+    return [...this.kept.values()]
+      .filter((row) => row.status === "held" && row.evictedAt === null)
+      .sort((a, b) => (b.checkedAt ?? 0) - (a.checkedAt ?? 0))
+      .slice(keep);
+  }
+
+  async checking(): Promise<ArchiveRow[]> {
+    return [...this.kept.values()].filter((row) => row.status === "checking");
+  }
+}
+
+const SELECT = `select game_id, content_hash, format, steps, state_hash, winner, verdict,
+                       bytes, status, problems, checked_at, evicted_at from archives`;
+
+interface Kept {
+  game_id: string;
+  content_hash: string;
+  format: number;
+  steps: string;
+  state_hash: string;
+  winner: number | null;
+  verdict: ArchiveRow["verdict"];
+  bytes: string;
+  status: Status;
+  problems: string[];
+  checked_at: Date | null;
+  evicted_at: Date | null;
+}
+
+/** `bigint` comes back as a string, because it does not fit a double in
+ *  general. A step count does, and a byte count does, so both are narrowed
+ *  here rather than carried as strings through the rest of the service. */
+const asArchive = (kept: Kept): ArchiveRow => ({
+  gameId: kept.game_id,
+  contentHash: kept.content_hash,
+  format: kept.format,
+  steps: Number(kept.steps),
+  stateHash: kept.state_hash,
+  winner: kept.winner,
+  verdict: kept.verdict,
+  bytes: Number(kept.bytes),
+  status: kept.status,
+  problems: kept.problems ?? [],
+  checkedAt: kept.checked_at?.getTime() ?? null,
+  evictedAt: kept.evicted_at?.getTime() ?? null,
 });
