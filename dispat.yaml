@@ -116,11 +116,22 @@ dependencies:
     - net
     - protocol
     - headless
+  host:
+    - sim
+    - net
+    - protocol
+    - headless
+  api:
+    - sim
+    - net
+    - protocol
 # Never released, so they start from nothing and dispat decides the first
 # number from the commits themselves rather than from a guess made here.
 initials:
+  api: 0.0.0
   bot: 0.0.0
   headless: 0.0.0
+  host: 0.0.0
   net: 0.1.0
   observer: 0.0.0
   prototype: 0.1.0

@@ -22,8 +22,14 @@ is not re-posted, and verifies nothing about games. Any implementation qualifies
 - a small service with a rate limiter, for a public one;
 - a [host peer](../clients/host-peer.md) serving its own row.
 
-There is no board shipped with this client, and no default URL. A board is a URL
-that arrives the way a room code used to.
+The second of those now exists: [`apps/api`](../clients/api-service.md) is a
+board somebody can stand up, and its page is mostly a list of what it refuses to
+decide. Standing one up changes nothing on this page — a hosted board is still a
+board, and the rules below still bound it.
+
+There is still no board shipped with this client, and no default URL. Running a
+board and shipping its address are two decisions, and only the first has been
+made. A board is a URL that arrives the way a room code used to.
 
 ## A row is a door
 

@@ -36,7 +36,9 @@ sign, and what each peer checks before believing it.
 | [`packages/headless`](packages/headless) | `@tessera/headless` — running a peer with no browser around it: WebRTC under Node, a key in a file, an archive on disk. |
 | [`apps/web`](apps/web) | The browser client: virtualised viewport, LOD renderer, minimap. |
 | [`apps/observer`](apps/observer) | An always-on peer with no seat. It keeps a game alive and writes it down. |
+| [`apps/host`](apps/host) | The same peer with a door: it composes a game, relays the room, and serves what it keeps. |
 | [`apps/bot`](apps/bot) | A headless peer that holds one seat — night cover for an empire that is asleep. |
+| [`apps/api`](apps/api) | The hosted half: a board of rows nobody has to believe. Decides nothing; not a default. |
 | [`apps/prototype`](apps/prototype) | The original single-player prototype, frozen as reference. |
 
 ## Running it

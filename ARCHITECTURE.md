@@ -53,13 +53,19 @@ Dependencies point one way, and the direction is the design:
 | [`packages/net`](packages/net) | sim, protocol, peerjs | mesh, lockstep, lobby, archive |
 | [`packages/headless`](packages/headless) | net, node-datachannel | a peer with no browser around it |
 | [`apps/web`](apps/web) | sim, protocol, net | rendering and input |
-| [`apps/observer`](apps/observer), [`apps/bot`](apps/bot) | headless | one program each |
+| [`apps/observer`](apps/observer), [`apps/bot`](apps/bot), [`apps/host`](apps/host) | headless | one program each |
+| [`apps/api`](apps/api) | sim, protocol, net, pg | storage with a URL, and no authority |
 
 The sim knowing nothing about the network is what makes the network testable:
 [`transport.ts`](packages/net/src/transport.ts) defines the four methods
 `Lockstep` needs, and `LoopbackNetwork` implements them well enough to run six
 drivers in one Node process with deterministic delivery order. "Do peers
 converge" is therefore a CI check rather than two browser tabs and a squint.
+
+[`apps/api`](apps/api) is the only component here with an address somebody else
+has to reach, and it is the one where that direction is hardest to keep: it
+imports `verifyWrite` from net and adds nothing of its own to the trust model.
+See [the API service](docs/clients/api-service.md).
 
 [`apps/prototype`](apps/prototype) is the original single-player game, frozen.
 Nothing depends on it.

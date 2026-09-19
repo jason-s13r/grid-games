@@ -1,0 +1,28 @@
+{
+  "name": "@tessera/api",
+  "version": "0.1.0",
+  "private": true,
+  "description": "The hosted half: a board for rows nobody has to believe, a store for files nobody is trusted to have written.",
+  "license": "MIT",
+  "type": "module",
+  "bin": {
+    "tessera-api": "./dist/main.js"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.test.json",
+    "start": "node dist/main.js",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@tessera/net": "workspace:*",
+    "@tessera/protocol": "workspace:*",
+    "@tessera/sim": "workspace:*",
+    "pg": "8.13.1"
+  },
+  "devDependencies": {
+    "@types/node": "22.7.5",
+    "@types/pg": "8.11.10",
+    "typescript": "5.6.3"
+  }
+}

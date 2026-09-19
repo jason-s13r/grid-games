@@ -52,6 +52,13 @@ The write rule is access control and not adjudication: a row is owned by the key
 that announced it, so `present` and `withdraw` need that key's signature. The
 signature says who posted a row, never that the row is true.
 
+None of that changes when the board is one we run. [`apps/api`](../clients/api-service.md)
+is a board, so the paragraph above is its whole power and the page describing it
+is mostly a list of what it refuses to decide. The value of this section is that
+it is true for a board run by a stranger; a hosted one is not more trustworthy
+for being hosted, and if it ever needed to be, the client would have been
+simplified somewhere it should not have been.
+
 ## The broker
 
 PeerJS's public broker does [signalling only](../mesh/webrtc-mesh.md) — it

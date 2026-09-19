@@ -1,0 +1,49 @@
+# A board and the database under it.
+#
+#   docker compose -f apps/api/compose.yaml up --build
+#
+# The board then answers at http://127.0.0.1:8081/games, which is the string to
+# paste into the web client's Settings — with the path, because `Directory`'s
+# base *is* the games collection.
+#
+# Bound to loopback on purpose. Everything here is HTTP and the browser needs
+# https:// for a page served from anywhere else, so a public board wants a
+# certificate and a reverse proxy in front of this — which is also where the
+# per-IP limiting lives, since the limits inside the process bound a key and a
+# key is free to mint.
+
+name: tessera-api
+
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: tessera
+      POSTGRES_PASSWORD: tessera
+      POSTGRES_DB: tessera
+    volumes:
+      - rows:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U tessera"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  api:
+    build:
+      context: ../..
+      dockerfile: apps/api/Dockerfile
+    command:
+      - --bind
+      - 0.0.0.0
+      - --database
+      - postgres://tessera:tessera@db:5432/tessera
+    ports:
+      - "127.0.0.1:8081:8081"
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  rows:

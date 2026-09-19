@@ -1,6 +1,6 @@
 # 0015 — The board: a service for rows nobody has to believe
 
-Status: planned
+Status: built
 Depends on: 0007 (the client, and the row it reads)
 Branch: `hosted-board`
 
