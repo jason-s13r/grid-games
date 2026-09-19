@@ -495,3 +495,45 @@ multi-room — `byRoom: Map<string, Set<BusSocket>>`, `rooms: Map<string, Room>`
 but `apps/host/src/main.ts` calls `rooms.set` and `hostGame` exactly once, so N
 games means N processes on N ports. The board is what makes that invisible to a
 player, which is worth knowing here and is not a reason to change it.
+
+## What came out differently
+
+Written after building it. The plan was unusually accurate — the four endpoints,
+the `(gameId, ref)` keying, the CORS preflight and the three write checks all
+went in as written, and the rate-limit table needed no adjustment. Four things
+it did not have.
+
+**An expiry that is clamped but not rewritten is two different numbers, and the
+plan's own verification asked for the wrong one.** `expiresAt` is the client's,
+stored whole inside the document, and also the service's lease column — and the
+ceiling applies to the second and not the first. The first draft of the test
+read a 48-hour row back through a `Directory` whose clock had passed the ceiling
+and expected an empty list; it got the row, correctly, because the *client* was
+reading the announcer's unclamped claim. The clamp is only observable by
+advancing the *service's* clock, which is what the test does now. A board that
+rewrote the row to match its own lease would have made the two agree and broken
+"stored whole and unaltered" to do it.
+
+**A row limit has to be on rows held, not on writes that mention them.** The
+table says "rows per owner key: 32" and the obvious implementation counts the
+refs in a post against it. A host sitting at the ceiling then cannot heartbeat,
+and watches its own game fall off the board ninety seconds later — the exact
+failure the plan warns about in §"Order of work", arriving from the direction it
+did not expect. Only refs that are *not already this key's rows* count as new.
+
+**A row that arrives already expired is stored, not special-cased.** The plan
+does not say, and the first draft deleted the caller's rows instead, which is a
+withdrawal nobody asked for. Storing it is what "stores what it is given" means,
+it is never read because both clocks check the expiry, and it is swept.
+
+**An absent `expiresAt` is a ceiling-length lease rather than a dead row.**
+`Directory.read` drops a row only when `expiresAt` is present *and* past, so a
+row without one never expires to a reader. The service needs a number to sweep
+on, and the honest one is the ceiling.
+
+Two things outside the plan's scope. The `tsconfig.test.json` pair had to come
+with this app rather than later — the build must not put `src/test` in `dist`
+and the typecheck must still see it, which `apps/host` never needed because it
+has no tests at all. And `apps/host` was missing from `README.md`,
+`ARCHITECTURE.md` and both halves of `dispat.yaml`; the plan spotted all four and
+they were fixed here.

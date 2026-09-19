@@ -473,3 +473,47 @@ popular will need a different answer there before it needs one here.
 **The `index` field.** It is a position in an input list, which is meaningful
 to a local caller and not across a wire. It is kept so `Leaderboard` does not
 fork into two types, and a hosted reader should use `game` instead.
+
+## What came out differently
+
+Written after building it. The split was as clean as the plan predicted — the
+existing `rankings.test.ts` passed unchanged, which is the refactor's real test —
+and the monoid argument held: an accumulated table and a recomputed one are equal
+over the same games, in every order tried. Four things the plan did not have.
+
+**The all-time table folds its contributions rather than keeping a running
+total, and that is a deliberate deviation.** The plan specifies an incremental
+accumulator: apply adds, supersede subtracts the old sums and recomputes the
+three maxima for the affected keys, because a max cannot be un-maxed. Every
+property it wants from that — exactness, order-independence, idempotence on the
+game id — holds for a fold over the stored contributions too, and holds more
+simply: supersede is just replacing a row. A contribution is a few hundred bytes
+and the fold is nine lines of arithmetic, against an ingest that replays ten
+million steps to produce one; the fold is free relative to the thing that
+triggers it. It is also exactly the computation a reader does over
+`GET /rankings/applied` to check the service, and it is the plan's own repair
+path in §"An all-time table cannot be repaired". If a corpus ever outgrows it,
+an incremental total is the optimisation and this stays the check on it.
+
+**`Counted` has to be built at ingest, not at rank time.** The plan has 0016
+cache a `Verdict` and 0017 read it. But `countedOf` needs the genesis and the
+seatings to turn the summary's member indices into keys, and after eviction the
+service has neither — so a `Counted` derived later would be missing exactly the
+games the all-time table exists for. It is computed in the one moment the file
+and the verdict are both in hand.
+
+**`counted: null` is load-bearing and had to survive the type.** `Leaderboard`
+declares `counted: string[]`, so a hosted response cannot simply widen it; both
+the service's test type and the client's `HostedTable` are `Omit<Leaderboard,
+"counted">` plus the nullable field. Null rather than `[]` because "fetch
+`/rankings/applied` instead" and "nothing was counted" must not look alike.
+
+**The client fetches a hosted table only when there is nothing local.** The plan
+says a service gives "a second route" and does not say when each wins. A file
+the player opened is a file they asked to see counted, and a service's table
+cannot contain it — so anything local takes the local path. That rule is also
+the checking recipe: fetch the corpus, open the files, press the button again.
+
+One smaller thing. `main.ts` already had a private `hostOf` for the board's host
+line, identical to the one `net/rankings.ts` needed; the duplicate went rather
+than the import being aliased.

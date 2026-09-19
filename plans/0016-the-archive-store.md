@@ -409,3 +409,53 @@ reversible.
 right number depends on what the window table is for, and that is 0017's
 question rather than this one: a window over 500 games and a window over 50 are
 different products and neither is wrong.
+
+## What came out differently
+
+Written after building it. The plan's lead finding was right and was a live bug
+exactly as described: `readArchive` had no `claim` branch and stamped `format: 1`
+while the writer stamped 2, the two covering for each other so that
+`verifyArchive`'s guard for this very file could never fire. The round-trip test
+fails on the tree before the fix with `unsigned move at step 8`, a bad signature
+from the claimed seat, and a hash mismatch — three problems, none of which names
+the reader. It landed on its own commit, as the plan asked.
+
+Four things the plan did not have.
+
+**The blob store is a directory, not S3.** The plan says "S3-compatible" and
+puts MinIO in `compose.yaml`. `Blobs` is three methods and the routes have no
+opinion about what is under them, which is the part that matters; the shipped
+implementation is a directory on a volume. Adding `@aws-sdk/client-s3` would
+roughly double this repository's runtime dependency count — there are five — for
+a code path nothing here tests, and an S3 backend is a fourth implementation of
+the same interface whenever an operator wants one. This is a deliberate
+deviation and it is the only one.
+
+**Filing under the recomputed id and refusing the file are both true at once.**
+The plan's verification asks that "an upload is stored under the recomputed id,
+not the claimed one", and the natural test — post a genuine archive with
+`genesis.gameId` overwritten — produces a row under the real id that is then
+*refused*, because `inspectGenesis` catches a record whose own id field is
+wrong. Both halves are correct and the test asserts both: the filing is on the
+hash, and the file does not survive lying about it.
+
+**The store is opt-in.** The plan folds it into the app without saying what
+happens when an operator wants only a board. `--archives` turns it on and the
+routes 404 without it; a board is a whole deployment and 0015 shipped one.
+
+**`held` is a column, not a fourth status.** The plan's schema has
+`status: checking | held | refused` and separately wants an evicted game listed
+"marked `held: false`". Those are different facts — a game can be verified and
+no longer stored — so eviction is its own timestamp and `held` is derived from
+the pair.
+
+**The corpus is paged with a cursor rather than an offset.** The plan's route
+signature has `cursor=` and does not say why. It is not cosmetic: the corpus
+grows at the head, so an offset page repeats or skips a row every time something
+is ingested mid-read.
+
+One thing the plan asked for that lands in 0017 instead. The verification table
+wants an evicted game to keep "its row, its verdict and its `Counted`", but
+`Counted` is 0017's type and the plan's own SQL has no column for it. 0016 keeps
+the verdict; 0017 adds `applied.contribution` and tests that it survives
+eviction, which is the same claim in the plan that owns the type.
