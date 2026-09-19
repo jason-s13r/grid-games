@@ -12,10 +12,18 @@
 // same interface, and the router is exercised against it so the HTTP contract is
 // testable without a database; `PostgresStore` is what an operator runs.
 
-import { Pool } from "pg";
+// `pg` is CommonJS and its entry point is `module.exports = new PG(Client)` —
+// an instance, so Node's ESM loader cannot see named exports on it and
+// `import { Pool }` throws at startup even though the bundler-mode typechecker
+// and vitest's interop both accept it. The default import is the module object.
+import pg from "pg";
+import type { Pool } from "pg";
+
 import type { Row, Store } from "./board.js";
 import type { ArchiveRow, Archives, Corpus, Status } from "./ingest.js";
 import type { Applied, AppliedStore } from "./rank.js";
+
+const { Pool: PgPool } = pg;
 
 export const SCHEMA = `
 create table if not exists rows (
@@ -60,7 +68,7 @@ export class PostgresStore implements Store {
   constructor(readonly pool: Pool) {}
 
   static open(url: string): PostgresStore {
-    return new PostgresStore(new Pool({ connectionString: url }));
+    return new PostgresStore(new PgPool({ connectionString: url }));
   }
 
   async migrate(): Promise<void> {
