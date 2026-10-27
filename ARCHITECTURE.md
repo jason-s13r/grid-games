@@ -24,7 +24,12 @@ Three consequences run through the rest of the repository:
 
 - **Anything that moves the hash is a breaking change**, even when no exported
   signature changed. Rule tweaks, spawn weights, RNG draw order and snapshot
-  layout all qualify, and bump `PROTOCOL_VERSION`.
+  layout all qualify. Commit it as `feat(sim)!:` or `fix(sim)!:` so the release
+  is a new major of `@tessera/sim`.
+- **The protocol version is the sim's major version.** dispat writes each
+  released version into [`version.ts`](packages/sim/src/version.ts), and
+  `PROTOCOL_VERSION` is its major, so `@tessera/sim@4.x` plays protocol 4 and a
+  client can say which games it plays by naming the sim it was built with.
 - **`PROTOCOL_VERSION` and `SUPPORTED_PROTOCOLS`**
   ([`constants.ts`](packages/sim/src/constants.ts)) are two ideas that used to
   share a name. `PROTOCOL_VERSION` is stamped into every genesis this build

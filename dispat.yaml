@@ -19,9 +19,10 @@
 #     renderer-facing helpers, performance work that provably preserves the
 #     draw order.
 #
-# packages/sim exports PROTOCOL_VERSION. A client refuses a game whose genesis
-# names a protocol it does not support, which turns a silent desync into a
-# refusal at the door.
+# The sim's major version IS the protocol version. dispat writes each released
+# version into packages/sim/src/version.ts, and PROTOCOL_VERSION is read from
+# it. A client refuses a game whose genesis names a protocol it does not
+# support, which turns a silent desync into a refusal at the door.
 
 scripts:
   build-lib: pnpm build
@@ -61,6 +62,12 @@ spaces:
       match: ["workspace:*"]
       range: "workspace:*"
       syncLock: [sync-lock]
+      # The version the sim reports about itself at runtime, and where
+      # PROTOCOL_VERSION comes from. Only the sim carries this file.
+      replace:
+        - files: ["src/version.ts"]
+          find: 'VERSION = "{previous}"'
+          write: 'VERSION = "{version}"'
     flow:
       build: build-lib
       publish: publish-lib

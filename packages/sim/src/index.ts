@@ -1,5 +1,6 @@
 export * from "./types.js";
 export * from "./constants.js";
+export { SIM_VERSION } from "./version.js";
 export * from "./geometry.js";
 export * from "./duration.js";
 export { Rng, seedFrom } from "./rng.js";

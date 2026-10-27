@@ -2,13 +2,19 @@
 
 import { ITEM, ELIMINATION } from "./types.js";
 import type { Genesis, Rules, MapConfig } from "./types.js";
+import { SIM_VERSION } from "./version.js";
 
 /** Stamped into every genesis this build composes. New games are always
- *  current: nothing anywhere downgrades this. */
-export const PROTOCOL_VERSION = 4;
+ *  current: nothing anywhere downgrades this.
+ *
+ *  The sim's major version, so a hash-moving change and a protocol bump are the
+ *  same release. See version.ts. */
+export const PROTOCOL_VERSION: number = Number(SIM_VERSION.split(".")[0]);
 
 /** Every version this build can play, verify and replay, newest first.
- *  PROTOCOL_VERSION is always its first entry. */
+ *  PROTOCOL_VERSION is always its first entry — written out rather than derived,
+ *  so a major release that forgets to list itself here fails a test instead of
+ *  silently dropping the version before it. */
 export const SUPPORTED_PROTOCOLS: readonly number[] = [4, 3];
 
 /** The day each superseded version stops being played, ISO. Written by hand at

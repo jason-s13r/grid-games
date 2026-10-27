@@ -11,6 +11,7 @@
 // suite goes red on the day a version is due to be dropped, rather than on the
 // day somebody notices a game has quietly stopped working.
 
+import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import {
   PROTOCOL_SUNSET,
@@ -20,6 +21,7 @@ import {
   shelfLife,
 } from "../constants.js";
 import { makeGenesis, Sim } from "../sim.js";
+import { SIM_VERSION } from "../version.js";
 import { humans } from "../specs.js";
 import type { Genesis } from "../types.js";
 import { RECORDED } from "./fixtures/index.js";
@@ -40,6 +42,23 @@ describe("playsProtocol", () => {
   it("defaults to this build's set", () => {
     expect(playsProtocol(PROTOCOL_VERSION)).toBe(true);
     expect(playsProtocol(PROTOCOL_VERSION + 1)).toBe(false);
+  });
+});
+
+describe("the protocol is the sim's major version", () => {
+  const manifest = JSON.parse(
+    readFileSync(new URL("../../package.json", import.meta.url), "utf8"),
+  ) as { version: string };
+
+  it("reports the version its manifest declares", () => {
+    // dispat writes both at release. If they disagree, one of them was edited
+    // by hand, and the protocol a client advertises is no longer the release
+    // it was built from.
+    expect(SIM_VERSION).toBe(manifest.version);
+  });
+
+  it("takes the protocol from the major", () => {
+    expect(PROTOCOL_VERSION).toBe(Number(manifest.version.split(".")[0]));
   });
 });
 
