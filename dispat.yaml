@@ -3,8 +3,9 @@
 # dependency order.
 #
 # Commit scopes name packages: feat(sim), fix(web), feat(sim,protocol,web)!.
-# A scope that is not a package is an error, so docs and chores go unscoped
-# (docs:, chore:, ci:) and release nothing.
+# A scope that is not a package is an error. Changes to the repository as a
+# whole use the repo scope (chore(repo):, ci(repo):, docs(repo):) and release
+# nothing.
 #
 # THE COMPATIBILITY CONTRACT IS THE STATE HASH, NOT THE PUBLIC API.
 #
@@ -89,6 +90,13 @@ dependencies:
   web:
     - sim
     - protocol
+# Scopes that are deliberately not packages, and resolve to nothing without a
+# diagnostic.
+#   release  dispat's own release-commit scope
+#   repo     repository-wide changes that release nothing: chore(repo):, ci(repo):
+#   ci       a fix(ci) commit on main from before scopes had to name packages
+#   the rest packages that were removed, still named by older commits
+nonPackageScopes: [release, repo, ci, net, headless, observer, bot, host, api, prototype]
 # --- release records -----------------------------------------------------
 #
 # The release run writes what it did: a changelog per package, one release
