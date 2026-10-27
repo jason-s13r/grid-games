@@ -5,9 +5,18 @@
 // connection state would have two peers computing different winners — a
 // guaranteed desync. Members emit signed HEARTBEATs instead, making liveness a
 // deterministic function of state.
+//
+// An empire nobody has claimed is outside every count here, and the reason is
+// the same one: it is territory, and territory does not go quiet. `silentFor`
+// on an empire with no members is "silent since step zero", so counted as a
+// player it would make everybody else absent-by-comparison and hand
+// `WIN.LAST_ROSTER` to whoever beat first. Counted as alive it holds its capital
+// forever and `LAST_EMPIRE` could never fire at all. Neither is a rule anybody
+// would write down; both are what happens if you forget to write one.
 
 import { ELIMINATION, PHASE, WIN } from "./types.js";
 import type { Empire } from "./types.js";
+import { isVacant } from "./state.js";
 import type { State } from "./state.js";
 
 export function isLive(state: State, empire: Empire): boolean {
@@ -44,13 +53,21 @@ export function checkVictory(state: State): void {
     }
   }
 
-  const alive = state.empires.filter((e) => e.alive);
+  // Unclaimed empires are excluded from every count below. Left in, a vacancy
+  // holds its capital forever and `LAST_EMPIRE` could never fire; worse,
+  // `silentFor` reports it silent from step zero, so `present` drops to one and
+  // `WIN.LAST_ROSTER` is handed to whoever is awake on the first pass. That is
+  // the same trap 0002 closed for sleeping teams, arriving through a different
+  // door.
+  const alive = state.empires.filter((e) => e.alive && !isVacant(e));
 
   if (alive.length === 1) {
     end(state, alive[0]!.id, WIN.LAST_EMPIRE);
     return;
   }
   if (alive.length === 0) {
+    // Every claimed empire is gone and only vacancies remain: the game is over
+    // and nobody won it, which is what a winner of zero already means here.
     end(state, 0, WIN.LAST_EMPIRE);
     return;
   }
@@ -74,7 +91,7 @@ export function checkVictory(state: State): void {
 function leader(state: State): number {
   let best: Empire | null = null;
   for (const e of state.empires) {
-    if (!e.alive) continue;
+    if (!e.alive || isVacant(e)) continue;
     if (
       !best ||
       e.tilesOwned > best.tilesOwned ||

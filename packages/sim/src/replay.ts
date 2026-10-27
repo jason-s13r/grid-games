@@ -120,8 +120,10 @@ function record(path: string, seed: number, steps: number): void {
 
   const fixture = {
     note:
-      "A recorded game, replayed by both the Node and browser suites. " +
-      "Regenerate with: pnpm --filter @tessera/sim replay --record <path>",
+      `A recorded v${genesis.protocol} game, replayed by both the Node and ` +
+      "browser suites. One fixture per supported version, listed in " +
+      "src/test/fixtures/index.ts. Regenerate with: " +
+      "pnpm --filter @tessera/sim replay --record <path>",
     genesis,
     steps: sim.step,
     hash: hex(sim.hash()),

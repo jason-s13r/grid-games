@@ -12,67 +12,8 @@ importers:
         specifier: 3.2.7
         version: 3.2.7(@vitest/browser@3.2.7)(lightningcss@1.33.0)(sass@1.103.1)
 
-  apps/bot:
-    dependencies:
-      '@tessera/headless':
-        specifier: workspace:*
-        version: link:../../packages/headless
-      '@tessera/net':
-        specifier: workspace:*
-        version: link:../../packages/net
-      '@tessera/protocol':
-        specifier: workspace:*
-        version: link:../../packages/protocol
-      '@tessera/sim':
-        specifier: workspace:*
-        version: link:../../packages/sim
-    devDependencies:
-      '@types/node':
-        specifier: 22.7.5
-        version: 22.7.5
-      typescript:
-        specifier: 5.6.3
-        version: 5.6.3
-
-  apps/observer:
-    dependencies:
-      '@tessera/headless':
-        specifier: workspace:*
-        version: link:../../packages/headless
-      '@tessera/net':
-        specifier: workspace:*
-        version: link:../../packages/net
-      '@tessera/protocol':
-        specifier: workspace:*
-        version: link:../../packages/protocol
-      '@tessera/sim':
-        specifier: workspace:*
-        version: link:../../packages/sim
-    devDependencies:
-      '@types/node':
-        specifier: 22.7.5
-        version: 22.7.5
-      typescript:
-        specifier: 5.6.3
-        version: 5.6.3
-
-  apps/prototype:
-    devDependencies:
-      '@parcel/transformer-sass':
-        specifier: 2.16.4
-        version: 2.16.4(@parcel/core@2.16.4(@swc/helpers@0.5.23))
-      parcel:
-        specifier: 2.16.4
-        version: 2.16.4(@swc/helpers@0.5.23)
-      typescript:
-        specifier: 5.6.3
-        version: 5.6.3
-
   apps/web:
     dependencies:
-      '@tessera/net':
-        specifier: workspace:*
-        version: link:../../packages/net
       '@tessera/protocol':
         specifier: workspace:*
         version: link:../../packages/protocol
@@ -92,50 +33,6 @@ importers:
       playwright:
         specifier: 1.62.1
         version: 1.62.1
-      typescript:
-        specifier: 5.6.3
-        version: 5.6.3
-
-  packages/headless:
-    dependencies:
-      '@tessera/net':
-        specifier: workspace:*
-        version: link:../net
-      '@tessera/protocol':
-        specifier: workspace:*
-        version: link:../protocol
-      '@tessera/sim':
-        specifier: workspace:*
-        version: link:../sim
-      node-datachannel:
-        specifier: 0.33.2
-        version: 0.33.2
-      peerjs:
-        specifier: 1.5.5
-        version: 1.5.5
-    devDependencies:
-      '@types/node':
-        specifier: 22.7.5
-        version: 22.7.5
-      typescript:
-        specifier: 5.6.3
-        version: 5.6.3
-
-  packages/net:
-    dependencies:
-      '@tessera/protocol':
-        specifier: workspace:*
-        version: link:../protocol
-      '@tessera/sim':
-        specifier: workspace:*
-        version: link:../sim
-      peerjs:
-        specifier: 1.5.5
-        version: 1.5.5
-    devDependencies:
-      '@types/node':
-        specifier: 22.7.5
-        version: 22.7.5
       typescript:
         specifier: 5.6.3
         version: 5.6.3
@@ -375,10 +272,6 @@ packages:
     resolution: {integrity: sha512-iA7+tyVqfrATAIsIRWQG+a7ZLLD0VaOCKV2Wd/v4mqIU3J9c4jx9p7S0nw1XH3gJCKNBOOwACOPYYSUu9pgT+w==}
     engines: {node: '>=12.0.0'}
 
-  '@msgpack/msgpack@2.8.0':
-    resolution: {integrity: sha512-h9u4u/jiIRKbq25PM+zymTyW6bhTzELvOoUd+AvYriWOAKpLGnIamaET3pnHYoI5iYphAHBI4ayx0MehR+VVPQ==}
-    engines: {node: '>= 10'}
-
   '@msgpackr-extract/msgpackr-extract-darwin-arm64@3.0.4':
     resolution: {integrity: sha512-LCkGo6JDfaBhgST7UpPWgNgLINpcpabaHfyz5OBx75nUYxBsaEPxjnyNjWpeb/xBup/682QnBfRBy2/LvPutZQ==}
     cpu: [arm64]
@@ -414,51 +307,6 @@ packages:
     engines: {node: ^22.20 || ^24.12 || >=25}
     cpu: [x64]
     os: [linux]
-
-  '@node-datachannel/android-arm64@0.33.2':
-    resolution: {integrity: sha512-I71a0jICUNYgh4ZI5AcINEMuRtQSVyrpp4FV3kJZMcx31xS0vKKtf06tpsUAtW5uS+uRXbZR+vlMEqS1h710wQ==}
-    cpu: [arm64]
-    os: [android]
-
-  '@node-datachannel/darwin-arm64@0.33.2':
-    resolution: {integrity: sha512-EwBGiaMh3MX6zjYoZHuK02Q6hmQQIvR39335Kb/ZnP3fXZU0/VWx6ksHLM6K0XFFYRfP+yJeVgU79g++xoeQpw==}
-    cpu: [arm64]
-    os: [darwin]
-
-  '@node-datachannel/darwin-x64@0.33.2':
-    resolution: {integrity: sha512-a1nvL6MiskSjV3TWTNXdVpI/2kHNIOP2AbuBZjR5eC7VSrH/6hCFfHIBW4SFKXGFm8LOGliY9Df10UnJUutjwA==}
-    cpu: [x64]
-    os: [darwin]
-
-  '@node-datachannel/linux-arm64-gnu@0.33.2':
-    resolution: {integrity: sha512-YWAu3EiMl2HRi/fwWlfFTW30wFTkRVYJWRHQcI1uDSeZYG/tfyBqBy6CRy9Sgrb0xjOYZ6XhLDj8cdX0foPlpg==}
-    cpu: [arm64]
-    os: [linux]
-
-  '@node-datachannel/linux-arm64-musl@0.33.2':
-    resolution: {integrity: sha512-16o3Ny5hbxTTjDmhsZog/t7p2tRP6s/Oa/V9kKzZfiGlCqvxxCE4ACOWw/MWHOhN0xI9/63IIRfrrnQnPxjK8g==}
-    cpu: [arm64]
-    os: [linux]
-
-  '@node-datachannel/linux-x64-gnu@0.33.2':
-    resolution: {integrity: sha512-grLRAbZgSIX8nmObciblyCmnevDCst0snhV+z1fvDmUlzXIVXeDmv6lEzAaWs3KRleagqwSsFg5d1td1bwMT9w==}
-    cpu: [x64]
-    os: [linux]
-
-  '@node-datachannel/linux-x64-musl@0.33.2':
-    resolution: {integrity: sha512-PlpgvYjo+gmBhIkRFaZWIhCF335FMTJmCpl+FVa4XliEgyOqD+cvjQPWcbnlrA2Jd+QnLiZt+NxT7nv4QXpoiQ==}
-    cpu: [x64]
-    os: [linux]
-
-  '@node-datachannel/win32-arm64-msvc@0.33.2':
-    resolution: {integrity: sha512-8NpHkm7R8EY0jHGHOXdK7K0wjWY34PJ+PJY++2VDHTAtXGazNm28zcnVE/4IU0N26YGdCDSSWat3OO3W6nwoRw==}
-    cpu: [arm64]
-    os: [win32]
-
-  '@node-datachannel/win32-x64-msvc@0.33.2':
-    resolution: {integrity: sha512-aLk0O/M1JNVpzxx4RVBXMJTMlpswE04Cz5baayKwuEN+qk9hO6DSJgYMR6Wq9a5zGYAmvLFlOg+LsePyXkWliA==}
-    cpu: [x64]
-    os: [win32]
 
   '@parcel/bundler-default@2.16.4':
     resolution: {integrity: sha512-Nb8peNvhfm1+660CLwssWh4weY+Mv6vEGS6GPKqzJmTMw50udi0eS1YuWFzvmhSiu1KsYcUD37mqQ1LuIDtWoA==}
@@ -1246,9 +1094,6 @@ packages:
   estree-walker@3.0.3:
     resolution: {integrity: sha512-7RUKfXgSMMkzt6ZuXmqapOurLGPPfgj6l9uRZ7lRGolvk0y2yocc35LdcxKC5PQZdn2DMqioAQ2NoWcrTKmm6g==}
 
-  eventemitter3@4.0.7:
-    resolution: {integrity: sha512-8guHBZCwKnFhYdHr2ysuRWErTwhoN2X8XELRlrRwpmfeY2jjuUN4taQMsULKUVo1K4DvZl+0pgfyoysHxvmvEw==}
-
   expect-type@1.4.0:
     resolution: {integrity: sha512-KfYbmpRm0VbLjEvVa9yGwCi9GI34xvi7A/HXYWQO65CSD2u3MczUJSuwXKFIxlGsgBQizV9q5J9NHj4VG0n+pA==}
     engines: {node: '>=12.0.0'}
@@ -1415,10 +1260,6 @@ packages:
   node-addon-api@7.1.1:
     resolution: {integrity: sha512-5m3bsyrjFWE1xf7nz7YXdN4udnVtXK6/Yfgn5qnahL6bCkf2yKt4k3nuTKAtT4r3IG8JNR2ncsIMdZuAzJjHQQ==}
 
-  node-datachannel@0.33.2:
-    resolution: {integrity: sha512-WRL+uqYG2eSvpnKuCOKueaMiyKlDjkJFd6pFH/f2SbD/EiXLMXwmYNU5z+TDQPrAv+BMgkuC40UESeRRL+4zBw==}
-    engines: {node: '>=18.20.0'}
-
   node-gyp-build-optional-packages@5.1.1:
     resolution: {integrity: sha512-+P72GAjVAbTxjjwUmwjVrqrdZROD4nf8KgpBoDxqXXTiYZZt/ud60dE5yvCSr9lRO8e8yv6kgJIC0K0PfZFVQw==}
     hasBin: true
@@ -1448,14 +1289,6 @@ packages:
   pathval@2.0.1:
     resolution: {integrity: sha512-//nshmD55c46FuFw26xV/xFAaB5HF9Xdap7HJBBnrKdAd6/GxDBaNA1870O79+9ueg61cZLSVc+OaFlfmObYVQ==}
     engines: {node: '>= 14.16'}
-
-  peerjs-js-binarypack@2.1.0:
-    resolution: {integrity: sha512-YIwCC+pTzp3Bi8jPI9UFKO0t0SLo6xALnHkiNt/iUFmUUZG0fEEmEyFKvjsDKweiFitzHRyhuh6NvyJZ4nNxMg==}
-    engines: {node: '>= 14.0.0'}
-
-  peerjs@1.5.5:
-    resolution: {integrity: sha512-viMUCPDL6CSfOu0ZqVcFqbWRXNHIbv2lPqNbrBIjbFYrflebOjItJ4hPfhjnuUCstqciHVu9vVJ7jFqqKi/EuQ==}
-    engines: {node: '>= 14'}
 
   picocolors@1.1.1:
     resolution: {integrity: sha512-xceH2snhtb5M9liqDsmEw56le376mTZkEX/jEb/RxNFyegNul7eNslCXP9FDj/Lcu0X8KEyMceP2ntpaHrDEVA==}
@@ -1511,9 +1344,6 @@ packages:
     resolution: {integrity: sha512-9icZURbP51S6S0QGoyaeqk9uB06GNWxsFYWfH5RgpFgqK5FA8tJcM3AdVxrZEVJ7dz+L87nG95gBKf4VuaMHGw==}
     engines: {node: '>=20.19.0'}
     hasBin: true
-
-  sdp@3.2.2:
-    resolution: {integrity: sha512-xZocWwfyp4hkbN4hLWxMjmv2Q8aNa9MhmOZ7L9aCZPT+dZsgRr6wZRrSYE3HTdyk/2pZKPSgqI7ns7Een1xMSA==}
 
   semver@7.8.5:
     resolution: {integrity: sha512-Y7/KDsb8LjooZpwaqGyulO6DQlksgCncchHGk+sZIY4SBvUocMBEFH5Ur1fI4dV+Jvl0w6cjvucaIi40puRioA==}
@@ -1675,10 +1505,6 @@ packages:
   weak-lru-cache@1.2.2:
     resolution: {integrity: sha512-DEAoo25RfSYMuTGc9vPJzZcZullwIqRDSI9LOy+fkCJPi6hykCnfKaXTuPBDuXAUcqHXyOgFtHNp/kB2FjYHbw==}
 
-  webrtc-adapter@9.0.6:
-    resolution: {integrity: sha512-CHbl2ZQbxx164IgWRgzJno4hWtM4tFbRam1QfI3Yxhs3w/DvqluVxVWeXs3oL5/fbGkSNLKo0Ty5MgUWceNhog==}
-    engines: {node: '>=6.0.0', npm: '>=3.10.0'}
-
   why-is-node-running@2.3.0:
     resolution: {integrity: sha512-hUrmaWBdVDcxvYqnyh09zunKzROWjbZTiNy8dBEjkS7ehEDQibXJ7XvlmtbwuTclUiIyN+CyXQD4Vmko8fNm8w==}
     engines: {node: '>=8'}
@@ -1818,8 +1644,6 @@ snapshots:
       '@lezer/lr': 1.4.10
       json5: 2.2.3
 
-  '@msgpack/msgpack@2.8.0': {}
-
   '@msgpackr-extract/msgpackr-extract-darwin-arm64@3.0.4':
     optional: true
 
@@ -1839,33 +1663,6 @@ snapshots:
     optional: true
 
   '@napi-rs/lzma-linux-x64-gnu@1.5.1':
-    optional: true
-
-  '@node-datachannel/android-arm64@0.33.2':
-    optional: true
-
-  '@node-datachannel/darwin-arm64@0.33.2':
-    optional: true
-
-  '@node-datachannel/darwin-x64@0.33.2':
-    optional: true
-
-  '@node-datachannel/linux-arm64-gnu@0.33.2':
-    optional: true
-
-  '@node-datachannel/linux-arm64-musl@0.33.2':
-    optional: true
-
-  '@node-datachannel/linux-x64-gnu@0.33.2':
-    optional: true
-
-  '@node-datachannel/linux-x64-musl@0.33.2':
-    optional: true
-
-  '@node-datachannel/win32-arm64-msvc@0.33.2':
-    optional: true
-
-  '@node-datachannel/win32-x64-msvc@0.33.2':
     optional: true
 
   '@parcel/bundler-default@2.16.4(@parcel/core@2.16.4(@swc/helpers@0.5.23))':
@@ -2876,8 +2673,6 @@ snapshots:
     dependencies:
       '@types/estree': 1.0.9
 
-  eventemitter3@4.0.7: {}
-
   expect-type@1.4.0: {}
 
   fdir@6.5.0(picomatch@4.0.7):
@@ -3010,20 +2805,6 @@ snapshots:
 
   node-addon-api@7.1.1: {}
 
-  node-datachannel@0.33.2:
-    dependencies:
-      detect-libc: 2.1.2
-    optionalDependencies:
-      '@node-datachannel/android-arm64': 0.33.2
-      '@node-datachannel/darwin-arm64': 0.33.2
-      '@node-datachannel/darwin-x64': 0.33.2
-      '@node-datachannel/linux-arm64-gnu': 0.33.2
-      '@node-datachannel/linux-arm64-musl': 0.33.2
-      '@node-datachannel/linux-x64-gnu': 0.33.2
-      '@node-datachannel/linux-x64-musl': 0.33.2
-      '@node-datachannel/win32-arm64-msvc': 0.33.2
-      '@node-datachannel/win32-x64-msvc': 0.33.2
-
   node-gyp-build-optional-packages@5.1.1:
     dependencies:
       detect-libc: 2.1.2
@@ -3063,15 +2844,6 @@ snapshots:
   pathe@2.0.3: {}
 
   pathval@2.0.1: {}
-
-  peerjs-js-binarypack@2.1.0: {}
-
-  peerjs@1.5.5:
-    dependencies:
-      '@msgpack/msgpack': 2.8.0
-      eventemitter3: 4.0.7
-      peerjs-js-binarypack: 2.1.0
-      webrtc-adapter: 9.0.6
 
   picocolors@1.1.1: {}
 
@@ -3148,8 +2920,6 @@ snapshots:
       source-map-js: 1.2.1
     optionalDependencies:
       '@parcel/watcher': 2.6.0
-
-  sdp@3.2.2: {}
 
   semver@7.8.5: {}
 
@@ -3286,10 +3056,6 @@ snapshots:
       - yaml
 
   weak-lru-cache@1.2.2: {}
-
-  webrtc-adapter@9.0.6:
-    dependencies:
-      sdp: 3.2.2
 
   why-is-node-running@2.3.0:
     dependencies:

@@ -32,9 +32,13 @@ body {
 .app {
   display: grid;
   grid-template-columns: 236px minmax(0, 1fr) 272px;
-  grid-template-rows: auto 1fr;
+  // The middle row is the scrubber's, and it is `auto` rather than a fixed
+  // height: the strip is `hidden` in every game that is not a replay, generates
+  // no box, and the row collapses to nothing.
+  grid-template-rows: auto auto 1fr;
   grid-template-areas:
     "top   top   top"
+    "scrub scrub scrub"
     "left  stage right";
   height: 100dvh;
 }
@@ -44,7 +48,67 @@ body {
   grid-template-columns: 236px minmax(0, 1fr);
   grid-template-areas:
     "top   top"
+    "scrub scrub"
     "left  stage";
+}
+
+// The timeline of a game that has already happened.
+.scrubber {
+  grid-area: scrub;
+  padding: 8px 12px;
+  background: #f4efe2;
+  border-bottom: 1px solid #ded5be;
+  font-size: 12px;
+}
+
+.scrub-bar {
+  display: block;
+}
+
+.scrub-track {
+  width: 100%;
+  margin: 0;
+  accent-color: #7a6a4f;
+}
+
+// Stands in for the track while there is nothing to scrub yet. Same height, so
+// the strip does not jump when a build finishes.
+.scrub-progress {
+  height: 16px;
+  border: 1px solid #ded5be;
+  border-radius: 8px;
+  background: #fffdf6;
+  overflow: hidden;
+
+  span {
+    display: block;
+    height: 100%;
+    background: #b9a87f;
+    transition: width 120ms linear;
+  }
+}
+
+.scrub-say {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 4px;
+}
+
+.scrub-label {
+  color: #6b6152;
+  font-variant-numeric: tabular-nums;
+}
+
+// Every reason, never the first one. A verifier that shows one line of what was
+// wrong with a file is one nobody can act on.
+.scrub-problems {
+  margin: 6px 0 0;
+  padding-left: 18px;
+  color: #8a3d33;
+
+  li { margin: 2px 0; }
 }
 
 .topbar {
@@ -266,6 +330,30 @@ body {
 
 @keyframes pulse {
   50% { outline-color: rgba(127, 232, 240, 0.35); }
+}
+
+// The pocket around an empire nobody has claimed. Nothing may be taken, marched
+// into or cascaded into here until somebody arrives, and a region where every
+// click silently fails is a bug report waiting to happen — so it is hatched,
+// visibly, and it disappears the moment the empire is claimed.
+//
+// Deliberately quiet. It is ground that is out of play rather than ground
+// anybody owns, and it can be a quarter of what is on screen.
+.standing.vacant {
+  color: var(--muted);
+  font-style: italic;
+}
+
+.tile.is-shielded::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: repeating-linear-gradient(
+    45deg,
+    rgba(255, 255, 255, 0.16) 0 2px,
+    transparent 2px 6px
+  );
 }
 
 // --- map controls ------------------------------------------------------------
@@ -598,13 +686,6 @@ body {
 
 .screen-tag { margin: 4px 0 0; color: var(--muted); }
 
-.screen-cols {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 16px;
-  align-items: start;
-}
-
 .card {
   padding: 14px;
   background: var(--panel);
@@ -621,6 +702,68 @@ body {
 }
 
 .card-tag { margin: 0 0 10px; font-size: 12px; color: var(--muted); }
+
+// --- the setup flow ----------------------------------------------------------
+//
+// One card, read top to bottom: what kind of game, then who is in it, then what
+// the world is, then the button that starts it. The parts appear and disappear
+// with the mode rather than sitting side by side greyed out — see view/Setup.ts
+// for why the flow is a flow.
+
+// The title and the way back out of the mode, on one line: leaving is a small
+// reversible thing beside the heading, not an action competing with Start.
+.setup-title {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+
+  h2 { margin-bottom: 8px; }
+}
+
+// The two ways to start something of your own. Side by side and equal, because
+// neither is the default — and they wrap to a stack on their own, without a
+// breakpoint, once two of them no longer fit.
+.setup-choose {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  gap: 8px;
+  margin: 12px 0;
+}
+
+// Sized like a decision without being painted like one: black is reserved for
+// Start, which is the only button on this screen that commits to anything. Two
+// black slabs offering to show you a form said the opposite.
+.btn.setup-pick {
+  padding: 12px;
+  font-weight: 600;
+  background: #f3eeda;
+  border-color: #c8c0aa;
+  &:hover:not(:disabled) { background: #fffdf2; border-color: #8a7a4a; }
+}
+
+.setup-or { margin: 14px 0 0; }
+
+.setup-form { margin-top: 12px; }
+
+// Fenced off from the room code above it, so "who is playing" and "what they
+// are playing" read as two answers rather than one long list. A solo game has
+// nothing above the form to be separated from, so it gets no rule.
+.setup-lobby:not([hidden]) + .setup-form {
+  padding-top: 12px;
+  border-top: 1px solid var(--edge);
+}
+
+.setup-lobby:empty { display: none; }
+
+.setup-foot:empty { display: none; }
+.setup-foot {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--edge);
+
+  .hint { margin: 0; }
+}
 
 .field {
   display: flex;
@@ -647,6 +790,141 @@ body {
   border-color: #23201a;
   color: #fffbe8;
   &:hover:not(:disabled) { background: #37322a; border-color: #37322a; }
+}
+
+// --- the games card ----------------------------------------------------------
+//
+// A list of rows above the card that starts a game. Each row is four short
+// lines and a button: what the world is, how long is left, how to get in, and
+// who has vouched for it. Nothing here is a colour-coded verdict — a row that
+// cannot be played says so in words, because "greyed out" is not a reason.
+.games { margin-bottom: 14px; }
+
+.games-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 8px;
+}
+
+.games-row {
+  display: grid;
+  // The button sits to the right of everything and spans the rows beside it, so
+  // a row with a sunset notice does not push it out of reach of the row it
+  // belongs to.
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 2px 10px;
+  padding: 9px 10px;
+  border: 1px solid var(--edge);
+  border-radius: 4px;
+  background: #fffdf6;
+
+  > * { grid-column: 1; }
+}
+
+// A game this build cannot play is shown, never hidden: a lobby that silently
+// omits the game you are in is the worst possible answer. It is quieter, and
+// the row says why in words underneath.
+.games-row-off { opacity: 0.66; }
+
+.games-main {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.games-title { font-size: 13px; }
+
+.games-op { font-size: 11px; color: var(--muted); }
+
+.games-id {
+  margin-left: auto;
+  font-size: 11px;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.games-facts {
+  margin: 1px 0 0;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.games-proof {
+  margin: 3px 0 0;
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.games-act {
+  grid-column: 2;
+  grid-row: 1 / -1;
+  align-self: center;
+}
+
+// What knocking turned up, under the facts rather than instead of them: nobody
+// answering the door does not change what the game is.
+.games-found {
+  margin: 6px 0 0;
+  padding: 6px 8px;
+  font-size: 11px;
+  border-left: 2px solid var(--edge);
+  color: var(--muted);
+
+  p { margin: 0; }
+}
+
+.games-problems {
+  margin: 3px 0 0;
+  padding-left: 16px;
+}
+
+// The settings disclosure, between the card and the footer. It wears the
+// sidebar's triangle rather than the browser's marker, for the same reason that
+// one does, but it is not an `.acc`: those are panels beside a board and this is
+// a fold on a menu screen.
+.settings {
+  margin-top: 14px;
+}
+
+.settings > summary {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  cursor: pointer;
+  font-size: 10px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--muted);
+  user-select: none;
+
+  list-style: none;
+  &::-webkit-details-marker { display: none; }
+  &::before {
+    content: "";
+    flex: none;
+    width: 0;
+    height: 0;
+    border-left: 4px solid currentColor;
+    border-top: 3.5px solid transparent;
+    border-bottom: 3.5px solid transparent;
+    transition: transform 120ms ease;
+  }
+
+  &:hover { color: var(--ink); }
+}
+
+.settings[open] > summary::before { transform: rotate(90deg); }
+
+.settings-body {
+  padding: 4px 0 2px;
+
+  // The stacked field's own top margin is for a field under a field; this one
+  // is directly under the summary.
+  .field-stacked { margin-top: 6px; }
 }
 
 .screen-foot {
@@ -778,7 +1056,138 @@ a.btn {
 // grows cannot sit on one line with a caption.
 .field-stacked {
   display: block;
+  margin-top: 12px;
+
+  // A caption for the list under it rather than half of a labelled row, so it
+  // reads as a heading and is not mistaken for the paragraph above it.
+  > label {
+    display: block;
+    margin-bottom: 2px;
+    font-weight: 600;
+  }
 }
+// A consent control, not a labelled setting: the box leads and the sentence
+// follows it, because the sentence is the whole of what is being agreed to and
+// it runs to three lines. Deliberately not `justify-content: space-between` —
+// a tick box floated to the far right of its own explanation is a box people
+// tick without reading.
+.field-check {
+  display: flex;
+  align-items: flex-start;
+  justify-content: flex-start;
+  gap: 8px;
+  margin-top: 12px;
+  line-height: 1.45;
+  color: #6b6152;
+
+  input {
+    margin: 2px 0 0;
+    flex: none;
+  }
+}
+
+// The saved-game card. A native file input is the one control on this screen
+// that cannot be made to match the others — `Browse… No file selected` is drawn
+// by the browser and is not stylable — so the input is taken out of the flow and
+// its label wears the button. The input stays in the DOM inside the label, which
+// is what keeps it focusable and keyboard-reachable.
+.file-btn {
+  display: inline-block;
+  margin-bottom: 8px;
+
+  input[type="file"] {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    opacity: 0;
+    pointer-events: none;
+  }
+
+  // The focus ring belongs on the thing that looks like the button, not on a
+  // 1px input nobody can see.
+  &:focus-within {
+    background: #fff;
+    border-color: #b9b198;
+    outline: 2px solid #c9a531;
+    outline-offset: 1px;
+  }
+}
+
+// Derived, never reported — so the refusals share the card with the table
+// rather than hiding behind it. It sits under the picker that feeds it, ruled
+// off rather than boxed again: a card inside a card reads as two screens.
+.rank-mount {
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid var(--edge);
+
+  textarea {
+    resize: vertical;
+  }
+}
+
+// A table is the one thing on this screen allowed to be wider than the card.
+.rank-scroll {
+  overflow-x: auto;
+  margin: 8px 0;
+}
+
+.rank {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+
+  th,
+  td {
+    padding: 3px 8px 3px 0;
+    text-align: right;
+    white-space: nowrap;
+  }
+
+  th {
+    color: var(--muted);
+    font-weight: 600;
+    border-bottom: 1px solid #ded5be;
+  }
+
+  th:first-child,
+  td:first-child {
+    text-align: left;
+  }
+}
+
+.rank-key {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 11px;
+}
+
+.rank-bot {
+  color: var(--muted);
+  font-family: inherit;
+  font-size: 10px;
+}
+
+.rank-refusals {
+  margin: 4px 0 8px;
+  padding-left: 18px;
+  font-size: 12px;
+
+  li { margin: 2px 0; }
+
+  ul {
+    margin: 2px 0;
+    padding-left: 16px;
+    color: #8a3d33;
+  }
+}
+
+.rank-source {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 11px;
+  word-break: break-all;
+}
+
 .rivals .lobby-teams {
   margin: 6px 0;
 }
@@ -810,6 +1219,60 @@ a.btn {
   gap: 8px;
   margin-top: 8px;
   font-size: 12px;
+}
+
+// --- the bot tuner -----------------------------------------------------------
+//
+// Opened under the row it belongs to, indented and on its own ground, so a list
+// of four bots with one of them open still reads as a list of four bots. It is
+// a disclosure rather than a dialog: the game is configurable without it, and
+// nobody has to shut it before pressing start.
+.tuner {
+  margin: 2px 0 8px 10px;
+  padding: 8px 10px;
+  border-left: 2px solid #d9d2bd;
+  background: #f6f2e4;
+  border-radius: 0 4px 4px 0;
+
+  .hint { margin: 0 0 8px; }
+}
+
+// Label, slider, number. The number is tabular so it does not shuffle the
+// slider sideways while it is being dragged.
+.tuner-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 120px 52px;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  padding: 1px 0;
+
+  input[type="range"] {
+    width: 100%;
+    min-width: 0;
+    accent-color: #8a7a4a;
+  }
+}
+.tuner-value {
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  color: var(--muted);
+}
+.tuner-hint {
+  display: block;
+  font-size: 10px;
+  color: var(--muted);
+}
+// The six phases are one cycle rather than six settings, so they are fenced off
+// from the two above them that are not.
+.tuner-phases {
+  margin-top: 8px;
+  padding-top: 6px;
+  border-top: 1px solid #e4ddc8;
+}
+.tuner-note {
+  margin: 6px 0 0;
+  font-variant-numeric: tabular-nums;
 }
 
 // --- chat --------------------------------------------------------------------
@@ -1050,7 +1513,13 @@ a.btn {
 
   .screen { padding: 20px 14px 32px; }
   .screen-brand { font-size: 24px; }
-  .screen-cols { grid-template-columns: 1fr; }
+
+  // Three columns of slider have nowhere to go at this width, so the label
+  // takes its own line and the slider keeps its number beside it.
+  .tuner-row {
+    grid-template-columns: minmax(0, 1fr) 52px;
+    label { grid-column: 1 / -1; }
+  }
 }
 
 // Phone. Four tiles across is too tight to read, so wrap to two rows of two.
@@ -1097,4 +1566,63 @@ a.btn {
     background: #fffdf6;
     text-decoration: none;
   }
+}
+
+// --- the game log ----------------------------------------------------------
+//
+// Two registers, and they have to be tellable apart at a glance: one is what
+// happened in the world and is identical on every peer, the other is what
+// happened to this tab and is true nowhere else. A reader who cannot tell them
+// apart will quote a session line at somebody who never saw it.
+
+.log-lines {
+  max-height: 260px;
+  overflow-y: auto;
+  font-size: 12px;
+  line-height: 1.45;
+}
+.log-line {
+  display: flex;
+  gap: 5px;
+  padding: 1px 0;
+  overflow-wrap: anywhere;
+}
+.log-when {
+  flex: none;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+  font-size: 10px;
+  padding-top: 1px;
+}
+.log-body {
+  flex: 1;
+  min-width: 0;
+}
+// The shared account: plain, because it is the default reading.
+.log-world .log-body {
+  color: var(--ink);
+}
+// This tab's own: set back, italic, and marked. Nothing here happened to
+// anybody else.
+.log-session {
+  opacity: 0.72;
+}
+.log-session .log-body {
+  font-style: italic;
+}
+.log-session .log-body::before {
+  content: "· ";
+  color: var(--muted);
+}
+// The gap a reloaded tab cannot narrate. A marker and a number, because the
+// moves that built the state it adopted were broadcast before it was listening
+// and nobody will send them again.
+.log-gap {
+  margin: 6px 0;
+  padding: 3px 0;
+  border-top: 1px dashed var(--edge);
+  border-bottom: 1px dashed var(--edge);
+  color: var(--muted);
+  font-size: 11px;
+  text-align: center;
 }

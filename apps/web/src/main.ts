@@ -1,22 +1,19 @@
 // Tessera — browser client.
 //
-// Local play against SimBots for now. The sim is driven exactly as the Phase C
-// lockstep driver will drive it: moves in, dirty tiles out, camera and DOM
-// strictly outside the simulation.
+// Solo play against SimBots. The sim is driven the way an online driver will
+// drive it: moves in, dirty tiles out, camera and DOM strictly outside the
+// simulation. Online play comes back through the Cloudflare room.
 
-import { seedFrom, PROTOCOL_VERSION, Sim } from "@tessera/sim";
-import { Roster } from "@tessera/protocol";
-import { Archive, Lobby, Lockstep } from "@tessera/net";
+import { seedFrom, durationRules, hours, minutes, PROTOCOL_VERSION } from "@tessera/sim";
+import { displayName, fingerprint } from "@tessera/protocol";
 import pkg from "../package.json";
 import { LocalGame } from "./game/Local";
 import { boardClick } from "./game/input";
-import { OnlineGame } from "./game/Online";
 import type { Driver } from "./game/Driver";
-import { myIdentity } from "./net/identity";
-import { LobbyPanel } from "./view/LobbyPanel";
+import { myIdentity, myName, setMyName } from "./net/identity";
+import { Setup } from "./view/Setup";
+import type { SetupSummary } from "./view/Setup";
 import { Rivals } from "./view/Rivals";
-import type { RosterView } from "./view/LobbyPanel";
-import { ChatPanel } from "./view/Chat";
 import { Camera, MIN_ZOOM, MAX_ZOOM, DOM_MIN_ZOOM } from "./view/Camera";
 import { MapImage } from "./view/MapImage";
 import { Renderer } from "./view/Renderer";
@@ -24,8 +21,7 @@ import { Minimap } from "./view/Minimap";
 import { Tabs } from "./view/Tabs";
 import { Controls } from "./view/Controls";
 import { Shell } from "./view/Shell";
-import { injectThemeCss, empireTheme } from "./view/palette";
-import { MOVE } from "@tessera/sim";
+import { injectThemeCss } from "./view/palette";
 
 const pick = <T extends Element>(selector: string): T => {
   const el = document.querySelector<T>(selector);
@@ -35,9 +31,6 @@ const pick = <T extends Element>(selector: string): T => {
 
 injectThemeCss();
 
-// Version comes from the manifest, which dispat rewrites on release, so what
-// the UI shows is whatever was actually built. The protocol number is the one
-// that decides whether two peers can play together at all.
 const version = `v${pkg.version} · protocol ${PROTOCOL_VERSION}`;
 for (const el of document.querySelectorAll("[data-version], [data-version-menu]")) {
   el.textContent = version;
@@ -47,16 +40,10 @@ const viewportEl = pick<HTMLDivElement>("[data-viewport]");
 const tilesEl = pick<HTMLDivElement>("[data-tiles]");
 const lodEl = pick<HTMLCanvasElement>("[data-lod]");
 const minimapEl = pick<HTMLCanvasElement>("[data-minimap]");
-const lobbyEl = pick<HTMLDivElement>("[data-lobby]");
-const chatEl = pick<HTMLDivElement>("[data-chat]");
-const chatSideEl = pick<HTMLElement>("[data-chat-section]");
 const appEl = pick<HTMLElement>(".app");
 
 /** Which panels start open. A desktop sidebar has room for all of them at
- *  once; a phone does not, and a column of open accordions is exactly the
- *  wasted space they exist to avoid — so only the standings, the one worth a
- *  glance between clicks, starts open there. Set once, then left alone: after
- *  this the state is the reader's. */
+ *  once; a phone does not, so only the standings start open there. */
 function openPanelsForWidth(): void {
   const narrow = window.matchMedia("(max-width: 900px)").matches;
   for (const panel of document.querySelectorAll<HTMLDetailsElement>(".acc")) {
@@ -67,7 +54,12 @@ openPanelsForWidth();
 
 /** Map sizes offered on the setup screen. A mesh game uses whatever its genesis
  *  says, so these are a starting point rather than an assumption the view makes
- *  anywhere else. */
+ *  anywhere else.
+ *
+ *  Read for a solo game and a hosted one alike. They are the same world with
+ *  different seats in it, so the form asks once and whichever start button you
+ *  pressed takes the answer — which is also the only way the two can be
+ *  guaranteed not to disagree. */
 const MAP_SIZES: Record<string, { width: number; height: number }> = {
   small: { width: 96, height: 72 },
   medium: { width: 160, height: 112 },
@@ -79,11 +71,67 @@ const MAP_SIZES: Record<string, { width: number; height: number }> = {
 const mapSize = () =>
   MAP_SIZES[pick<HTMLSelectElement>('[data-cfg="size"]').value] ?? MAP_SIZES.medium!;
 
-/** The rival empires the solo card is offering, each with its own difficulty.
- *  It renders itself, so nothing here has to know how many there are. */
+/** Lengths the setup screen suggests. A list beside the picker rather than a
+ *  type in the sim: the old `type Duration = "3h" | "1d" | ...` is what a host
+ *  had to extend to add 45 minutes, and what lands in the genesis is only ever
+ *  three numbers anyway.
+ *
+ *  No open-ended entry, and that is the one thing the two kinds of game could
+ *  not be given identically. Every hosted game from v4 on has an end date, because
+ *  that is what makes a version's sunset derivable rather than a judgement
+ *  call — a running game cannot be upgraded, so a game with no end is a game
+ *  nobody can promise to still play. A solo game could have been left
+ *  open-ended, but a list with an entry that quietly means "multiplayer only"
+ *  is the sort of thing the combined form exists to get rid of. `endStep: 0`
+ *  stays legal in the sim forever, for every v3 record and for anybody
+ *  composing a genesis by hand. */
+const COMMON_DURATIONS: ReadonlyArray<{ label: string; steps: number }> = [
+  { label: "15 minutes", steps: minutes(15) },
+  { label: "30 minutes", steps: minutes(30) },
+  { label: "1 hour", steps: hours(1) },
+  { label: "3 hours", steps: hours(3) },
+  { label: "6 hours", steps: hours(6) },
+  { label: "1 day", steps: hours(24) },
+  { label: "3 days", steps: hours(72) },
+  { label: "5 days", steps: hours(120) },
+  { label: "10 days", steps: hours(240) },
+];
+
+const lengthEl = pick<HTMLSelectElement>('[data-cfg="length"]');
+lengthEl.innerHTML = COMMON_DURATIONS.map(
+  (d, i) => `<option value="${d.steps}"${i === 4 ? " selected" : ""}>${d.label}</option>`,
+).join("");
+
+/** The duration the setup screen is asking for. Read at the moment a game
+ *  starts rather than cached, the same way the map size is, so changing the
+ *  dropdown and pressing start agree. */
+const duration = () => durationRules(Number(lengthEl.value));
+
+/** The bot empires in the world, each with its own difficulty or its own tuned
+ *  profile. It renders itself, so nothing here has to know how many there are —
+ *  and there is one of it, read by a solo game and a hosted one alike. */
 const rivals = new Rivals(pick<HTMLElement>('[data-cfg="rivals"]'));
 
-const soloSetup = () => ({ bots: rivals.list, ...mapSize() });
+const soloSetup = () => ({ bots: rivals.list, duration: duration(), ...mapSize() });
+
+// --- settings ----------------------------------------------------------------
+
+/** The name this browser plays under. The preview shows the cleaned string
+ *  beside the fingerprint, which is what other players will see. */
+const nameEl = pick<HTMLInputElement>('[data-cfg="name"]');
+const nameShownEl = pick<HTMLElement>('[data-cfg="name-shown"]');
+nameEl.value = myName();
+
+async function showName(): Promise<void> {
+  const identity = await myIdentity();
+  nameShownEl.textContent = `Shown as ${displayName(myName(), await fingerprint(identity.key))}`;
+}
+void showName();
+
+nameEl.addEventListener("change", () => {
+  nameEl.value = setMyName(nameEl.value);
+  void showName();
+});
 
 let MAP = { ...MAP_SIZES.medium! };
 
@@ -120,6 +168,37 @@ function start(seed: number): void {
   mount(new LocalGame({ seed, ...soloSetup() }));
 }
 
+/** A fresh solo game from whatever the form currently says. */
+function startSolo(): void {
+  start(seedFrom(String(Date.now())));
+  shell.show("game");
+}
+
+/** What the game as configured comes to, and why it cannot be started yet. */
+function summarise(): SetupSummary {
+  const bots = rivals.count;
+  if (bots < 1) {
+    return {
+      note: "A solo game needs somebody to play against — add a bot empire.",
+      problem: true,
+      ready: false,
+    };
+  }
+  const who = `you and ${bots} bot ${bots === 1 ? "empire" : "empires"}`;
+  return { note: `${bots + 1} empires will be in the world: ${who}.`, problem: false, ready: true };
+}
+
+const setup = new Setup(
+  {
+    root: pick<HTMLElement>("[data-setup]"),
+    head: pick<HTMLElement>("[data-setup-head]"),
+    form: pick<HTMLElement>("[data-setup-form]"),
+    foot: pick<HTMLElement>("[data-setup-foot]"),
+  },
+  { start: () => startSolo(), summary: () => summarise() },
+);
+rivals.onChange = () => setup.refresh();
+
 /** Everything downstream of here is the same for a solo game and a mesh game —
  *  the driver interface is the whole of the difference. */
 function mount(driver: Driver): void {
@@ -142,16 +221,11 @@ function mount(driver: Driver): void {
     zoomhint: pick<HTMLElement>("[data-zoomhint]"),
   });
 
-  // Nobody to talk to in a solo game, so the right sidebar goes entirely and
-  // the grid drops its column rather than reserving an empty one.
-  chatSideEl.hidden = !driver.online;
-  appEl.dataset.chat = driver.online ? "on" : "off";
+  appEl.dataset.chat = "off";
 
-  // The world turns on wall-clock time and other people are in it, so there is
-  // nothing in a mesh game to pause. Derived from the driver rather than
-  // switched off at the mesh call site, which left it stuck off for the next
-  // solo game you started.
-  pick<HTMLButtonElement>('[data-action="pause"]').disabled = driver.online;
+  // An online game runs on wall-clock time with other people in it, so there
+  // is nothing to pause. Derived from the driver rather than from its kind.
+  pick<HTMLButtonElement>('[data-action="pause"]').disabled = driver.online || !driver.running;
   pick<HTMLButtonElement>('[data-action="pause"]').textContent = "Pause";
 
   mapImage.paintAll(game.sim.state);
@@ -315,55 +389,7 @@ pick<HTMLButtonElement>('[data-action="pause"]').addEventListener("click", (even
   }
 });
 
-/** Put down a mesh session if this client holds one. Leaving has to be real:
- *  the peers still playing would otherwise wait on a seat that had wandered
- *  off. A solo game has nothing to close. */
-function leaveMesh(): void {
-  if (!lobby) return;
-  lobby.close();
-  lobby = undefined;
-  mesh = undefined;
-  archive = undefined;
-  archiveBtn.hidden = true;
-  chat.close();
-  panel.detach();
-}
-
-/** Hand the player their own copy of the game.
- *
- *  This is the other half of a checkable result. `verifyArchive` rebuilds the
- *  roster from the genesis record and checks every signature in the file
- *  against it, so what comes down here is not a score anybody is asked to
- *  believe — it is the inputs, and the hash they produce, for anyone to run
- *  themselves. A tab holds the log anyway; all that was missing was a way to
- *  get it out. */
-const archiveBtn = pick<HTMLButtonElement>('[data-action="archive"]');
-archiveBtn.addEventListener("click", () => {
-  if (!archive) return;
-  const game = archive.toJSON();
-  const url = URL.createObjectURL(
-    new Blob([JSON.stringify(game)], { type: "application/json" }),
-  );
-  const link = document.createElement("a");
-  link.href = url;
-  link.download = `tessera-${(game.genesis.gameId ?? "game").slice(0, 12)}-${game.steps}.json`;
-  link.click();
-  // Revoked on the next turn rather than immediately: the click is synchronous
-  // but the fetch the browser starts for it is not.
-  setTimeout(() => URL.revokeObjectURL(url), 0);
-});
-
-pick<HTMLButtonElement>('[data-action="solo"]').addEventListener("click", () => {
-  leaveMesh();
-  start(seedFrom(String(Date.now())));
-  shell.show("game");
-});
-
-// "Menu" said nothing about what pressing it did. This is the way out of a
-// game: it puts down the mesh session, if there is one, and goes back to the
-// lobby — so it says so, and it actually leaves rather than pretending to.
 pick<HTMLButtonElement>('[data-action="leave"]').addEventListener("click", () => {
-  leaveMesh();
   shell.left();
 });
 
@@ -395,136 +421,10 @@ function frame(now: number): void {
     zoomLevelEl.textContent = `${camera.zoom}`;
     zoomInEl.disabled = !camera.canZoomIn;
     zoomOutEl.disabled = !camera.canZoomOut;
-    panel.setStatus(game.status());
-    panel.setRoster(mesh ? rosterView(mesh) : null);
     minimapDue = now + 200;
   }
 
   requestAnimationFrame(frame);
-}
-
-// --- multiplayer -------------------------------------------------------------
-
-let lobby: Lobby | undefined;
-
-/** The live mesh driver, when there is one. Chat goes straight to it rather
- *  than through the Driver interface: a solo game has nobody to talk to, so
- *  there is nothing for LocalGame to implement. */
-let mesh: Lockstep | undefined;
-/** The game this tab has been writing down, for as long as it has been in it.
- *
- *  A tab is not a durable archive and is not pretending to be one — that is
- *  what the observer is for. What it is, is the copy the person who actually
- *  played holds: signed, replayable, and theirs to keep or to hand to anybody
- *  who would like to check the result rather than take their word for it. */
-let archive: Archive | undefined;
-
-const chat = new ChatPanel(chatEl, {
-  send: (body, channel) => void mesh?.say(body, channel),
-});
-
-const panel = new LobbyPanel(lobbyEl, {
-  host: () => void begin(),
-  join: (code) => void begin(code),
-  start: (plan) => void lobby?.host({ ...plan, ...mapSize() }),
-  leave: () => {
-    lobby?.close();
-    lobby = undefined;
-    mesh = undefined;
-    chat.close();
-    panel.detach();
-  },
-  invite: (key) => void mesh?.amend(key),
-  endorse: (empire, key) => void mesh?.endorse(empire, key),
-});
-
-/** Chat needs a seat: which empire the team channel is sealed to, and whether
- *  there is anyone on it to seal to. */
-function openChat(seat: { empire: number; member: number }): void {
-  const empires = mesh?.sim.state.empires ?? [];
-  chat.open(seat, (empires[seat.empire - 1]?.members.length ?? 1) - 1);
-  chat.note(`You are ${empireTheme(seat.empire).name}. Say hello.`);
-}
-
-/** Who is here without a seat, and what our empire is being asked to sign.
- *
- *  Recomputed rather than remembered: the roster changes underneath this — a
- *  vote carries, somebody arrives — and a cached answer would be wrong in
- *  exactly the moments it matters. The panel drops it when nothing changed. */
-function rosterView(driver: Lockstep): RosterView {
-  const here = lobby?.players() ?? [];
-  const ours = driver.seat?.empire;
-  return {
-    watching: !driver.seat,
-    waiting: here.filter((who) => !who.you && !driver.roster.has(who.key)),
-    asks: driver
-      .invitations()
-      .filter((record) => record.amendment.empire === ours)
-      .map((record) => ({
-        key: record.amendment.key,
-        empire: record.amendment.empire,
-        label: here.find((who) => who.key === record.amendment.key)?.label ?? "someone",
-        endorsed: record.signatures.length,
-        needed: driver.roster.quorum(record.amendment.empire),
-      })),
-  };
-}
-
-async function begin(code?: string): Promise<void> {
-  if (lobby) return;
-  panel.connecting();
-
-  const identity = await myIdentity();
-  let opened: Lobby;
-  try {
-    opened = await Lobby.open(identity, code);
-  } catch (error) {
-    // Reaching the broker can fail outright — offline, blocked, or the service
-    // is down. Swallowing it left the panel looking like the click did nothing.
-    const reason = (error as Error).message;
-    // A failed chunk fetch is the browser's phrasing for "you are offline", and
-    // it is the first thing that breaks because PeerJS loads on demand.
-    panel.detach(
-      reason.includes("dynamically imported module")
-        ? "could not load the networking code — check your connection."
-        : reason,
-    );
-    return;
-  }
-
-  lobby = opened;
-  panel.attach(lobby);
-  lobby.onStart = (genesis, seat, transport) => {
-    const driver = new Lockstep({
-      genesis,
-      sim: new Sim(genesis),
-      roster: Roster.fromGenesis(genesis),
-      transport,
-      identity,
-      seat,
-    });
-
-    archive = new Archive(genesis, driver);
-    archive.attach(driver);
-    archiveBtn.hidden = false;
-
-    driver.onMessage = (message, text) => chat.add(message, text);
-    // Being voted a seat mid-game is the moment an observer becomes a player.
-    // Nothing about the driver changes — it was already verifying every move —
-    // so all that is left is to open the parts of the UI that need a seat.
-    driver.onSeated = (given, key) => {
-      if (key !== identity.key) return;
-      openChat(given);
-      panel.setStatus(`You have been seated as ${empireTheme(given.empire).name}.`);
-    };
-    driver.start();
-
-    mesh = driver;
-    if (seat) openChat(seat);
-
-    mount(new OnlineGame(driver, lobby!.mesh));
-    shell.show("game");
-  };
 }
 
 start(seedFrom("tessera"));
@@ -534,8 +434,6 @@ Object.assign(window as unknown as Record<string, unknown>, {
   tessera: {
     get game() { return game; },
     get camera() { return camera; },
-    get mesh() { return mesh; },
-    get lobby() { return lobby; },
     MIN_ZOOM,
     MAX_ZOOM,
   },

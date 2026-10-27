@@ -3,8 +3,8 @@ name: Release
 # dispat computes the release from the conventional commits, writes the
 # changelogs, rewrites the manifests, creates one release commit carrying all
 # of it, tags every released package on that commit ({name}@{version}) and
-# pushes the branch and the tags. The deploy job then publishes that exact
-# commit to Pages.
+# pushes the branch and the tags. Deploying the release commit to Cloudflare
+# is added with the Worker.
 #
 # Manual, not on push: a release is a decision, and dispat's own commits would
 # otherwise re-enter the trigger. Note that tags pushed with the workflow's
@@ -107,20 +107,9 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: dispat --log-format json
 
-      # dispat left the release commit at HEAD and pushed it. Deploying this
-      # SHA rather than the branch is what stops a merge landing mid-run from
-      # being published as though it were part of the release.
+      # dispat left the release commit at HEAD and pushed it. A deploy keyed on
+      # this SHA rather than the branch cannot publish a merge that landed
+      # mid-run as though it were part of the release.
       - name: Record the release commit
         id: released
         run: echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
-
-  deploy:
-    name: Deploy to Pages
-    needs: release
-    permissions:
-      contents: read
-      pages: write
-      id-token: write
-    uses: ./.github/workflows/pages.yml
-    with:
-      ref: ${{ needs.release.outputs.sha }}

@@ -8,10 +8,11 @@ import { beforeAll, describe, expect, it } from "vitest";
 import { Sim, makeGenesis, CLAIM } from "../sim.js";
 import { MOVE, MEMBER, CONTROL, TERRAIN, ITEM, WIN } from "../types.js";
 import { idx } from "../geometry.js";
-import { DEFAULT_RULES, STAT, STEPS_PER_SECOND } from "../constants.js";
+import { DEFAULT_RULES, STAT, STEPS_PER_SECOND, VACANCY_RULES } from "../constants.js";
 import { arena, at, claimNow, held, humans, own, ownerAt, popAt } from "./testkit.js";
-import { DIFFICULTY, simbot } from "../specs.js";
+import { DIFFICULTY, TUNING, checkProfile, simbot, tuneBot } from "../specs.js";
 import { turnOf } from "../policy.js";
+import { isProtected } from "../rules.js";
 import type { Difficulty } from "../specs.js";
 import type { BotProfile } from "../types.js";
 
@@ -227,8 +228,14 @@ describe("noob protection", () => {
         rules: {
           coinIntervalMin: 1 << 28,
           coinIntervalMax: 1 << 28,
-          noobTiles: 40,
-          noobSteps: 100 * STEPS_PER_SECOND,
+          graceTiles: 40,
+          graceSteps: 100 * STEPS_PER_SECOND,
+          // The population bars out of the way: this suite is about the tile
+          // threshold and the clock, and a capital that grows past a pop bar
+          // would end protection for a reason none of these tests is asking
+          // about.
+          graceCapitalPop: 1 << 28,
+          gracePopTotal: 1 << 28,
         },
       }),
     );
@@ -267,8 +274,10 @@ describe("noob protection", () => {
 
     beforeAll(() => {
       grown = arena([humans(1), humans(1)], 7, {
-        noobTiles: 40,
-        noobSteps: 100 * STEPS_PER_SECOND,
+        graceTiles: 40,
+        graceSteps: 100 * STEPS_PER_SECOND,
+        graceCapitalPop: 1 << 28,
+        gracePopTotal: 1 << 28,
       });
       victim = grown.state.empires[1]!.capital;
       own(grown, 3, 0, 1); // adjacent to empire 2's parked capital
@@ -282,7 +291,7 @@ describe("noob protection", () => {
 
     it("and the shield lifts at the tile threshold, with the clock untouched", () => {
       grown.state.empires[1]!.tilesOwned = 40;
-      expect(grown.step).toBeLessThan(grown.state.genesis.rules.noobSteps);
+      expect(grown.step).toBeLessThan(grown.state.genesis.rules.graceSteps!);
       expect(grown.validate(CLAIM(grown.step, 1, 0, 0, 4, 0))).toBe(true);
     });
 
@@ -290,6 +299,52 @@ describe("noob protection", () => {
       grown.advance([CLAIM(grown.step, 1, 0, 0, 4, 0)]);
       expect(grown.state.owner[victim]).toBe(1);
     });
+  });
+});
+
+// The claim the two new population bars rest on, measured rather than asserted.
+//
+// `graceCapitalPop` and `gracePopTotal` exist so that "established" means more
+// than "owns ground" — forty tiles of one population each is not an empire that
+// can defend anything, and it is exactly what a claimant holding a granted
+// pocket looks like on the step they arrive. But they are only safe to add if a
+// *genesis-seated* empire still loses protection the way it always did: on the
+// tile bar, first. A default that ended protection early for an ordinary empire
+// would be a silent change to every new game's opening minutes.
+describe("a game with vacancies still ends an ordinary empire's grace on tiles", () => {
+  it("carries none of the grace rules when nobody asked for a vacancy", () => {
+    // The whole of the no-bump argument, asserted where it can be broken. Two of
+    // the grace fields change `isProtected` for any game at all, and a field in
+    // `rules` is read straight past by an older build — so they must not be in
+    // the defaults. A game with no unclaimed empires composes the rules every
+    // build before this one composed.
+    expect(DEFAULT_RULES).not.toHaveProperty("graceCapitalPop");
+    expect(DEFAULT_RULES).not.toHaveProperty("vacancyRadius");
+  });
+
+  it("keeps the tile bar as the one that fires, with room under both new ones", () => {
+    // Under the vacancy rules, an empire that grows the ordinary way must still
+    // lose protection because of its *tiles*. If either population bar fired
+    // first, adding them would have quietly changed every new game's opening
+    // minutes rather than only a claimant's arrival.
+    const sim = arena([humans(1), humans(1)], 11, {
+      ...VACANCY_RULES,
+      graceSteps: 100 * STEPS_PER_SECOND,
+    });
+    const held = sim.state.empires[1]!;
+    held.tilesOwned = VACANCY_RULES.graceTiles - 1;
+    // One population a tile, which is what an empire spreading thinly looks
+    // like — and what a granted pocket looks like exactly.
+    held.popTotal = held.tilesOwned;
+    sim.state.pop[held.capital] = 1;
+    expect(isProtected(sim.state, held)).toBe(true);
+
+    held.tilesOwned++;
+    held.popTotal++;
+    expect(isProtected(sim.state, held)).toBe(false);
+    // And the reason was the tiles: both population bars still have room.
+    expect(held.popTotal).toBeLessThan(VACANCY_RULES.gracePopTotal);
+    expect(sim.state.pop[held.capital]!).toBeLessThan(VACANCY_RULES.graceCapitalPop);
   });
 });
 
@@ -413,6 +468,69 @@ describe("team empires", () => {
     // night, which is the game this is for.
     it("by default, four", () => {
       expect(DEFAULT_RULES.maxSeats).toBe(4);
+    });
+  });
+
+  // The front door's opening hours. It gates being voted onto an existing team
+  // today, and claiming a vacant empire once 0010 lands — one rule, not two.
+  // Bots stay welcome past it: night cover, or a substitute on day six.
+  describe("the door closes on late human seats", () => {
+    const amend = (step: number, kind: number) => ({
+      step,
+      empire: 1,
+      member: 0,
+      seq: 0,
+      type: MOVE.ROSTER_AMEND,
+      x: kind,
+      y: 0,
+    });
+    const table = () => arena([humans(1), humans(1)], 1, { joinWindow: 40, maxSeats: 4 });
+
+    it("admits a human before the window closes", () => {
+      expect(table().validate(amend(39, MEMBER.HUMAN))).toBe(true);
+    });
+
+    it("refuses one at the closing step", () => {
+      // Half-open: the window shuts *at* joinWindow, which is what makes
+      // joinWindow: 1 mean "no late joins" while 0 still means "always open".
+      expect(table().validate(amend(40, MEMBER.HUMAN))).toBe(false);
+    });
+
+    it("refuses one after it", () => {
+      expect(table().validate(amend(80, MEMBER.HUMAN))).toBe(false);
+    });
+
+    it("admits a bot on both sides of the line", () => {
+      expect(table().validate(amend(39, MEMBER.BOT))).toBe(true);
+      expect(table().validate(amend(80, MEMBER.BOT))).toBe(true);
+    });
+
+    it("leaves a game with no window open forever", () => {
+      // Every genesis written before v4 lacks the field, and reading it as 0
+      // is what keeps those games playable rather than retroactively sealed.
+      const open = arena([humans(1), humans(1)], 1, { maxSeats: 4 });
+      expect(open.state.genesis.rules.joinWindow).toBeUndefined();
+      expect(open.validate(amend(9999, MEMBER.HUMAN))).toBe(true);
+    });
+
+    // The plan's load-bearing test, and the one 0001 wanted and could not
+    // write: one process, one build, two versions, and an observable
+    // difference in behaviour. A v4 build playing a v3 game must reach the
+    // verdict a v3 build would — which is what "running it as v3" means in
+    // code, and the only place it is visible.
+    it("does not exist in a v3 game, even in a record that claims it", () => {
+      const rules = { joinWindow: 40, maxSeats: 4 };
+      const v3 = arena([humans(1), humans(1)], 1, rules, { protocol: 3 });
+      const v4 = arena([humans(1), humans(1)], 1, rules, { protocol: 4 });
+
+      expect(v3.state.genesis.rules.joinWindow).toBe(40);
+      expect(v3.validate(amend(80, MEMBER.HUMAN))).toBe(true);
+      expect(v4.validate(amend(80, MEMBER.HUMAN))).toBe(false);
+    });
+
+    it("still caps seats past the window, for bots too", () => {
+      const full = arena([humans(4), humans(1)], 1, { joinWindow: 40, maxSeats: 4 });
+      expect(full.validate(amend(10, MEMBER.BOT))).toBe(false);
     });
   });
 });
@@ -586,6 +704,67 @@ describe("bot difficulty is a scale", () => {
   });
 });
 
+// The preset table read the other way round. `BotTuning` is what a person
+// turns and `BotProfile` is what the simulation reads; the three presets are
+// defined as the first passed through `tuneBot`, so a hand-tuned bot is the
+// same kind of thing as a preset rather than a second kind beside it. These
+// are the properties that arrangement has to have.
+describe("a bot tuned by hand", () => {
+  it("reproduces the presets it is built from", () => {
+    for (const level of ["easy", "steady", "hard"] as Difficulty[]) {
+      expect(tuneBot(TUNING[level])).toEqual(DIFFICULTY[level]);
+    }
+  });
+
+  // "Never sleeps" and "sleeps for no time" are the same bot and must be the
+  // same record: a genesis is content-addressed, so two spellings of one game
+  // would be two game ids.
+  it("writes a phase of no seconds as no phase at all", () => {
+    expect(TUNING.hard.phases.sleep).toBe(0);
+    expect(DIFFICULTY.hard.phases!.sleep).toBeUndefined();
+  });
+
+  // Tempo is deliberately not among the numbers a tuning carries. A bot that
+  // could be told to click faster would dodge its own ceiling, and the ceiling
+  // is the whole of what difficulty means here.
+  it("takes its click rate from the phase, never from the tuning", () => {
+    const strong = tuneBot({ ...TUNING.easy, popMax: 999 });
+    expect(strong.phases!.attack!.rate).toEqual(DIFFICULTY.hard.phases!.attack!.rate);
+    expect(strong.phases!.expand!.rate).toEqual(DIFFICULTY.easy.phases!.expand!.rate);
+  });
+
+  it("clamps whatever it is handed", () => {
+    const wild = tuneBot({
+      popMax: -5,
+      coins: 400,
+      phases: { expand: 10, attack: 0, defend: 0, fortify: 0, heal: 0, sleep: 0 },
+    });
+    expect(wild.popMax).toBe(1);
+    expect(wild.coins).toBe(100);
+    expect(Object.keys(wild.phases!)).toEqual(["expand"]);
+  });
+
+  // The path the setup screen takes: a tuning becomes a whole SimBot empire
+  // exactly as a preset name does.
+  it("seats as a SimBot empire the way a preset does", () => {
+    expect(simbot(tuneBot(TUNING.steady))).toEqual(simbot("steady"));
+  });
+
+  // A bot dialled all the way down is still a bot. It holds a capital, so the
+  // game is not over on the first step, and it never acts.
+  it("may be tuned into doing nothing at all", () => {
+    const idle = tuneBot({
+      popMax: 999,
+      coins: 0,
+      phases: { expand: 0, attack: 0, defend: 0, fortify: 0, heal: 0, sleep: 0 },
+    });
+    const sim = arena([simbot(idle), humans(1)], 5);
+    own(sim, 6, 6, 1);
+    for (let i = 0; i < STEPS_PER_SECOND * 60; i++) sim.advance([]);
+    expect(sim.state.empires[0]!.members[0]!.stats[STAT.MOVES]!).toBe(0);
+  });
+});
+
 // The cycle is derived from the step rather than remembered, which is what
 // keeps bots out of the snapshot entirely. These are the properties that has to
 // have: it must land somewhere, it must move on, and it must come back.
@@ -626,5 +805,56 @@ describe("a bot's phase cycle", () => {
   it("a bot with no phases sleeps", () => {
     const sim = arena([simbot("steady"), humans(1)]);
     expect(turnOf(sim.state, sim.state.empires[0]!, 0, { phases: {} }).mode).toBe("sleep");
+  });
+});
+
+describe("a profile somebody tuned by hand", () => {
+  // `checkProfile` refuses; it never clamps. The two clamps that actually bind
+  // are elsewhere and stay there — this is the early refusal, while whoever is
+  // composing can still fix it and before the record is broadcast.
+  it("accepts every preset", () => {
+    for (const profile of Object.values(DIFFICULTY)) expect(checkProfile(profile)).toBe("");
+  });
+
+  it.each([
+    ["an empty phase set", { phases: {} }],
+    ["every phase at zero", { phases: { expand: { steps: 0, rate: [12, 24] as [number, number] } } }],
+    ["no phases at all", {}],
+    ["a population ceiling above the rule", { ...DIFFICULTY.easy, popMax: DEFAULT_RULES.popMax + 1 }],
+    ["a population ceiling of zero", { ...DIFFICULTY.easy, popMax: 0 }],
+    ["a fractional ceiling", { ...DIFFICULTY.easy, popMax: 12.5 }],
+    ["a coin appetite over 100", { ...DIFFICULTY.easy, coins: 101 }],
+    ["a negative duration", { phases: { expand: { steps: -1, rate: [12, 24] as [number, number] } } }],
+    ["a backwards click rate", { phases: { expand: { steps: 60, rate: [24, 12] as [number, number] } } }],
+    ["a click rate that is not a pair", { phases: { expand: { steps: 60, rate: [12] as unknown as [number, number] } } }],
+  ])("refuses %s", (_what, profile) => {
+    expect(checkProfile(profile)).not.toBe("");
+  });
+
+  // The two clamps, exercised rather than trusted. An absurd profile is an
+  // opponent and not an exploit: it plays a deterministic game, never banks
+  // above the rule and never out-reflexes anybody.
+  it("an absurd profile plays a game, and the clamps are what bind", () => {
+    const absurd = {
+      popMax: 99_999,
+      coins: 100,
+      phases: { expand: { steps: 600, rate: [0, 0] as [number, number] } },
+    };
+    // Refused before it is proposed — but a hostile client does not call this,
+    // which is exactly why the clamps below are the things that matter.
+    expect(checkProfile(absurd)).not.toBe("");
+
+    const sim = arena([simbot(absurd), humans(1)]);
+    // `state.ts` holds the seat back to the rule rather than lifting it.
+    expect(sim.state.empires[0]!.members[0]!.popMax).toBeLessThanOrEqual(DEFAULT_RULES.popMax);
+
+    const before = sim.hash();
+    for (let i = 0; i < 400; i++) sim.advance();
+    const once = sim.hash();
+    expect(once).not.toBe(before);
+
+    const again = arena([simbot(absurd), humans(1)]);
+    for (let i = 0; i < 400; i++) again.advance();
+    expect(again.hash()).toBe(once);
   });
 });

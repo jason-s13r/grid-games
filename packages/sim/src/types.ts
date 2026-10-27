@@ -4,6 +4,8 @@
 // stays erasable-syntax only — it runs under Node's native type stripping and
 // under any bundler without a transform step.
 
+import type { BannerId } from "./banners.js";
+
 export type EmpireId = number; // 0 = neutral, 1..N = empire
 export type TileIndex = number;
 export type MemberIndex = number;
@@ -100,14 +102,72 @@ export interface Rules {
   coinNearBias: number;
   coinNearRadius: number;
 
+  /** Superseded by `graceTiles` / `graceSteps` and kept because every record
+   *  written before vacancies carries them. Read through the grace fields, which
+   *  fall back to these, so a stored game keeps the protection it was composed
+   *  with. */
   noobTiles: number;
   noobSteps: number;
+
+  /** How long a new empire's capital cannot be taken, counted **from that
+   *  empire's own arrival** rather than from the start of the game.
+   *
+   *  The distinction is the whole of what makes a vacancy claimable. `noobSteps`
+   *  is three minutes from step zero, so a player claiming an empire on day
+   *  three would get not a shorter grace but none at all. Grace belongs to the
+   *  empire: one seated at genesis has arrived at 0 forever, however many
+   *  substitutes it amends in on day six, and a team does not get its capital
+   *  immunity back by recruiting.
+   *
+   *  Optional, and absent falls back to the two above. */
+  graceSteps?: number;
+  graceTiles?: number;
+  /** The two strength bars `graceTiles` alone cannot express.
+   *
+   *  Forty tiles of one population each is not an established empire, and it is
+   *  exactly what a claimant holding a granted pocket looks like on the step
+   *  they arrive. Protection ends when an empire is *established*, which is more
+   *  than one measure — but see `isProtected` for the shape, because four
+   *  conditions OR'd together can only ever shorten protection and that is the
+   *  trap this is written to avoid.
+   *
+   *  Defaulted high enough that a genesis-seated empire crosses the tile bar
+   *  first, exactly as it does today. */
+  graceCapitalPop?: number;
+  gracePopTotal?: number;
+
+  /** No empire may take, march into, or cascade into a tile within this von
+   *  Neumann ball of an **unclaimed** capital.
+   *
+   *  A von Neumann ball rather than a Euclidean disc because that is what
+   *  `COIN_RADIUS` already means here, and two radius metrics is one too many.
+   *
+   *  The number is paid by the people already playing: `ballSize(r) = 2r²+2r+1`,
+   *  so four vacancies at radius 14 would close 27% of the default map to
+   *  everyone who turned up on time, for as long as the vacancies stand. Six
+   *  closes 5.5% each and still costs a camper a ring of 24 tiles to wall.
+   *
+   *  Absent or 0 is no shield, which is every record written before vacancies. */
+  vacancyRadius?: number;
+
+  /** Population put on each neutral tile inside the ball when the vacancy is
+   *  claimed, so an arrival is a pocket with a border to push from rather than
+   *  one tile inside somebody's wall. 0 grants nothing. */
+  vacancyGrant?: number;
 
   heartbeatInterval: number;
   livenessWindow: number;
   abandonWindow: number;
   elimination: Elimination;
   endStep: number;
+
+  /** Steps after which no human seat may be added; absent or 0 = always open.
+   *
+   *  Optional because every genesis written before v4 lacks it, and reading it
+   *  as 0 is what keeps those games playable rather than retroactively sealed.
+   *  Optional also means `DEFAULT_RULES` does not carry it, so a game composed
+   *  with no duration is byte-identical to what a v3 build composed. */
+  joinWindow?: number;
 
   /** Default steps between a bot's claims, and the floor a headless bot is
    *  held to. A profile may ask for longer; nothing may ask for shorter, or an
@@ -193,8 +253,14 @@ export interface BotProfile {
   /** Population this seat banks to, never above `rules.popMax`. The most
    *  expensive tile it can ever leave behind, and the bot's whole strength. */
   popMax?: number;
-  /** The cycle. A bot moves through the phases it has durations for, in the
-   *  order they are declared here, and starts over. */
+  /** The cycle. A bot moves through the phases it has durations for and starts
+   *  over — in `MODES` order, which is fixed (`policy.ts`), and never in the
+   *  order they happen to be written here. This is a **set of durations, not a
+   *  sequence**, and saying otherwise was a promise the simulation has never
+   *  kept: `turnOf` builds its cycle with `MODES.map(...)`, and a genesis is
+   *  canonicalised with its keys sorted anyway, so a declared order could not
+   *  survive the record even if the sim honoured it. Nobody noticed because the
+   *  three presets happen to declare their phases in exactly that order. */
   phases?: Partial<Record<BotMode, BotPhase>>;
   /** Percent chance of taking an adjacent coin instead of following the phase.
    *  Coins are the one way in the game to gain ground faster than population
@@ -219,6 +285,18 @@ export type BotMode = "expand" | "attack" | "defend" | "fortify" | "heal" | "sle
 
 export interface EmpireSpec {
   control?: Control;
+  /** Which house this empire flies.
+   *
+   *  Presentation only: the simulation never reads it, exactly as it never
+   *  reads `MemberSpec.key`. Absent means fall back to the empire's index,
+   *  which is what every record written before this field existed does — and
+   *  the fallback **indexes rather than wrapping**, so appending a banner
+   *  cannot repaint an archived game.
+   *
+   *  Must be omitted when unset and never written as `null`: `canonicalJson`
+   *  drops `undefined` and keeps `null`, so the two spellings of "no banner"
+   *  would hash to different game ids while meaning the same thing. */
+  banner?: BannerId;
   members: MemberSpec[];
 }
 
@@ -232,6 +310,20 @@ export interface Genesis {
   map: MapConfig;
   rules: Rules;
   empires: EmpireSpec[];
+  /** Who agreed to play this world, before it was a game.
+   *
+   *  Structural rather than imported, exactly as `MemberSpec.key` is: the
+   *  simulation never inspects a signature, and `sim` cannot depend on
+   *  `protocol` without inverting the one dependency in the tree. The net layer
+   *  checks these against the proposal the record recomposes to — see
+   *  `protocol/src/proposal.ts`.
+   *
+   *  Absent from every record composed before consent existed, and that is a
+   *  state rather than a failure: a record claims nothing here and is checked
+   *  for nothing. `gameIdOf` strips only `gameId`, so where the field *is*
+   *  present it is hashed into the game id like everything else — which is
+   *  what stops a sealer adding, removing or reordering one after the fact. */
+  consent?: readonly { key: string; proposalId: string; sig: string }[];
 }
 
 export interface Move {

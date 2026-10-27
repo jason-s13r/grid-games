@@ -1,33 +1,37 @@
 # Release configuration. Conventional commits drive the versions; dispat reads
-# them, computes the graph from the package manifests, and publishes in
+# them, computes the graph from the package manifests, and releases in
 # dependency order.
+#
+# Commit scopes name packages: feat(sim), fix(web), feat(sim,protocol,web)!.
+# A scope that is not a package is an error, so docs and chores go unscoped
+# (docs:, chore:, ci:) and release nothing.
 #
 # THE COMPATIBILITY CONTRACT IS THE STATE HASH, NOT THE PUBLIC API.
 #
-# Peers only interoperate if their simulations produce bit-identical state for
-# the same (genesis, move log). So for @tessera/sim the semver rule is
+# Clients only interoperate if their simulations produce bit-identical state
+# for the same (genesis, move log). So for @tessera/sim the semver rule is
 # stricter than usual:
 #
-#   * ANY change that moves the hash is BREAKING -> feat!: / fix!: / major,
+#   * ANY change that moves the hash is BREAKING -> feat(sim)!: / fix(sim)!:,
 #     even when no exported signature changed. Rule tweaks, spawn-weight
 #     changes, RNG draw-order changes and snapshot layout changes all qualify.
 #   * Only genuinely hash-neutral work is a minor or patch: docs, types,
 #     renderer-facing helpers, performance work that provably preserves the
 #     draw order.
 #
-# packages/sim exports PROTOCOL_VERSION; a peer refuses to join a game whose
-# genesis names a different major. That check is what turns a silent overnight
-# desync into an refusal at the lobby.
+# packages/sim exports PROTOCOL_VERSION. A client refuses a game whose genesis
+# names a protocol it does not support, which turns a silent desync into a
+# refusal at the door.
 
 scripts:
   build-lib: pnpm build
   # Regenerates pnpm-lock.yaml after the version stage, so the release commit
   # never carries a lockfile that disagrees with the manifests beside it.
   sync-lock: pnpm install --lockfile-only
-  # Nothing goes to a registry. The library ships as a tarball attached to its
-  # GitHub release, which a bot peer or the observer can install straight from
-  # the download URL. Packed into a temp dir, never the package folder, because
-  # the release commit stages that folder and would otherwise carry the .tgz.
+  # Nothing goes to a registry. A library ships as a tarball attached to its
+  # GitHub release, so a custom client can install it from the download URL.
+  # Packed into a temp dir, never the package folder, because the release
+  # commit stages that folder and would otherwise carry the .tgz.
   publish-lib: |
     set -eu
     out=$(mktemp -d)
@@ -35,26 +39,17 @@ scripts:
     echo "DISPAT_EXPORT_GITHUB=$out/$(ls "$out")" >> "$DISPAT_OUTPUT"
     echo "packed $DISPAT_PACKAGE $DISPAT_VERSION for the GitHub release"
   build-app: pnpm build
-  # An app has no registry to go to, but its build is still worth keeping: the
-  # zip is the exact bundle that was deployed to Pages for this version, so a
-  # release is reproducible from its own artifact rather than only from source.
-  # Built with --public-url ./, so it serves from any path — unzip it anywhere.
-  # The headless apps go through the same flow and produce the same thing for a
-  # different audience: a zip of compiled JavaScript that runs under Node, which
-  # is how somebody stands an observer up without cloning the repository.
-  # Zipped into a temp dir, never the package folder, because the release
-  # commit stages that folder and would otherwise carry the archive.
+  # An app's build is kept as a zip on its GitHub release: the exact bundle
+  # that was released, reproducible from its own artifact.
   export-app: |
     set -eu
     out=$(mktemp -d)
-    site="$out/tessera-$DISPAT_PACKAGE-$DISPAT_VERSION-site.zip"
+    site="$out/tessera-$DISPAT_PACKAGE-$DISPAT_VERSION.zip"
     (cd dist && zip -qr "$site" .)
     echo "DISPAT_EXPORT_GITHUB=$site" >> "$DISPAT_OUTPUT"
     echo "zipped $DISPAT_PACKAGE $DISPAT_VERSION for the GitHub release"
 spaces:
-  # Shared libraries: the sim, the wire protocol, the mesh, and the headless
-  # runtime. These are what the bot and the observer consume, so each release
-  # carries a tarball.
+  # Shared libraries: the sim and the protocol. Each release carries a tarball.
   packages:
     path: packages
     autoVersion:
@@ -69,17 +64,12 @@ spaces:
     flow:
       build: build-lib
       publish: publish-lib
-  # Deployables: the web frontend, the headless bot peer and the archive and
-  # observer peer. Versioned and changelogged, never published to npm — each
-  # release instead carries its build as a zip.
+  # Deployables: the web client. Versioned and changelogged, never published to
+  # npm — each release carries its build as a zip.
   apps:
     path: apps
     autoVersion:
       manifests: root
-      # Only touch ranges already declared with the workspace protocol, and
-      # write them back unchanged. Rewriting workspace:* to ^0.2.0 breaks the
-      # local link and leaves pnpm-lock.yaml stale, which fails the deploy's
-      # --frozen-lockfile. Package versions are still written.
       match: ["workspace:*"]
       range: "workspace:*"
       syncLock: [sync-lock]
@@ -87,49 +77,16 @@ spaces:
       build: build-app
       publish: export-app
 dependencies:
-  net:
-    - sim
-    - protocol
   protocol:
     - sim
   web:
     - sim
-    - net
     - protocol
-  headless:
-    - sim
-    - net
-    - protocol
-  observer:
-    - sim
-    - net
-    - protocol
-    - headless
-  bot:
-    - sim
-    - net
-    - protocol
-    - headless
-# Never released, so they start from nothing and dispat decides the first
-# number from the commits themselves rather than from a guess made here.
-initials:
-  bot: 0.0.0
-  headless: 0.0.0
-  net: 0.1.0
-  observer: 0.0.0
-  prototype: 0.1.0
-  protocol: 0.1.0
-  sim: 0.1.0
-  web: 0.1.0
 # --- release records -----------------------------------------------------
 #
 # The release run writes what it did: a changelog per package, one release
 # commit carrying all of them, an annotated tag per released package
-# ({name}@{version}, so web@0.2.0) and a GitHub release. All of it is opt-in;
-# commit is disabled by default.
-#
-# The Pages deploy keys off the commit this produces rather than off main, so
-# the published site is always a version that exists.
+# ({name}@{version}, so web@0.2.0) and a GitHub release.
 changelog:
   enabled: true
 commit:

@@ -192,10 +192,20 @@ export class Renderer {
       if (isProtected(state, empire)) cls += " is-protected";
     }
 
+    // An unclaimed empire's pocket. Drawn because a region where every click
+    // silently fails is not a rule players can play around; it is a bug they
+    // will report. The shield is the one rule in the game that refuses a move
+    // for a reason nothing on the board would otherwise show.
+    if (state.shielded[i]! > 0) cls += " is-shielded";
+
     if (el.className !== cls) el.className = cls;
 
-    const attr = owner > 0 ? String(owner) : "";
-    if (el.dataset.empire !== attr) el.dataset.empire = attr;
+    // The banner slug, not the empire id. The stylesheet carries one rule per
+    // banner and none per empire, so this is the whole of the per-game binding
+    // — and an empire past the end of the table no longer matches nothing and
+    // paint itself invisible.
+    const attr = owner > 0 ? empireTheme(owner).id : "";
+    if (el.dataset.banner !== attr) el.dataset.banner = attr;
 
     const label = this.camera.zoom >= LABEL_MIN_ZOOM && pop > 0 ? String(pop) : "";
     if (el.textContent !== label) el.textContent = label;

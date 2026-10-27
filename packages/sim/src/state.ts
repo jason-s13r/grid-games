@@ -15,6 +15,7 @@ import { EventQueue } from "./events.js";
 import type { EventType } from "./events.js";
 import { Rng } from "./rng.js";
 import { fnv1a } from "./hash.js";
+import { idx, inBounds, vonNeumannBall, xOf, yOf } from "./geometry.js";
 
 const MAGIC = 0x54455353; // "TESS"
 const LAYOUT_VERSION = 3;
@@ -35,6 +36,68 @@ export interface State {
   winReason: WinReason;
   empires: Empire[];
   genesis: Genesis;
+  /** How many **unclaimed** capitals' shields cover each tile.
+   *
+   *  Derived and never serialised: rebuilt from `empires[].capital` and
+   *  `members.length`, both of which the snapshot already carries, so the
+   *  snapshot encoding and `LAYOUT_VERSION` are untouched by vacancies. Had this
+   *  been stored, the version would have had to move.
+   *
+   *  A **count** rather than a flag, which is what makes overlapping shields
+   *  correct without any handling of their own: a tile inside two shields is at
+   *  2, one claim brings it to 1, and it stays protected until both are claimed.
+   *
+   *  It exists at all because `isShielded` runs once per tile a cascade touches,
+   *  up to `cascadeTileCap`, so the question has to be O(1) and cannot scan the
+   *  empire list. */
+  shielded: Uint8Array;
+}
+
+/** An empire the map generator placed and nobody has claimed.
+ *
+ *  Territory, not a player. Derived, never stored — `members.length === 0` and
+ *  nothing else — so there is no new field in `Empire`. Members are only ever
+ *  appended, a dropped seat being a net-layer concept the simulation never
+ *  hears about, so the derivation cannot go backwards. */
+export function isVacant(empire: Empire): boolean {
+  return empire.members.length === 0;
+}
+
+/** Rebuild the shield layer from the empires as they stand.
+ *
+ *  Called once when a game is generated, once at the end of every `restore`, and
+ *  never in the step loop: a claim walks its own ball and decrements, which is
+ *  the only way the layer changes during play.
+ *
+ *  Nothing here reads a rule that a stored record might lack — an absent
+ *  `vacancyRadius` is zero, and zero is a layer of zeroes, which is every game
+ *  composed before vacancies existed. */
+export function rebuildShields(state: State): void {
+  const n = state.width * state.height;
+  if (state.shielded.length !== n) state.shielded = new Uint8Array(n);
+  else state.shielded.fill(0);
+
+  const radius = state.genesis.rules.vacancyRadius ?? 0;
+  if (radius <= 0) return;
+  for (const empire of state.empires) {
+    if (isVacant(empire)) markShield(state, empire, 1);
+  }
+}
+
+/** Add or subtract one empire's ball. `delta` is +1 when a vacancy appears (only
+ *  ever at setup) and -1 the moment it is claimed. */
+export function markShield(state: State, empire: Empire, delta: 1 | -1): void {
+  const radius = state.genesis.rules.vacancyRadius ?? 0;
+  if (radius <= 0) return;
+  const cx = xOf(empire.capital, state.width);
+  const cy = yOf(empire.capital, state.width);
+  for (const [dx, dy] of vonNeumannBall(radius)) {
+    const x = cx + dx;
+    const y = cy + dy;
+    if (!inBounds(x, y, state.width, state.height)) continue;
+    const i = idx(x, y, state.width);
+    state.shielded[i] = Math.max(0, state.shielded[i]! + delta);
+  }
 }
 
 export function createState(genesis: Genesis): State {
@@ -56,6 +119,9 @@ export function createState(genesis: Genesis): State {
     winner: 0,
     winReason: WIN.NONE,
     genesis,
+    // Filled by `rebuildShields` once the map generator has placed the capitals;
+    // there is nothing to shield before that.
+    shielded: new Uint8Array(n),
     empires: genesis.empires.map((spec, i) => ({
       id: i + 1,
       control: spec.control ?? CONTROL.HUMAN,
@@ -259,6 +325,11 @@ export function restore(state: State, buffer: ArrayBuffer): State {
   }
   state.events.load(events);
   state.events.seq = eventSeq;
+
+  // Last, because it reads the empires this restore has just rebuilt. A snapshot
+  // carries no shield layer and does not need to: capitals and member counts are
+  // in it, and those are the whole of the derivation.
+  rebuildShields(state);
 
   return state;
 }

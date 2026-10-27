@@ -3,76 +3,23 @@ export { Identity, verify, sha256, randomBytes, fingerprint, SIGNATURE_BYTES } f
 export type { MemberKey } from "./identity.js";
 export { canonicalJson, gameIdOf, sealGenesis, inspectGenesis } from "./genesis.js";
 export type { GenesisProblem } from "./genesis.js";
+export { Names, cleanName, displayName, NAME_BYTES } from "./names.js";
+export type { Named } from "./names.js";
 export { Roster } from "./roster.js";
 export type { Seat } from "./roster.js";
 export {
   CHANNEL,
   NONCE_BYTES,
-  EquivocationWatch,
-  amendmentMove,
-  encodeAmendment,
-  encodeDrop,
-  encodeCheckpoint,
   encodeHello,
   encodeMessage,
   encodeMove,
-  encodeReady,
-  endorseAmendment,
-  endorseDrop,
-  mergeAmendment,
-  mergeDrop,
   messageInRange,
   moveInRange,
   proveHello,
-  sameMove,
-  signCheckpoint,
   signMessage,
   signMove,
-  signReady,
-  tallyAmendment,
-  verifyAmendment,
-  verifyDrop,
-  verifyCheckpoint,
-  verifyEquivocation,
   verifyHello,
   verifyMessage,
   verifyMove,
-  verifyReady,
 } from "./records.js";
-export type {
-  Amendment,
-  Channel,
-  Checkpoint,
-  Drop,
-  EquivocationProof,
-  Message,
-  Ready,
-  SignedAmendment,
-  SignedCheckpoint,
-  SignedDrop,
-  SignedMessage,
-  SignedReady,
-  SignedMove,
-  Tally,
-} from "./records.js";
-export { FRAME, encodeFrame, decodeFrame } from "./wire.js";
-export type {
-  AmendmentFrame,
-  ByeFrame,
-  CheckpointFrame,
-  DropFrame,
-  EquivocationFrame,
-  Frame,
-  FrameType,
-  GenesisFrame,
-  HelloFrame,
-  MessageFrame,
-  MoveFrame,
-  ProofFrame,
-  ReadyFrame,
-  SnapshotFrame,
-  SnapshotRequestFrame,
-  WelcomeFrame,
-} from "./wire.js";
-export { sealTeamBody, openTeamBody } from "./secrets.js";
-export type { Teammate } from "./secrets.js";
+export type { Channel, Message, SignedMessage, SignedMove } from "./records.js";

@@ -8,6 +8,7 @@ import { Sim, makeGenesis, CLAIM } from "../sim.js";
 import type { EmpireSpec, Rules } from "../types.js";
 import { TERRAIN, ITEM } from "../types.js";
 import { idx } from "../geometry.js";
+import { rebuildShields } from "../state.js";
 
 export { humans, simbot } from "../specs.js";
 
@@ -22,21 +23,40 @@ export { humans, simbot } from "../specs.js";
  *  every tile a test placed. Suppressed here the same way spawning is — these
  *  are world processes, and the tests that care about them build their own
  *  board. See upkeep.test.ts. */
-export function arena(empires: EmpireSpec[], seed = 1, rules: Partial<Rules> = {}): Sim {
+export function arena(
+  empires: EmpireSpec[],
+  seed = 1,
+  rules: Partial<Rules> = {},
+  /** Stamp a version other than the one this build composes. The only way to
+   *  put a v3 peer and a v4 peer in one process, which is what a gated branch
+   *  needs to be tested at all — the Sim constructor never checks gameId, so a
+   *  hand-stamped genesis is enough and no re-sealing is involved. */
+  options: { protocol?: number } = {},
+): Sim {
+  const genesis = makeGenesis({
+    seed,
+    empires,
+    map: { width: 24, height: 24, mountains: 0, lakes: 0, rivers: 0, walls: 0 },
+    rules: {
+      coinIntervalMin: 1 << 28,
+      coinIntervalMax: 1 << 28,
+      upkeepInterval: 1 << 28,
+      // No capital protection: an arena is a board for testing one transition,
+      // and a shield nobody asked for is a refusal in the middle of a test about
+      // something else. The grace fields are absent from `DEFAULT_RULES` — they
+      // travel only with vacancies — so these two are what protection is read
+      // from here, and a test about grace names the grace fields itself.
+      noobSteps: 0,
+      noobTiles: 0,
+      // `vacancyRadius` is absent too, and that matters for this fixture in
+      // particular: `arena` parks capitals two tiles apart, so any nonzero
+      // radius would close the whole board and every rules test touching an
+      // unclaimed empire would fail for a reason unrelated to what it tests.
+      ...rules,
+    },
+  });
   const sim = new Sim(
-    makeGenesis({
-      seed,
-      empires,
-      map: { width: 24, height: 24, mountains: 0, lakes: 0, rivers: 0, walls: 0 },
-      rules: {
-        coinIntervalMin: 1 << 28,
-        coinIntervalMax: 1 << 28,
-        upkeepInterval: 1 << 28,
-        noobSteps: 0,
-        noobTiles: 0,
-        ...rules,
-      },
-    }),
+    options.protocol === undefined ? genesis : { ...genesis, protocol: options.protocol },
   );
   const s = sim.state;
   s.terrain.fill(TERRAIN.PLAIN);
@@ -55,6 +75,11 @@ export function arena(empires: EmpireSpec[], seed = 1, rules: Partial<Rules> = {
     e.tilesOwned = 1;
     e.popTotal = 1;
   }
+  // The capitals just moved, and the shield layer is derived from where they
+  // are. A no-op at the arena's default radius of zero, and the difference
+  // between a working fixture and a silently wrong one for any test that sets
+  // `vacancyRadius` itself.
+  rebuildShields(s);
   return sim;
 }
 

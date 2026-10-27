@@ -32,10 +32,10 @@
           <div class="clock" data-clock></div>
           <span class="version" data-version></span>
           <button data-action="pause" class="btn">Pause</button>
-          <button data-action="archive" class="btn" hidden title="Download this game's signed move log">Save log</button>
           <button data-action="leave" class="btn">Leave</button>
         </div>
       </header>
+
 
       <!-- Collapsible so a phone can shut what it is not reading. Native
            <details> rather than a bespoke toggle: it is keyboard-operable and
@@ -58,6 +58,8 @@
           <summary>Your seats</summary>
           <div class="acc-body" data-roster></div>
         </details>
+
+
       </aside>
 
       <main class="stage">
@@ -92,14 +94,7 @@
            asks for it. See view/Tabs.ts. -->
       <nav class="tabs" data-tabs aria-label="Panels"></nav>
 
-      <aside class="side side-right" data-chat-section hidden>
-        <details class="acc acc-chat" data-acc="chat">
-          <summary>Chat</summary>
-          <div class="acc-body" data-chat></div>
-        </details>
-      </aside>
-
-      <!-- The setup screen. Lobby, teams and solo configuration live here and
+      <!-- The setup screen. Lobby, teams and game configuration live here and
            nowhere else, so nothing about starting a game competes with playing
            one. -->
       <section class="screen" data-menu>
@@ -107,18 +102,17 @@
           <header class="screen-head">
             <h1 class="screen-brand">Tessera</h1>
             <p class="screen-tag">
-              No server holds the game. Your browsers agree with each other.
+              Claim the map, one tile at a time.
             </p>
           </header>
 
-          <div class="screen-cols">
-            <section class="card">
-              <h2>Solo</h2>
-              <p class="card-tag">One empire against bots. Starts immediately.</p>
-              <div class="field field-stacked">
-                <label>Rival empires</label>
-                <div class="rivals" data-cfg="rivals"></div>
-              </div>
+          <!-- The form that configures a game and the button that starts it.
+               See view/Setup.ts. -->
+          <section class="card setup" data-setup>
+            <div data-setup-head></div>
+
+            <!-- Map, length and opponents. -->
+            <div class="setup-form" data-setup-form hidden>
               <div class="field">
                 <label for="cfg-size">Map</label>
                 <select id="cfg-size" data-cfg="size">
@@ -127,18 +121,62 @@
                   <option value="large">large &mdash; 256&times;176</option>
                 </select>
               </div>
-              <button class="btn primary" data-action="solo">Start solo game</button>
-            </section>
+              <!-- Options are filled from COMMON_DURATIONS in main.ts rather
+                   than written here, so adding 45 minutes is one line and not
+                   two. -->
+              <div class="field">
+                <label for="cfg-length">Length</label>
+                <select id="cfg-length" data-cfg="length"></select>
+              </div>
+              <p class="hint">
+                At the end, whoever holds the most ground wins. A longer game
+                also opens the door for late joiners longer and waits longer
+                before it calls a silent empire abandoned &mdash; one number sets
+                all three, because a three-hour patience in a ten-day game is a
+                losing condition for going to bed.
+              </p>
+              <div class="field field-stacked">
+                <label>Bot empires</label>
+                <div class="rivals" data-cfg="rivals"></div>
+              </div>
+            </div>
 
-            <section class="card">
-              <h2>Multiplayer</h2>
-              <div data-lobby></div>
-            </section>
-          </div>
+            <div class="setup-foot" data-setup-foot></div>
+          </section>
+
+          <details class="settings" data-settings>
+            <summary>Settings</summary>
+            <div class="settings-body">
+              <!-- A label, never a credential. The key is the seat; this is the
+                   word in front of the eight hex characters of its digest, and
+                   the hex is what people are actually told apart by. Two players
+                   may choose the same name and nothing stops them: uniqueness
+                   needs an authority to arbitrate, and there is none. See
+                   protocol/names.ts. -->
+              <div class="field field-stacked">
+                <label for="cfg-name">Your name</label>
+                <input
+                  id="cfg-name"
+                  class="lobby-code"
+                  data-cfg="name"
+                  maxlength="24"
+                  placeholder="kestrel"
+                  spellcheck="false"
+                  autocomplete="off"
+                />
+                <p class="hint" data-cfg="name-shown"></p>
+              </div>
+              <p class="hint">
+                Shown as <code>name#fingerprint</code> wherever somebody is
+                deciding something about you, because anybody may pick any name
+                and the fingerprint is what tells two of them apart. Kept in this
+                browser, and said again in every game you join.
+              </p>
+            </div>
+          </details>
 
           <footer class="screen-foot">
             <button class="btn" data-action="resume" hidden>Back to the game</button>
-            <a class="btn" href="./prototype/">Original prototype</a>
             <span class="version" data-version-menu></span>
           </footer>
 

@@ -1,11 +1,54 @@
 // Tunables. Enums live in types.ts; this file is the balance sheet.
 
 import { ITEM, ELIMINATION } from "./types.js";
-import type { Rules, MapConfig } from "./types.js";
+import type { Genesis, Rules, MapConfig } from "./types.js";
 
-/** Bumped whenever a change moves the state hash. Genesis records it, and a
- *  peer refuses to join a game whose major differs. */
-export const PROTOCOL_VERSION = 3;
+/** Stamped into every genesis this build composes. New games are always
+ *  current: nothing anywhere downgrades this. */
+export const PROTOCOL_VERSION = 4;
+
+/** Every version this build can play, verify and replay, newest first.
+ *  PROTOCOL_VERSION is always its first entry. */
+export const SUPPORTED_PROTOCOLS: readonly number[] = [4, 3];
+
+/** The day each superseded version stops being played, ISO. Written by hand at
+ *  the bump — the release date plus the longest duration preset — and checked
+ *  by a test that fails once a date has passed. Retirement is an alarm clock,
+ *  not something somebody has to remember. */
+export const PROTOCOL_SUNSET: Readonly<Record<number, string>> = {
+  // Release day + 90. From v4 on this is arithmetic — a version's longest
+  // possible game is fixed the moment it stops being current, so the date is
+  // its successor's release plus MAX_DURATION plus slack, and raising the cap
+  // later can never invalidate a date already published.
+  //
+  // For 3 it cannot be derived, and the reason is durations themselves: v3
+  // predates them, so every v3 game is open-ended and no arithmetic bounds it.
+  // 90 days is a policy choice — long enough that a marathon started the week
+  // before this release is not cut short, short enough to be a real deadline.
+  // Those games are exactly what the shelf-life notice is for.
+  3: "2026-12-11",
+};
+
+/** Whether this build will play a game stamped with `version`.
+ *
+ *  The set is a parameter with a default rather than a closed-over constant.
+ *  On the day this ships the constant has one entry, and a predicate that can
+ *  only be asked about that entry is a predicate no test can move. */
+export function playsProtocol(
+  version: number,
+  supported: readonly number[] = SUPPORTED_PROTOCOLS,
+): boolean {
+  return supported.includes(version);
+}
+
+/** What to tell a player whose game is on a superseded version: null while the
+ *  game is current, which is every game until the first bump. */
+export function shelfLife(
+  genesis: Genesis,
+): { version: number; until: string } | null {
+  const until = PROTOCOL_SUNSET[genesis.protocol];
+  return until === undefined ? null : { version: genesis.protocol, until };
+}
 
 /** Indexed by Terrain. Mountains and lakes are permanent; rivers and walls
  *  open once bridged or laddered. */
@@ -38,9 +81,14 @@ export const STAT_SLOTS = 16;
 
 export const STEPS_PER_SECOND = 12;
 
-const seconds = (n: number) => Math.floor(n * STEPS_PER_SECOND);
-const minutes = (n: number) => seconds(n * 60);
-const hours = (n: number) => minutes(n * 60);
+// Exported so a caller can say `durationRules(hours(6))` rather than doing its
+// own arithmetic on STEPS_PER_SECOND. They stay here rather than moving to
+// duration.ts because DEFAULT_RULES uses them three lines later, and moving
+// them would put a cycle between the two files for no gain.
+export const seconds = (n: number) => Math.floor(n * STEPS_PER_SECOND);
+export const minutes = (n: number) => seconds(n * 60);
+export const hours = (n: number) => minutes(n * 60);
+export const days = (n: number) => hours(n * 24);
 
 export const DEFAULT_RULES: Rules = {
   popMax: 999,
@@ -97,6 +145,52 @@ export const DEFAULT_RULES: Rules = {
   // a strategy.
   maxSeats: 4,
 };
+
+/** The rules a game with unclaimed empires needs, and **deliberately not part of
+ *  `DEFAULT_RULES`.**
+ *
+ *  This is the whole of why vacancies need no protocol bump, and it is a
+ *  narrower argument than "a vacancy is an empty members array" on its own.
+ *  That array is already an error to every older build, so a record containing
+ *  one is *declined* rather than desynced — but a field in `rules` is read
+ *  straight past by that same build. Two of the fields below change
+ *  `isProtected` for any game at all, not only one with a vacancy in it: an old
+ *  peer handed a record carrying `graceCapitalPop` would ignore it, keep a
+ *  capital protected that this build has stopped protecting, and disagree about
+ *  a move three hours in.
+ *
+ *  So they travel **together with the thing an old build refuses**. A game
+ *  composed with no vacancies carries none of them and its rules are
+ *  byte-identical to what every build before this one composed; a game composed
+ *  with vacancies carries all of them and is declined wholesale by anything that
+ *  would misread them. Neither build is ever in the position of half-agreeing.
+ *
+ *  The numbers:
+ *
+ *  - `graceSteps`/`graceTiles` are the same three minutes and forty tiles under
+ *    their new names, because this changes what the clock is measured *from* and
+ *    not how long protection lasts.
+ *  - `graceCapitalPop`/`gracePopTotal` are the bars that make "established" mean
+ *    more than "owns ground" — a claimant handed a whole pocket owns forty tiles
+ *    of one population each on the step they arrive, which is not an empire that
+ *    can defend anything. Set so a genesis-seated empire still crosses the tile
+ *    bar first, exactly as it does today; `rules.test.ts` measures that rather
+ *    than assuming it.
+ *  - `vacancyRadius: 6` is 85 tiles granted, a ring of 24 for an attacker to
+ *    wall, and 5.5% of the default map held per vacancy. Chosen from the side of
+ *    the ledger the cost falls on: the camper is hypothetical and the players
+ *    staring at ground they cannot enter are not.
+ *  - `vacancyGrant: 1` is one population a tile — enough to hold the pocket
+ *    against a probe and not enough to walk out of it, which is what makes the
+ *    grant a border rather than an army. */
+export const VACANCY_RULES = {
+  graceSteps: minutes(3),
+  graceTiles: 40,
+  graceCapitalPop: 60,
+  gracePopTotal: 400,
+  vacancyRadius: 6,
+  vacancyGrant: 1,
+} as const;
 
 /** The most seats any rule may allow. Empire and member ids ride in single
  *  bytes of every signed move, and 32 members is already an empire nobody could

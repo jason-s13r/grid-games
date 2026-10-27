@@ -39,7 +39,7 @@ Seven fields, sixteen bytes on the wire, and the interesting part is what is
 - **No key.** A move names a seat, `(empire, member)`; the roster says which
   public key sits there. If the key travelled inside the move, "the signature
   is valid for the key it names" would prove nothing at all
-  ([`roster.ts`](packages/protocol/src/roster.ts)).
+  (`roster.ts`).
 - **No amount.** A claim does not say how much population it spends. The
   simulation reads `member.popTimer`, which it has been accruing itself since
   step zero.
@@ -55,7 +55,7 @@ never to have received it.
 
 ### Encoding
 
-`encodeMove` ([`records.ts`](packages/protocol/src/records.ts)) produces the
+`encodeMove` (`records.ts`) produces the
 bytes that get signed:
 
 ```
@@ -183,7 +183,7 @@ A note on wording, since the two are easy to conflate: the **modifiers** are
 `marchUnlocked` and `growthUnlocked`, two flags that change what moves are
 legal. The **stat slots** are sixteen counters that change nothing and record
 what happened — they exist for the leaderboard, which recomputes them by replay
-rather than accepting them as reported ([`rankings.ts`](packages/net/src/rankings.ts)).
+rather than accepting them as reported (`rankings.ts`).
 
 ## Bot moves, which are not messages
 
@@ -195,13 +195,13 @@ the same path as anyone's.
 
 A headless PeerBot is the opposite and deliberately so: it holds a real seat
 with a real key, and its moves are signed and broadcast like a person's
-([`peerbot.ts:215`](packages/net/src/peerbot.ts#L215)). There is no bot-shaped
+(`peerbot.ts:215`). There is no bot-shaped
 mechanism in the protocol at all — which is the point, since a seat a host
 could conjure would be a seat that dodges the seat cap.
 
 ## The other frames
 
-Fourteen frame types exist ([`wire.ts:25`](packages/protocol/src/wire.ts#L25));
+Fourteen frame types exist (`wire.ts:25`);
 only one of them carries a move. The rest are how peers agree about moves, and
 none of them can change state on its own:
 
@@ -227,7 +227,7 @@ to desync a game.
 
 ## What happens to a move on arrival
 
-`onMove` in [`lockstep.ts:645`](packages/net/src/lockstep.ts#L645), in order:
+`onMove` in `lockstep.ts:645`, in order:
 
 1. **Verify the signature** against the key the roster has for that seat. A
    failure is a silent discard — an unverified move must never be fed to

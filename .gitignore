@@ -2,7 +2,5 @@ node_modules/
 .parcel-cache/
 dist/
 _site/
-
-# dispat compute --write leaves one of these beside the file it rewrites.
-*.backup
-apps/observer/archives
+.xfer/
+*.jwk

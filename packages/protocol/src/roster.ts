@@ -79,7 +79,14 @@ export class Roster {
   }
 
   /** Strict majority of the keyed seats. A single-member empire is its own
-   *  quorum, which is what lets a solo player recruit a teammate. */
+   *  quorum, which is what lets a solo player recruit a teammate.
+   *
+   *  A **zero**-member empire is not, and the arithmetic says so: `floor(0/2)+1`
+   *  is one, not zero. "Nobody to ask means no endorsements needed" is a nice
+   *  sentence about a function that returns 1, so an empire nobody has claimed
+   *  cannot be seated through this path at all — `tallyAmendment` refuses it
+   *  outright and `verifyAmendment` requires `needed > 0`. That door is closed
+   *  on purpose and stays closed; `verifyClaim` is the other one. */
   quorum(empire: number): number {
     return Math.floor(this.membersOf(empire).length / 2) + 1;
   }

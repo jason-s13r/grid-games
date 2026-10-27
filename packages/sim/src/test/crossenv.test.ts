@@ -20,15 +20,7 @@
 import { describe, expect, it } from "vitest";
 import { Sim } from "../sim.js";
 import { hex } from "../hash.js";
-import type { Genesis, Move } from "../types.js";
-import fixture from "./fixtures/recorded.json";
-
-const recorded = fixture as unknown as {
-  genesis: Genesis;
-  steps: number;
-  hash: string;
-  moveLog: Move[];
-};
+import { RECORDED } from "./fixtures/index.js";
 
 /** Named in the failure output, so a red run says which engine disagreed.
  *  Read off globalThis rather than the globals themselves: this package is
@@ -41,23 +33,31 @@ const global = globalThis as {
 const environment =
   global.navigator?.userAgent?.slice(0, 60) ?? `node ${global.process?.version ?? "?"}`;
 
-describe(`a recorded game replays identically (${environment})`, () => {
-  const sim = new Sim(recorded.genesis);
-  sim.fastForward(recorded.steps, recorded.moveLog);
+// One block per supported version, so a red run says which version diverged
+// in which engine. A v3 branch that has quietly stopped behaving like v3 is
+// caught by the file that has not changed — which is the honest cost of
+// playing more than one version, and its only real proof.
+for (const recorded of RECORDED) {
+  const version = recorded.genesis.protocol;
 
-  it("reaches the recorded step", () => expect(sim.step).toBe(recorded.steps));
+  describe(`a recorded v${version} game replays identically (${environment})`, () => {
+    const sim = new Sim(recorded.genesis);
+    sim.fastForward(recorded.steps, recorded.moveLog);
 
-  it("reaches the recorded hash", () => expect(hex(sim.hash())).toBe(recorded.hash));
+    it("reaches the recorded step", () => expect(sim.step).toBe(recorded.steps));
 
-  // Without this the test would still pass on a log whose moves were all
-  // rejected, and would then be checking the map generator and nothing else.
-  it("and the moves are what got it there", () => {
-    const withoutMoves = new Sim(recorded.genesis);
-    withoutMoves.fastForward(recorded.steps);
-    expect(hex(withoutMoves.hash())).not.toBe(recorded.hash);
+    it("reaches the recorded hash", () => expect(hex(sim.hash())).toBe(recorded.hash));
+
+    // Without this the test would still pass on a log whose moves were all
+    // rejected, and would then be checking the map generator and nothing else.
+    it("and the moves are what got it there", () => {
+      const withoutMoves = new Sim(recorded.genesis);
+      withoutMoves.fastForward(recorded.steps);
+      expect(hex(withoutMoves.hash())).not.toBe(recorded.hash);
+    });
+
+    it("the log is not trivially small", () => {
+      expect(recorded.moveLog.length).toBeGreaterThan(100);
+    });
   });
-
-  it("the log is not trivially small", () => {
-    expect(recorded.moveLog.length).toBeGreaterThan(100);
-  });
-});
+}

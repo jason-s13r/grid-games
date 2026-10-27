@@ -14,10 +14,8 @@ import {
   encodeMove,
   signMessage,
   signMove,
-  signReady,
   verifyMessage,
   verifyMove,
-  verifyReady,
 } from "../records.js";
 import type { SignedMove } from "../records.js";
 import { claim, fixture } from "./fixture.js";
@@ -128,27 +126,5 @@ describe("chat", () => {
     const chat = await signMessage(f.bob, f.gameId, { ...message, member: 1, body: "hi" });
     const huge = { ...chat, message: { ...chat.message, body: "x".repeat(4096) } };
     await expect(verifyMessage(f.roster, f.gameId, huge)).resolves.toBe(false);
-  });
-});
-
-describe("readiness", () => {
-  it("a readiness claim verifies", async () => {
-    const ready = await signReady(f.alice, f.gameId, { upTo: 300, empire: 1, member: 0 });
-    await expect(verifyReady(f.roster, f.gameId, ready)).resolves.toBe(true);
-  });
-
-  // Readiness is a promise to send nothing more for those steps. Letting anyone
-  // raise it for anyone else would let one peer walk the rest past a step the
-  // seat had not spoken for.
-  it("raising someone else's readiness is caught", async () => {
-    const ready = await signReady(f.alice, f.gameId, { upTo: 300, empire: 1, member: 0 });
-    const raised = { ...ready, ready: { ...ready.ready, upTo: 900 } };
-    await expect(verifyReady(f.roster, f.gameId, raised)).resolves.toBe(false);
-  });
-
-  it("readiness cannot be asserted on another seat's behalf", async () => {
-    const ready = await signReady(f.alice, f.gameId, { upTo: 300, empire: 1, member: 0 });
-    const moved = { ...ready, ready: { ...ready.ready, member: 1 } };
-    await expect(verifyReady(f.roster, f.gameId, moved)).resolves.toBe(false);
   });
 });

@@ -9,11 +9,13 @@
 // it stops being a button and becomes a badge on the HUD.
 
 import type { State } from "@tessera/sim";
-import { MOVE, PHASE, WIN, STEPS_PER_SECOND, isProtected, summarise } from "@tessera/sim";
+import { MOVE, PHASE, WIN, STEPS_PER_SECOND, isProtected, isVacant, summarise } from "@tessera/sim";
 import { empireTheme } from "./palette";
 import type { Driver } from "../game/Driver";
 
-const clock = (steps: number): string => {
+/** A step count as a wall clock. Exported because the scrubber counts in the
+ *  same units and a second formatter would drift from this one. */
+export const clock = (steps: number): string => {
   const total = Math.floor(steps / STEPS_PER_SECOND);
   const h = Math.floor(total / 3600);
   const m = Math.floor((total % 3600) / 60);
@@ -22,6 +24,39 @@ const clock = (steps: number): string => {
     ? `${h}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`
     : `${m}:${String(s).padStart(2, "0")}`;
 };
+
+/** What the clock says, which in a game with an end is not how long it has been
+ *  running.
+ *
+ *  `clock(step)` is elapsed time, and in an open-ended game that is the only
+ *  honest reading. In a game the record gives an `endStep`, it is the wrong
+ *  number on screen: a player three hours into a three-hour game wants to know
+ *  they have minutes left, and what they were shown was "3:00:00" counting up.
+ *
+ *  Both readings come off the genesis rules and this peer's own step. Never off
+ *  a listing, which is a claim somebody posted, and never off a wall clock —
+ *  the step number already is one, agreed by everybody playing.
+ *
+ *  `online` is only about the join window. A solo game is composed by the same
+ *  form as a hosted one and carries the same `DurationRules`, join window and
+ *  all — which is right, because the two are the same world with different
+ *  seats in it — but there is nobody who could walk through that door, so
+ *  counting down to it closing is a countdown to nothing. */
+export function clockLine(state: State, online = true): string {
+  const end = state.genesis.rules.endStep ?? 0;
+  const label = end > 0 ? `${clock(Math.max(0, end - state.step))} left` : clock(state.step);
+
+  // Only while it is open, and only where somebody could use it. Once the window
+  // has passed it stops being news about when to hurry, and the panel already
+  // says the seats are closed.
+  // Read the way the rest of the client reads it: a v3 record predates the
+  // field, and a number that means nothing should not be counted down.
+  const window = online && state.genesis.protocol >= 4 ? (state.genesis.rules.joinWindow ?? 0) : 0;
+  const joining =
+    window > 0 && state.step < window ? ` · seats open for ${clock(window - state.step)}` : "";
+
+  return `${label} · step ${state.step}${joining}`;
+}
 
 const WIN_TEXT: Record<number, string> = {
   [WIN.TIMEOUT]: "time expired",
@@ -76,14 +111,38 @@ export class Controls {
     });
   }
 
+  /** The last markup written to each subtree, so an unchanged one is left
+   *  alone.
+   *
+   *  Not an optimisation. `render` runs from a 200 ms block and used to rewrite
+   *  three subtrees unconditionally on every call — and **`[data-acts]` is the
+   *  shop**, whose tiles are buttons. Replace a button between `pointerdown` and
+   *  `pointerup` and the browser fires `click` on the nearest surviving
+   *  ancestor, where `closest("[data-buy]")` finds nothing and the purchase is
+   *  silently dropped. At 200 ms and a typical press, a meaningful fraction of
+   *  every purchase in the game was being thrown away.
+   *
+   *  Nobody noticed because the standings hold no buttons and the HUD holds
+   *  none either. The guard is per subtree so a HUD that changes every step
+   *  does not force the shop to redraw with it. */
+  private readonly drawn = new Map<string, string>();
+
+  /** Write only if it changed. Returns whether it did. */
+  private put(el: HTMLElement, key: string, markup: string): boolean {
+    if (this.drawn.get(key) === markup) return false;
+    this.drawn.set(key, markup);
+    el.innerHTML = markup;
+    return true;
+  }
+
   render(state: State): void {
     // An observer holds no empire, and empire 0 is neutral. It has a clock and
     // a board like everyone else; what it does not have is a seat to describe.
     const empire = state.empires[this.game.empire - 1];
     if (!empire) {
-      this.els.clock.textContent = `${clock(state.step)} · step ${state.step}`;
-      this.els.hud.innerHTML = `<strong class="hud-name">Watching</strong>`;
-      this.els.acts.innerHTML = "";
+      this.els.clock.textContent = clockLine(state, this.game.online);
+      this.put(this.els.hud, "hud", `<strong class="hud-name">Watching</strong>`);
+      this.put(this.els.acts, "acts", "");
       this.els.rosterPanel.hidden = true;
       this.renderStandings(state);
       return;
@@ -92,12 +151,15 @@ export class Controls {
     const rules = state.genesis.rules;
     const theme = empireTheme(empire.id);
 
-    this.els.clock.textContent = `${clock(state.step)} · step ${state.step}`;
+    this.els.clock.textContent = clockLine(state, this.game.online);
 
     const pct = Math.round((member.popTimer / rules.popMax) * 100);
 
-    this.els.hud.innerHTML = `
-      <span class="swatch" data-empire="${empire.id}"></span>
+    this.put(
+      this.els.hud,
+      "hud",
+      `
+      <span class="swatch" data-banner="${empireTheme(empire.id).id}"></span>
       <strong class="hud-name">${theme.name}</strong>
       ${isProtected(state, empire) ? '<span class="tag">protected</span>' : ""}
       <div class="meter" title="population timer">
@@ -117,11 +179,15 @@ export class Controls {
           ? '<span class="mod" title="Tiles connected to your capital gain population over time.">Growth</span>'
           : ""
       }
-    `;
+    `,
+    );
 
     // A bought modifier is not a button. It has no second state to toggle and
     // nothing left to spend, so it leaves the shop and shows on the HUD.
-    this.els.acts.innerHTML = [
+    this.put(
+      this.els.acts,
+      "acts",
+      [
       tile({
         buy: "bridge",
         glyph: "&#9636;",
@@ -160,7 +226,8 @@ export class Controls {
             cost: rules.growthCost,
             affordable: empire.diamonds >= rules.growthCost,
           }),
-    ].join("");
+      ].join(""),
+    );
 
     // Only a shared empire has seats worth listing; a solo player is the seat.
     // Only when it actually changes. Writing the same value still counts as an
@@ -169,15 +236,19 @@ export class Controls {
     const seats = empire.members.length >= 2;
     if (this.els.rosterPanel.hidden === seats) this.els.rosterPanel.hidden = !seats;
     if (empire.members.length > 1) {
-      this.els.roster.innerHTML = empire.members
-        .map((m, i) => {
-          const live = state.step - m.lastBeat <= rules.livenessWindow;
-          return `<div class="roster-row${live ? "" : " afk"}">
+      this.put(
+        this.els.roster,
+        "roster",
+        empire.members
+          .map((m, i) => {
+            const live = state.step - m.lastBeat <= rules.livenessWindow;
+            return `<div class="roster-row${live ? "" : " afk"}">
             <span>${i === this.game.member ? "You" : m.kind === 1 ? `Bot ${i}` : `Member ${i}`}</span>
             <span class="roster-pop">${m.popTimer}</span>
           </div>`;
-        })
-        .join("");
+          })
+          .join(""),
+      );
     }
 
     this.renderStandings(state);
@@ -185,7 +256,11 @@ export class Controls {
     if (state.phase === PHASE.ENDED) {
       const winner = state.winner > 0 ? empireTheme(state.winner).name : "Nobody";
       this.els.banner.hidden = false;
-      this.els.banner.innerHTML = `<strong>${winner} wins</strong><span>${WIN_TEXT[state.winReason] ?? ""}</span>`;
+      this.put(
+        this.els.banner,
+        "banner",
+        `<strong>${winner} wins</strong><span>${WIN_TEXT[state.winReason] ?? ""}</span>`,
+      );
     } else {
       this.els.banner.hidden = true;
     }
@@ -196,17 +271,51 @@ export class Controls {
       .slice()
       .sort((a, b) => b.tilesOwned - a.tilesOwned);
 
-    this.els.standings.innerHTML = rows
+    // Whether *this* viewer could take an empire nobody has taken: a mesh game,
+    // watching rather than playing, and the door still open. The same
+    // `joinWindow` expression the simulation and the lobby panel use, read off
+    // the record rather than off this build's constant — a claim is a human
+    // ROSTER_AMEND, so the join window is the front door's opening hours and
+    // needs no rule of its own.
+    const window =
+      state.genesis.protocol >= 4 ? (state.genesis.rules.joinWindow ?? 0) : 0;
+    // The same condition serves both buttons, and deliberately: taking an empire
+    // nobody has and asking one that somebody does are the two doors into a
+    // running game, and the join window closes both on the same line.
+    const claimable =
+      this.game.online &&
+      this.game.empire === 0 &&
+      !(window > 0 && state.step >= window);
+
+    this.put(
+      this.els.standings,
+      "standings",
+      rows
       .map((e) => {
         const t = empireTheme(e.id);
-        return `<div class="standing${e.alive ? "" : " dead"}">
-          <span class="swatch" data-empire="${e.id}"></span>
+        // An empire nobody has claimed is in the standings, not hidden from
+        // them: it has a name, a flag and a capital, all sealed into the record
+        // before anybody arrived, and "which vacancy" is a real choice a player
+        // makes. Listing it as territory with nobody in it is the honest
+        // rendering — and it never shows as dead, because it was never alive.
+        const vacant = isVacant(state.empires[e.id - 1]!);
+        return `<div class="standing${!vacant && !e.alive ? " dead" : ""}${vacant ? " vacant" : ""}">
+          <span class="swatch" data-banner="${empireTheme(e.id).id}"></span>
           <span class="standing-name">${t.name}${e.id === this.game.empire ? " (you)" : ""}</span>
-          <span class="standing-tiles">${e.tilesOwned}</span>
+          <span class="standing-tiles">${
+            vacant && claimable
+              ? `<button class="btn btn-small" type="button" data-claim="${e.id}">Take it</button>`
+              : vacant
+                ? "unclaimed"
+                : claimable && e.alive
+                  ? `<button class="btn btn-small" type="button" data-ask="${e.id}">Ask</button>`
+                  : e.tilesOwned
+          }</span>
           <span class="standing-meta">${e.largestCascade.tiles ? `${e.largestCascade.tiles}&#9733;` : ""}</span>
         </div>`;
-      })
-      .join("");
+        })
+        .join(""),
+    );
   }
 
   setZoomHint(text: string): void {
