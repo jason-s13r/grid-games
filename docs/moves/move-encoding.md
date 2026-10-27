@@ -6,13 +6,16 @@ way, from parsed fields — a signature is **never** verified over the bytes tha
 arrived, only over bytes rebuilt from the fields the parser accepted.
 
 ```
-"tessera/move/1" ‖ u16 len(gameId) ‖ gameId
-                 ‖ u32 step ‖ u32 seq
+"tessera/move/2" ‖ u16 len(gameId) ‖ gameId
+                 ‖ u32 seq
                  ‖ u8 empire ‖ u8 member ‖ u8 type ‖ u8 reserved(0)
                  ‖ u16 x ‖ u16 y
 ```
 
-The record body is exactly 16 bytes (`Writer(16)`).
+The record body is exactly 12 bytes (`Writer(12)`). **The step is not signed**:
+the game room decides which step a move lands on after the player has signed
+it. `seq` is signed and only rises per seat, so one signed move cannot be
+replayed into a second slot.
 The `reserved` byte keeps it 4-byte aligned if it ever grows. The preamble
 (`preamble()`, `records.ts:37`) is
 `utf8(tag) ‖ u16 length ‖ gameId`.
@@ -24,7 +27,7 @@ Every signed record — not just moves — carries these, and each is load-beari
 
 ### 1. A domain tag
 
-`"tessera/move/1"`. A signature over a move can never be replayed as a signature
+`"tessera/move/2"`. A signature over a move can never be replayed as a signature
 over a chat message (`"tessera/message/1"`), a
 checkpoint, a drop,
 or a handshake — the tagged payloads simply do not

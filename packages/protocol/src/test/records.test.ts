@@ -53,8 +53,12 @@ describe("signed moves", () => {
     await expect(tampered({ x: 11 })).resolves.toBe(false);
   });
 
-  it("a tampered step is caught", async () => {
-    await expect(tampered({ step: 121 })).resolves.toBe(false);
+  it("the step is not signed: the room decides it", async () => {
+    await expect(tampered({ step: 121 })).resolves.toBe(true);
+  });
+
+  it("a tampered sequence number is caught", async () => {
+    await expect(tampered({ seq: 4 })).resolves.toBe(false);
   });
 
   it("moving as a seat you do not hold is caught", async () => {

@@ -59,10 +59,14 @@ never to have received it.
 bytes that get signed:
 
 ```
-"tessera/move/1" ‖ u16 len(gameId) ‖ gameId ‖ u32 step ‖ u32 seq
+"tessera/move/2" ‖ u16 len(gameId) ‖ gameId ‖ u32 seq
                  ‖ u8 empire ‖ u8 member ‖ u8 type ‖ u8 reserved
                  ‖ u16 x ‖ u16 y
 ```
+
+The step is not in the signed bytes. The game room stamps it when it puts the
+move in order, and `seq`, which only rises per seat, keeps one signed move from
+being replayed into another slot.
 
 The domain tag means a move signature can never be replayed as a chat
 signature. The game id means a move signed in one game cannot be replayed into

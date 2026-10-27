@@ -19,7 +19,7 @@ import { Identity, verify } from "./identity.js";
 import type { MemberKey } from "./identity.js";
 import type { Roster } from "./roster.js";
 
-const TAG_MOVE = "tessera/move/1";
+const TAG_MOVE = "tessera/move/2";
 const TAG_MESSAGE = "tessera/message/1";
 const TAG_HELLO = "tessera/hello/1";
 
@@ -62,10 +62,13 @@ export function moveInRange(move: Move): boolean {
   );
 }
 
+/** The signed bytes of a move. **The step is not among them**: whoever orders
+ *  the game (a game room) decides which step a move lands on, after it is
+ *  signed. A player signs what they did; the order says when. `seq` is in, and
+ *  only rises, so a signed move cannot be replayed into a second slot. */
 export function encodeMove(gameId: string, move: Move): Uint8Array {
   if (!moveInRange(move)) throw new Error("move field out of range");
-  const record = new Writer(16)
-    .u32(move.step)
+  const record = new Writer(12)
     .u32(move.seq)
     .u8(move.empire)
     .u8(move.member)
