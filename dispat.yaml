@@ -51,7 +51,8 @@ scripts:
     echo "DISPAT_EXPORT_GITHUB=$site" >> "$DISPAT_OUTPUT"
     echo "zipped $DISPAT_PACKAGE $DISPAT_VERSION for the GitHub release"
 spaces:
-  # Shared libraries: the sim and the protocol. Each release carries a tarball.
+  # Shared libraries: the sim, the protocol and the room. Each release carries
+  # a tarball.
   packages:
     path: packages
     autoVersion:
@@ -87,6 +88,9 @@ spaces:
 dependencies:
   protocol:
     - sim
+  room:
+    - sim
+    - protocol
   web:
     - sim
     - protocol

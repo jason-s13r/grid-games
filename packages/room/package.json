@@ -1,0 +1,32 @@
+{
+  "name": "@tessera/room",
+  "version": "0.0.0",
+  "private": true,
+  "description": "The game room: orders moves into steps, keeps the log, and catches clients up. Runs in a Durable Object, a host tab, or a test.",
+  "license": "MIT",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.test.json",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@tessera/protocol": "workspace:*",
+    "@tessera/sim": "workspace:*"
+  },
+  "devDependencies": {
+    "typescript": "5.6.3",
+    "@types/node": "22.7.5"
+  }
+}

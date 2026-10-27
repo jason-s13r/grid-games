@@ -21,6 +21,7 @@ export default defineConfig({
     alias: {
       "@tessera/sim": source("sim"),
       "@tessera/protocol": source("protocol"),
+      "@tessera/room": source("room"),
     },
   },
   test: {

@@ -52,13 +52,38 @@ Three consequences run through the rest of the repository:
 |---|---|---|
 | [`packages/sim`](packages/sim) | *nothing* | tiles, rules, bots. No DOM, no network, no crypto |
 | [`packages/protocol`](packages/protocol) | sim | keys, signed moves and messages, the genesis record |
+| [`packages/room`](packages/room) | sim, protocol | the game room that orders moves, and its client |
 | [`apps/web`](apps/web) | sim, protocol | rendering and input |
 
-Online play is being rebuilt around Cloudflare. A Durable Object per game will
-order moves into steps, keep the log and snapshots, and keep the game running
-while nobody is connected; every client still runs the full simulation and
-validates every move. That adds `packages/room` (the sequencer and its client)
-and `apps/worker` (the Worker that serves the client and hosts the rooms).
+## The game room
+
+[`packages/room`](packages/room) is the one place a game's moves are put in
+order. Every client runs the full simulation and validates every move, so the
+room decides nothing about the rules; it decides **when**. Each move is stamped
+with the step it lands on, and a step is final once the room has sealed it.
+
+- **The clock.** While anybody is connected the host calls `tick()` every
+  250 ms. Each tick stamps the moves received since the last one onto the next
+  unsealed step, simulates up to the current wall-clock step, logs the batch and
+  broadcasts `{ from, upTo, moves }`. Clients simulate exactly that, so they need
+  no clock of their own and no agreement with each other.
+- **Moves** are signed by the seat's key over everything but the step, which
+  the room supplies. `seq` only rises per seat, so a signed move cannot be
+  replayed. Players' moves are checked against the roster before they are
+  accepted.
+- **Presence.** The room injects an unsigned `HEARTBEAT` for each connected
+  seat once per heartbeat interval, so the abandonment rules see who is here.
+- **Catching up.** A client says where it is when it connects. The room sends
+  the log tail from there, or its latest snapshot and the tail after it. Clients
+  report their hash every five seconds of game time; a mismatch gets the room's
+  state back.
+- **Sleeping.** With nobody connected the room stops ticking. The next tick
+  simulates everything since, which is cheap because the world is event-driven.
+
+The room has no timer, socket or database of its own: a host hands it
+connections, ticks and a store. The tests run a room and several clients in one
+process with a clock they turn; `apps/worker` (next) hosts it in a Durable
+Object.
 
 ## The simulation
 
