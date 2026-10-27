@@ -4,3 +4,6 @@ dist/
 _site/
 .xfer/
 *.jwk
+*.backup
+.wrangler/
+.dev.vars
