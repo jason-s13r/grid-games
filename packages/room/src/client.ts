@@ -27,6 +27,7 @@ export interface RoomClientOptions {
   identity: Identity;
   roomId: string;
   name?: string;
+  /** Sends one message on the current connection. */
   send: (text: string) => void;
 }
 
@@ -55,6 +56,12 @@ export class RoomClient {
 
   get key(): string {
     return this.options.identity.key;
+  }
+
+  /** Point the client at a new connection. The game it holds is kept, so the
+   *  room's hello on the new socket only has to send what was missed. */
+  reconnected(send: (text: string) => void): void {
+    this.options.send = send;
   }
 
   /** Handle one message from the room. Resolves once it has been handled. */

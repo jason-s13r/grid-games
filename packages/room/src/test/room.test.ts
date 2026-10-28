@@ -281,3 +281,22 @@ describe("catching up", () => {
     expect(a.errors).toEqual([]);
   });
 });
+
+describe("hosting", () => {
+  it("takes back authenticated sockets after the room object is rebuilt", async () => {
+    const { h, a, b } = await started();
+    await h.run(2_000);
+    // What a woken Durable Object does: a fresh room, the same sockets.
+    h.restart();
+    a.reattach(h.room);
+    b.reattach(h.room);
+    await h.run(2_000);
+    expect(a.client.sim!.hash()).toBe(h.room.hash());
+    const at = aClaim(a.client)!;
+    await a.client.submit(MOVE.CLAIM, at.x, at.y);
+    await h.settle();
+    await h.run(1_000);
+    expect(a.errors).toEqual([]);
+    expect(b.client.sim!.hash()).toBe(h.room.hash());
+  });
+});

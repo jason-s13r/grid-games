@@ -86,7 +86,7 @@ export class Room {
   private readonly config: RoomConfig;
   private readonly peers = new Map<string, Peer>();
 
-  private phase: Phase;
+  private _phase: Phase;
   private players: StoredPlayer[];
   private startsAt: number | undefined;
   private starting = false;
@@ -118,13 +118,17 @@ export class Room {
     const config = store.get<RoomConfig>("config");
     if (!config) throw new Error("no room in this store");
     this.config = config;
-    this.phase = store.get<Phase>("phase") ?? "lobby";
+    this._phase = store.get<Phase>("phase") ?? "lobby";
     this.players = store.get<StoredPlayer[]>("players") ?? [];
     this.startsAt = store.get<number | null>("startsAt") ?? undefined;
     this.seqs = store.get<Record<string, number>>("seqs") ?? {};
 
     const genesis = store.get<Genesis>("genesis");
     if (genesis) this.load(genesis, store.get<number>("next") ?? 0);
+  }
+
+  get phase(): Phase {
+    return this._phase;
   }
 
   get id(): string {
@@ -148,14 +152,14 @@ export class Room {
    *  and somebody to tell about it. With nobody connected the room sleeps, and
    *  the next tick after somebody arrives catches the world up. */
   wantsTicks(): boolean {
-    if (this.phase === "playing") return !this.ended && this.connectedKeys().size > 0;
+    if (this._phase === "playing") return !this.ended && this.connectedKeys().size > 0;
     return false;
   }
 
   /** When the room next needs waking with nobody connected: the scheduled
    *  start, if there is one. */
   wakeAt(): number | undefined {
-    return this.phase === "lobby" ? this.startsAt : undefined;
+    return this._phase === "lobby" ? this.startsAt : undefined;
   }
 
   // --- connections -----------------------------------------------------------
@@ -166,10 +170,25 @@ export class Room {
     this.sendTo(conn, { t: "challenge", nonce: toBase64Url(nonce) });
   }
 
+  /** Take back a socket that was already open before this room object existed:
+   *  a Durable Object woken from hibernation has its sockets but not their
+   *  state. A socket that had proved its key keeps it; one that had not is
+   *  challenged again. */
+  reattach(conn: Connection, key?: string): void {
+    if (!key) return this.connect(conn);
+    this.peers.set(conn.id, { conn, nonce: randomBytes(NONCE_BYTES), key, queue: Promise.resolve() });
+  }
+
+  /** The key a socket has proved, if it has. A host persists this beside the
+   *  socket so `reattach` can restore it. */
+  keyOf(id: string): string | undefined {
+    return this.peers.get(id)?.key;
+  }
+
   disconnect(id: string): void {
     const peer = this.peers.get(id);
     this.peers.delete(id);
-    if (peer?.key && this.phase === "lobby") this.broadcastLobby();
+    if (peer?.key && this._phase === "lobby") this.broadcastLobby();
   }
 
   /** Handle one message from one socket. Resolves once it has been handled;
@@ -211,7 +230,7 @@ export class Room {
     const ok = await verifyHello(message.key, this.config.roomId, peer.nonce, theirs, message.proof);
     if (!ok) return this.error(peer, "hello proof did not verify");
 
-    if (this.phase === "lobby") {
+    if (this._phase === "lobby") {
       peer.key = message.key;
       const name = cleanName(message.name);
       const known = this.players.find((p) => p.key === message.key);
@@ -247,7 +266,7 @@ export class Room {
   // --- the lobby -------------------------------------------------------------
 
   private lobbyChoice(key: string, message: Extract<ClientMessage, { t: "lobby" }>): void {
-    if (this.phase !== "lobby") return;
+    if (this._phase !== "lobby") return;
     const player = this.players.find((p) => p.key === key);
     if (!player) return;
     if (message.name !== undefined) player.name = cleanName(message.name);
@@ -301,7 +320,7 @@ export class Room {
   /** Seal the genesis record from the lobby and start the clock. `by` is the
    *  socket that asked, for error reporting; a scheduled start has none. */
   private async start(by?: Peer): Promise<void> {
-    if (this.phase !== "lobby" || this.starting) return;
+    if (this._phase !== "lobby" || this.starting) return;
     this.starting = true;
     try {
       const genesis = await this.compose();
@@ -317,7 +336,7 @@ export class Room {
       this.store.put("genesis", genesis);
       this.store.put("phase", "playing");
       this.store.put("next", 0);
-      this.phase = "playing";
+      this._phase = "playing";
       this.load(genesis, 0);
       const sim = this.sim!;
       this.store.putSnapshot({ step: 0, hash: sim.hash(), bytes: new Uint8Array(sim.snapshot()) });
@@ -387,7 +406,7 @@ export class Room {
   // --- moves -----------------------------------------------------------------
 
   private async move(peer: Peer, message: Extract<ClientMessage, { t: "move" }>): Promise<void> {
-    if (this.phase !== "playing" || !this.genesis || !this.roster || this.ended) return;
+    if (this._phase !== "playing" || !this.genesis || !this.roster || this.ended) return;
     const key = peer.key!;
     const seat = this.roster.seatOf(key);
     if (!seat) return this.error(peer, "you hold no seat");
@@ -418,7 +437,7 @@ export class Room {
    *  Starts a scheduled game when it is due, and seals the steps that have
    *  passed. */
   async tick(): Promise<void> {
-    if (this.phase === "lobby") {
+    if (this._phase === "lobby") {
       if (this.startsAt !== undefined && this.now() >= this.startsAt) await this.start();
       return;
     }

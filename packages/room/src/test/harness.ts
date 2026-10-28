@@ -26,6 +26,9 @@ export interface Linked {
   drop(): void;
   /** Open a new connection for the same client. */
   reconnect(): void;
+  /** Hand this client's open socket to a rebuilt room, as a woken Durable
+   *  Object does with the sockets it kept. */
+  reattach(room: Room): void;
 }
 
 let ids = 0;
@@ -69,16 +72,16 @@ export class Harness {
     });
     client.onError = (message) => errors.push(message);
 
+    const socket = (myId: string) => ({
+      id: myId,
+      send: (text: string) => {
+        if (open && id === myId) this.track(client.receive(text));
+      },
+    });
     const connect = (): void => {
       id = `conn-${++ids}`;
       open = true;
-      const myId = id;
-      this.room.connect({
-        id: myId,
-        send: (text) => {
-          if (open && id === myId) this.track(client.receive(text));
-        },
-      });
+      this.room.connect(socket(id));
     };
     connect();
     await this.settle();
@@ -91,6 +94,7 @@ export class Harness {
         this.room.disconnect(id);
       },
       reconnect: connect,
+      reattach: (room) => room.reattach(socket(id), identity.key),
     };
   }
 
