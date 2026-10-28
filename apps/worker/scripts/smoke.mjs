@@ -23,6 +23,8 @@ function connect(identity, roomId, name, existing) {
   const client = existing ?? new RoomClient({ identity, roomId, name, send });
   if (existing) existing.reconnected(send);
   client.onError = (message) => console.log(`  ${name} error: ${message}`);
+  // Clients keep their own clock: simulate up to now, as a page does per frame.
+  if (!existing) setInterval(() => client.advance(), 50);
   socket.addEventListener("message", (event) => void client.receive(event.data));
   return { client, socket };
 }
@@ -75,18 +77,21 @@ await waitFor("bob to see it", () => b.client.sim.state.owner[claim.y * b.client
 console.log(`claim at (${claim.x}, ${claim.y}) landed on both clients`);
 
 await sleep(1_000);
-if (a.client.sim.step !== b.client.sim.step) {
-  await waitFor("the same step", () => a.client.sim.step === b.client.sim.step, 2_000);
-}
+// Compare at one step: both clients simulate to the room's clock, so stop the
+// world for a moment by reading both in the same tick.
+a.client.advance();
+b.client.advance();
+if (a.client.sim.step !== b.client.sim.step) fail(`steps differ: ${a.client.sim.step} vs ${b.client.sim.step}`);
 if (a.client.sim.hash() !== b.client.sim.hash()) fail("hashes differ while playing");
 console.log(`step ${a.client.sim.step}: both clients hash ${a.client.sim.hash().toString(16)}`);
 
 b.socket.close();
 await sleep(4_000);
 b = connect(bob, id, "bob", b.client);
-await waitFor("bob to catch up", () => Math.abs(b.client.sim.step - a.client.sim.step) <= 3);
-await sleep(600);
-await waitFor("the same step after rejoining", () => a.client.sim.step === b.client.sim.step, 3_000);
+await sleep(1_500);
+a.client.advance();
+b.client.advance();
+if (a.client.sim.step !== b.client.sim.step) fail(`steps differ after rejoining: ${a.client.sim.step} vs ${b.client.sim.step}`);
 if (a.client.sim.hash() !== b.client.sim.hash()) fail("hashes differ after bob rejoined");
 console.log(`bob rejoined and caught up: step ${b.client.sim.step}, hash ${b.client.sim.hash().toString(16)}`);
 
