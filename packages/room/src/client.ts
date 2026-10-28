@@ -27,7 +27,16 @@ import {
 import { advanceTo, stepAt } from "./advance.js";
 import { decode, encode } from "./messages.js";
 import type { SignedInvite } from "@tessera/protocol";
-import type { Catchup, ClientMessage, LobbyView, People, Phase, ServerMessage, You } from "./messages.js";
+import type {
+  Catchup,
+  ChatLine,
+  ClientMessage,
+  LobbyView,
+  People,
+  Phase,
+  ServerMessage,
+  You,
+} from "./messages.js";
 
 export interface RoomClientOptions {
   identity: Identity;
@@ -59,6 +68,8 @@ export class RoomClient {
   you: You | undefined;
   /** Who is in the running game, and who is asking for a seat. */
   people: People = { people: [], requests: [] };
+  /** Chat this client has heard, oldest first. */
+  chat: ChatLine[] = [];
 
   /** The world was replaced wholesale (joined, resynced): repaint everything. */
   onReset: (() => void) | null = null;
@@ -66,6 +77,8 @@ export class RoomClient {
   onStart: ((genesis: Genesis) => void) | null = null;
   onError: ((message: string) => void) | null = null;
   onPeople: ((people: People) => void) | null = null;
+  /** New chat lines, as they arrive. */
+  onChat: ((lines: ChatLine[]) => void) | null = null;
   /** This client was given a seat after the start. */
   onSeated: ((you: You) => void) | null = null;
 
@@ -190,6 +203,11 @@ export class RoomClient {
     this.send(this.phase === "playing" ? { t: "name", name } : { t: "lobby", name });
   }
 
+  /** Say something. Team lines go to this client's empire only. */
+  say(text: string, channel: "all" | "team" = "all"): void {
+    this.send({ t: "say", channel, text });
+  }
+
   /** Take an empire nobody holds. */
   claim(empire: number): void {
     this.send({ t: "claim", empire });
@@ -289,6 +307,16 @@ export class RoomClient {
         this.people = message.people;
         this.onPeople?.(message.people);
         return;
+      case "chat": {
+        // History arrives again on every reconnect; keep each line once.
+        const seen = new Set(this.chat.map((l) => `${l.at}:${l.key}:${l.text}`));
+        const fresh = message.lines.filter((l) => !seen.has(`${l.at}:${l.key}:${l.text}`));
+        if (!fresh.length) return;
+        this.chat.push(...fresh);
+        if (this.chat.length > 500) this.chat.splice(0, this.chat.length - 500);
+        this.onChat?.(fresh);
+        return;
+      }
       case "error":
         this.onError?.(message.message);
         return;

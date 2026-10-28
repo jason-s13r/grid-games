@@ -469,3 +469,42 @@ describe("joining a game that has started", () => {
     expect(c.errors).toEqual([]);
   });
 });
+
+describe("chat", () => {
+  it("carries a line to everybody, and keeps it for latecomers", async () => {
+    const { h, a, b } = await started();
+    a.client.say("hello all");
+    await h.settle();
+    expect(b.client.chat.map((l) => [l.name, l.text, l.channel])).toEqual([["alice", "hello all", "all"]]);
+    const c = await h.join(carol);
+    expect(c.client.chat.map((l) => l.text)).toEqual(["hello all"]);
+  });
+
+  it("keeps a team line inside the empire", async () => {
+    const h = new Harness({ creator: alice.key, bots: ["easy"] });
+    const a = await h.join(alice, "alice");
+    const b = await h.join(bob, "bob");
+    const c = await h.join(carol, "carol");
+    a.client.pickEmpire(0);
+    b.client.pickEmpire(0);
+    c.client.pickEmpire(1);
+    await h.settle();
+    a.client.start();
+    await h.settle();
+
+    a.client.say("flank them", "team");
+    await h.settle();
+    expect(b.client.chat.map((l) => l.text)).toEqual(["flank them"]);
+    expect(c.client.chat).toEqual([]);
+    const watcher = await h.join(dave);
+    expect(watcher.client.chat).toEqual([]);
+  });
+
+  it("strips what should not be in a line, and refuses a flood", async () => {
+    const { h, a, b } = await started();
+    a.client.say("  look‮right   here ");
+    a.client.say("again");
+    await h.settle();
+    expect(b.client.chat.map((l) => l.text)).toEqual(["lookright here"]);
+  });
+});

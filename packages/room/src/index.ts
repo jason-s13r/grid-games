@@ -8,6 +8,7 @@ export { CHECKPOINT_EVERY, SNAPSHOT_EVERY, advanceTo, stepAt } from "./advance.j
 export { decode, encode } from "./messages.js";
 export type {
   Catchup,
+  ChatLine,
   ClientMessage,
   LobbyPlayer,
   LobbyView,

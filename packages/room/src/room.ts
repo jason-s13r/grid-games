@@ -49,6 +49,7 @@ import type {
   Catchup,
   ClientMessage,
   LobbyPlayer,
+  ChatLine,
   LobbyView,
   People,
   Phase,
@@ -96,6 +97,13 @@ interface StoredPlayer {
   empire: number | null;
 }
 
+/** Chat lines kept, for whoever arrives later. */
+const KEEP_CHAT = 200;
+/** The longest line, in characters, and the shortest gap between one
+ *  speaker's lines. */
+const CHAT_MAX = 500;
+const CHAT_GAP_MS = 400;
+
 /** Recent checkpoint hashes kept for comparison. */
 const KEEP_CHECKPOINTS = 64;
 
@@ -123,6 +131,8 @@ export class Room {
   private seatings: StoredSeating[];
   private requests: Array<{ key: string; empire: number }>;
   private usedInvites: string[];
+  private chat: ChatLine[];
+  private readonly spoke = new Map<string, number>();
   private readonly checkpoints = new Map<number, number>();
 
   /** Set up a new room's storage. The room itself is built with `new Room`. */
@@ -150,6 +160,7 @@ export class Room {
     this.requests = store.get<Array<{ key: string; empire: number }>>("requests") ?? [];
     this.usedInvites = store.get<string[]>("invites") ?? [];
     this.lastStamp = store.get<number>("lastStamp") ?? 0;
+    this.chat = store.get<ChatLine[]>("chat") ?? [];
 
     const genesis = store.get<Genesis>("genesis");
     if (genesis) this.load(genesis, store.get<number>("next") ?? 0);
@@ -261,6 +272,8 @@ export class Room {
         return this.redeem(peer, message.invite);
       case "name":
         return this.rename(peer.key, message.name);
+      case "say":
+        return this.say(peer.key, message.channel, message.text);
     }
   }
 
@@ -289,6 +302,7 @@ export class Room {
         you: this.you(message.key),
         lobby: this.lobbyView(),
       });
+      this.sendChatHistory(peer);
       this.broadcastLobby();
       return;
     }
@@ -308,6 +322,7 @@ export class Room {
       you: this.you(message.key),
       game: this.catchup(message.have),
     });
+    this.sendChatHistory(peer);
     this.broadcastPeople();
   }
 
@@ -677,6 +692,53 @@ export class Room {
     this.store.put("players", this.players);
     if (this._phase === "lobby") this.broadcastLobby();
     else this.broadcastPeople();
+  }
+
+  // --- chat ------------------------------------------------------------------
+
+  /** Chat is the room's to carry and nothing in the game depends on it, so it
+   *  is neither signed nor stamped: a line is a line as soon as the room has
+   *  it. Team lines reach the speaker's empire and nobody else. */
+  private say(key: string, channel: unknown, raw: unknown): void {
+    if (typeof raw !== "string") return;
+    // Control characters out (bidi overrides included), whitespace collapsed.
+    const text = raw
+      .normalize("NFC")
+      .replace(/[\u0000-\u001f\u007f-\u009f\u200b-\u200f\u202a-\u202e\u2066-\u2069]/g, "")
+      .replace(/\s+/g, " ")
+      .trim()
+      .slice(0, CHAT_MAX);
+    if (!text) return;
+    const now = this.now();
+    if (now - (this.spoke.get(key) ?? 0) < CHAT_GAP_MS) return;
+    this.spoke.set(key, now);
+
+    const empire = this.roster?.seatOf(key)?.empire ?? 0;
+    const team = channel === "team" && empire > 0;
+    const line: ChatLine = {
+      key,
+      name: this.players.find((p) => p.key === key)?.name ?? "",
+      empire,
+      channel: team ? "team" : "all",
+      text,
+      at: now,
+    };
+    this.chat.push(line);
+    if (this.chat.length > KEEP_CHAT) this.chat.splice(0, this.chat.length - KEEP_CHAT);
+    this.store.put("chat", this.chat);
+    for (const peer of this.peers.values()) {
+      if (peer.key && this.hears(peer.key, line)) this.sendTo(peer.conn, { t: "chat", lines: [line] });
+    }
+  }
+
+  private hears(key: string, line: ChatLine): boolean {
+    if (line.channel === "all") return true;
+    return this.roster?.seatOf(key)?.empire === line.empire;
+  }
+
+  private sendChatHistory(peer: Peer): void {
+    const lines = this.chat.filter((line) => this.hears(peer.key!, line));
+    if (lines.length) this.sendTo(peer.conn, { t: "chat", lines });
   }
 
   private peopleView(): People {

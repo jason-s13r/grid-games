@@ -82,6 +82,18 @@ export interface SeatRequest {
   empire: number;
 }
 
+/** One line of chat. `team` lines go only to the speaker's empire. */
+export interface ChatLine {
+  key: string;
+  name: string;
+  /** The speaker's empire, or 0 for somebody without a seat. */
+  empire: number;
+  channel: "all" | "team";
+  text: string;
+  /** The room's clock, ms since the epoch. */
+  at: number;
+}
+
 export interface People {
   people: Person[];
   requests: SeatRequest[];
@@ -97,6 +109,8 @@ export type ServerMessage =
   | { t: "resync"; game: Catchup }
   | { t: "seated"; you: You }
   | { t: "people"; people: People }
+  /** Lines of chat: the recent history on joining, then each as it is said. */
+  | { t: "chat"; lines: ChatLine[] }
   | { t: "error"; message: string };
 
 export type ClientMessage =
@@ -124,7 +138,8 @@ export type ClientMessage =
   | { t: "decline"; key: string }
   /** Join through an invite a member signed. */
   | { t: "redeem"; invite: SignedInvite }
-  | { t: "name"; name: string };
+  | { t: "name"; name: string }
+  | { t: "say"; channel: "all" | "team"; text: string };
 
 /** How a room is set up when it is created. Fixed for the room's life. */
 export interface RoomConfig {
