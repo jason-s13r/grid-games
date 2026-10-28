@@ -1,0 +1,31 @@
+{
+  // One Worker serves everything at tessera.qot.nz: the web client as static
+  // assets, the API under /api, and each game's WebSocket under /game/:id.
+  "$schema": "../../node_modules/wrangler/config-schema.json",
+  "name": "tessera",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-10-01",
+
+  "assets": {
+    // Built by apps/web. `pnpm dev` and `pnpm build` produce it first.
+    "directory": "../web/dist",
+    "binding": "ASSETS",
+    // /g/<room> is a page of the client, not a file.
+    "not_found_handling": "single-page-application",
+    // The API and the game sockets reach the Worker; everything else is served
+    // straight from the assets.
+    "run_worker_first": ["/api/*", "/game/*"]
+  },
+
+  "durable_objects": {
+    "bindings": [{ "name": "GAMES", "class_name": "GameRoom" }]
+  },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["GameRoom"] }],
+
+  "vars": {
+    // The game length the create form offers first.
+    "DEFAULT_DURATION_DAYS": "10"
+  },
+
+  "observability": { "enabled": true }
+}

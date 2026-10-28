@@ -73,8 +73,9 @@ spaces:
     flow:
       build: build-lib
       publish: publish-lib
-  # Deployables: the web client. Versioned and changelogged, never published to
-  # npm — each release carries its build as a zip.
+  # Deployables: the web client and the Worker that serves it. Versioned and
+  # changelogged, never published to npm — each release carries its build as a
+  # zip.
   apps:
     path: apps
     autoVersion:
@@ -94,6 +95,13 @@ dependencies:
   web:
     - sim
     - protocol
+  # The Worker serves web's build as its static assets, so a web release is a
+  # worker release too.
+  worker:
+    - sim
+    - protocol
+    - room
+    - web
 # Scopes that are deliberately not packages, and resolve to nothing without a
 # diagnostic.
 #   release  dispat's own release-commit scope

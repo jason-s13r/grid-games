@@ -4,12 +4,14 @@
   "private": true,
   "packageManager": "pnpm@9.12.3",
   "scripts": {
-    "dev": "pnpm --filter @tessera/web dev",
+    "dev": "pnpm --filter \"./packages/*\" build && pnpm --filter @tessera/web build && pnpm --parallel --filter @tessera/web --filter @tessera/worker run watch",
     "build": "pnpm -r build",
     "test": "pnpm -r test",
     "typecheck": "pnpm -r typecheck",
     "replay": "pnpm --filter @tessera/sim replay",
-    "clean": "rm -rf apps/*/dist packages/*/dist .parcel-cache apps/*/.parcel-cache"
+    "clean": "rm -rf apps/*/dist packages/*/dist .parcel-cache apps/*/.parcel-cache",
+    "dev:solo": "pnpm --filter @tessera/web dev",
+    "deploy": "pnpm build && pnpm --filter @tessera/worker run deploy"
   },
   "devDependencies": {
     "vitest": "3.2.7"

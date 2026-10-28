@@ -54,6 +54,7 @@ Three consequences run through the rest of the repository:
 | [`packages/protocol`](packages/protocol) | sim | keys, signed moves and messages, the genesis record |
 | [`packages/room`](packages/room) | sim, protocol | the game room that orders moves, and its client |
 | [`apps/web`](apps/web) | sim, protocol | rendering and input |
+| [`apps/worker`](apps/worker) | sim, protocol, room | serving the client, creating games, hosting rooms |
 
 ## The game room
 
@@ -82,8 +83,20 @@ with the step it lands on, and a step is final once the room has sealed it.
 
 The room has no timer, socket or database of its own: a host hands it
 connections, ticks and a store. The tests run a room and several clients in one
-process with a clock they turn; `apps/worker` (next) hosts it in a Durable
-Object.
+process with a clock they turn.
+
+## The Worker
+
+[`apps/worker`](apps/worker) is one Cloudflare Worker. It serves the web build as
+static assets (`/g/<room>` falls back to the client), creates games at
+`POST /api/games`, and hands `/game/<room>/ws` to that game's Durable Object.
+
+Each game is one `GameRoom` Durable Object, addressed by its room id, holding a
+`Room` over its SQLite storage. Sockets use the hibernation API and carry their
+proved key in their attachment, so a woken object takes them back without a new
+handshake. While anybody is connected an alarm fires every 250 ms and the room
+seals the steps since the last one; with nobody connected there is no alarm
+except a scheduled start, and the next connection catches the world up.
 
 ## The simulation
 

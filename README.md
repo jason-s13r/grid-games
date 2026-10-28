@@ -34,7 +34,8 @@ Online play is being rebuilt on Cloudflare and will be served from
 - Every client still runs the full simulation and validates every move.
   Cloudflare keeps time and records; the players keep the rules.
 
-Until that lands, the client plays solo against bot empires.
+The room and the Worker run; the web client still plays solo until its online
+screens land.
 
 ## Layout
 
@@ -42,16 +43,25 @@ Until that lands, the client plays solo against bot empires.
 |---|---|
 | [`packages/sim`](packages/sim) | `@tessera/sim` — the deterministic core. Rules, RNG, snapshots, bots, victory. No DOM. |
 | [`packages/protocol`](packages/protocol) | `@tessera/protocol` — identities, signed moves and messages, the genesis record. |
+| [`packages/room`](packages/room) | `@tessera/room` — the game room that orders moves, and the client side of it. |
 | [`apps/web`](apps/web) | The browser client: virtualised viewport, LOD renderer, minimap. |
+| [`apps/worker`](apps/worker) | The Cloudflare Worker: serves the client, creates games, hosts each one in a Durable Object. |
 
 ## Running it
 
 ```sh
 pnpm install
-pnpm dev            # the game at http://localhost:1234
-pnpm test           # rules, determinism, protocol, client
+pnpm dev            # everything at http://localhost:8787: client, API, game rooms
+pnpm dev:solo       # the client alone at http://localhost:1234, solo play only
+pnpm test           # rules, determinism, protocol, room, client
 pnpm replay         # headless: run a game, print the state hash
+pnpm --filter @tessera/worker smoke   # two players through a running `pnpm dev`
 ```
+
+`pnpm dev` builds the packages and the client, then runs Parcel in watch mode
+beside `wrangler dev`, which serves the client's build, the API and the
+Durable Objects on one port. Game state lives in `apps/worker/.wrangler/`
+between runs.
 
 `pnpm replay` is the load-bearing tool. Node and a browser must agree on the
 hash for the same seed and move log. `--log <file>` replays a recorded game
