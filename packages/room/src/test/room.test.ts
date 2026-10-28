@@ -508,3 +508,37 @@ describe("chat", () => {
     expect(b.client.chat.map((l) => l.text)).toEqual(["lookright here"]);
   });
 });
+
+describe("bots", () => {
+  it("are seated as bot seats, by invite, even after the join window", async () => {
+    const h = new Harness({ creator: alice.key, empires: 2, bots: ["easy"], joinShare: 0 });
+    const a = await h.join(alice, "alice");
+    a.client.pickEmpire(0);
+    await h.settle();
+    a.client.start();
+    await h.settle();
+    await h.run(2_000);
+
+    const invite = (await a.client.invite(365 * 24 * 3600 * 1000))!;
+    const bot = await h.join(dave, "night watch", { bot: true });
+    bot.client.redeem(invite);
+    await h.settle();
+    await h.run(1_000);
+    expect(bot.client.you!.seat).toEqual({ empire: 1, member: 1 });
+    expect(a.client.sim!.state.empires[0]!.members[1]!.kind).toBe(1); // MEMBER.BOT
+    expect(a.client.people.people.find((p) => p.key === dave.key)!.bot).toBe(true);
+  });
+
+  it("cannot take an empire nobody holds", async () => {
+    const h = new Harness({ creator: alice.key, empires: 3, bots: ["easy"] });
+    const a = await h.join(alice);
+    a.client.pickEmpire(0);
+    await h.settle();
+    a.client.start();
+    await h.settle();
+    const bot = await h.join(dave, "bot", { bot: true });
+    bot.client.claim(2);
+    await h.settle();
+    expect(bot.errors).toContain("a bot joins by invite or approval");
+  });
+});

@@ -89,12 +89,16 @@ interface StoredSeating {
   empire: number;
   key: string;
   step: number;
+  /** A program playing the seat. Absent in seatings stored before bots. */
+  bot?: boolean;
 }
 
 interface StoredPlayer {
   key: string;
   name: string;
   empire: number | null;
+  /** Said so in its hello: a program, not a person. */
+  bot?: boolean;
 }
 
 /** Chat lines kept, for whoever arrives later. */
@@ -286,14 +290,16 @@ export class Room {
     const ok = await verifyHello(message.key, this.config.roomId, peer.nonce, theirs, message.proof);
     if (!ok) return this.error(peer, "hello proof did not verify");
 
+    const bot = message.bot === true ? { bot: true } : {};
     if (this._phase === "lobby") {
       peer.key = message.key;
       const name = cleanName(message.name);
       const known = this.players.find((p) => p.key === message.key);
       if (known) {
         if (name) known.name = name;
+        Object.assign(known, bot);
       } else {
-        this.players.push({ key: message.key, name, empire: null });
+        this.players.push({ key: message.key, name, empire: null, ...bot });
       }
       this.store.put("players", this.players);
       this.sendTo(peer.conn, {
@@ -313,8 +319,11 @@ export class Room {
     peer.key = message.key;
     const name = cleanName(message.name);
     const known = this.players.find((p) => p.key === message.key);
-    if (!known) this.players.push({ key: message.key, name, empire: null });
-    else if (name) known.name = name;
+    if (!known) this.players.push({ key: message.key, name, empire: null, ...bot });
+    else {
+      if (name) known.name = name;
+      Object.assign(known, bot);
+    }
     this.store.put("players", this.players);
     this.sendTo(peer.conn, {
       t: "welcome",
@@ -454,7 +463,7 @@ export class Room {
     this.genesis = genesis;
     this.roster = Roster.fromGenesis(genesis);
     for (const seating of this.seatings) {
-      this.roster.amend(seating.empire, seating.key, MEMBER.HUMAN, seating.step);
+      this.roster.amend(seating.empire, seating.key, seating.bot ? MEMBER.BOT : MEMBER.HUMAN, seating.step);
     }
     const sim = new Sim(genesis);
     const snapshot = this.store.latestSnapshot();
@@ -600,13 +609,18 @@ export class Room {
     this.store.put("lastStamp", step);
     this.advance(step);
 
-    const move: Move = { step, empire, member: by, seq: 0, type: MOVE.ROSTER_AMEND, x: MEMBER.HUMAN, y: 0 };
+    // A bot is seated as one. The simulation lets a bot seat in after the join
+    // window has closed, because a bot is cover for an empire's own players
+    // rather than a new player arriving.
+    const bot = this.isBot(key);
+    const kind = bot ? MEMBER.BOT : MEMBER.HUMAN;
+    const move: Move = { step, empire, member: by, seq: 0, type: MOVE.ROSTER_AMEND, x: kind, y: 0 };
     if (sim.step !== step || !sim.validate(move)) {
       if (peer) this.error(peer, "that seat cannot be given now");
       return false;
     }
-    roster.amend(empire, key, MEMBER.HUMAN, step);
-    this.seatings.push({ empire, key, step });
+    roster.amend(empire, key, kind, step);
+    this.seatings.push({ empire, key, step, ...(bot ? { bot } : {}) });
     this.requests = this.requests.filter((r) => r.key !== key);
     this.store.put("seatings", this.seatings);
     this.store.put("requests", this.requests);
@@ -628,8 +642,15 @@ export class Room {
     return true;
   }
 
+  private isBot(key: string): boolean {
+    return this.players.find((p) => p.key === key)?.bot === true;
+  }
+
   private claim(peer: Peer, empireId: unknown): void {
     if (!this.canJoin(peer) || !Number.isInteger(empireId)) return;
+    // An empire with nobody in it is a player's to take. A bot is cover for
+    // people who are already there, so it comes in by invite or approval.
+    if (this.isBot(peer.key!)) return this.error(peer, "a bot joins by invite or approval");
     const empire = this.sim!.state.empires[(empireId as number) - 1];
     if (!empire || !isVacant(empire) || empire.control !== CONTROL.HUMAN) {
       return this.error(peer, "that empire cannot be taken");
@@ -753,6 +774,7 @@ export class Room {
         name: names.get(seat.key) ?? "",
         connected: online.has(seat.key),
         seat: { empire: seat.empire, member: seat.member },
+        ...(seat.kind === MEMBER.BOT ? { bot: true } : {}),
       });
     }
     for (const key of online) {

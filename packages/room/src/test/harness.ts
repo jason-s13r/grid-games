@@ -63,7 +63,7 @@ export class Harness {
     this.room = new Room(this.store, { now: this.clock.now });
   }
 
-  async join(identity: Identity, name?: string): Promise<Linked> {
+  async join(identity: Identity, name?: string, options: { bot?: boolean } = {}): Promise<Linked> {
     const errors: string[] = [];
     let id = "";
     let open = false;
@@ -72,6 +72,7 @@ export class Harness {
       identity,
       now: this.clock.now,
       roomId: this.room.id,
+      ...(options.bot ? { bot: true } : {}),
       ...(name ? { name } : {}),
       send: (text) => {
         if (open) this.track(this.room.receive(id, text));

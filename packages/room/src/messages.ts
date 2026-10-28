@@ -72,6 +72,8 @@ export interface Person {
   key: string;
   name: string;
   connected: boolean;
+  /** A program holding the seat. */
+  bot?: boolean;
   seat?: { empire: number; member: number };
 }
 
@@ -122,6 +124,8 @@ export type ClientMessage =
       name?: string;
       /** Where this client already is, if it has a game in memory. */
       have?: { step: number; hash: number };
+      /** A program rather than a person. Seated as a bot seat. */
+      bot?: boolean;
     }
   | { t: "lobby"; name?: string; empire?: number | null }
   | { t: "start" }

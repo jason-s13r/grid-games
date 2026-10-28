@@ -46,6 +46,8 @@ export interface RoomClientOptions {
   send: (text: string) => void;
   /** The local clock, ms since the epoch. */
   now?: () => number;
+  /** A program rather than a person: seated as a bot seat. */
+  bot?: boolean;
 }
 
 /** A hash report every 15 seconds of game time. They double as the seat's
@@ -334,6 +336,7 @@ export class RoomClient {
       nonce: toBase64Url(ours),
       proof,
       ...(this.name ? { name: this.name } : {}),
+      ...(this.options.bot ? { bot: true } : {}),
       // A reconnecting client already holds most of the game. It offers the
       // last state it knows is complete, and the room sends only what came
       // after, unless it has reason to doubt that state.

@@ -107,7 +107,7 @@ export class PeoplePanel {
       .map((p) => {
         const theme = p.seat ? empireTheme(p.seat.empire) : undefined;
         return `<div class="roster-row${p.connected ? "" : " afk"}">
-          <span>${theme ? `<span class="swatch" style="background:${theme.c1}"></span> ` : ""}${name(p)}${
+          <span>${theme ? `<span class="swatch" style="background:${theme.c1}"></span> ` : ""}${name(p)}${p.bot ? " (bot)" : ""}${
             p.key === this.me ? " (you)" : ""
           }</span>
           <span>${theme ? escape(theme.name) : "watching"}</span>
