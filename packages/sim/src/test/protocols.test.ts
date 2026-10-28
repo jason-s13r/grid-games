@@ -49,16 +49,18 @@ describe("the protocol is the sim's major version", () => {
   const manifest = JSON.parse(
     readFileSync(new URL("../../package.json", import.meta.url), "utf8"),
   ) as { version: string };
+  const major = (version: string): number => Number(version.split(".")[0]);
 
-  it("reports the version its manifest declares", () => {
-    // dispat writes both at release. If they disagree, one of them was edited
-    // by hand, and the protocol a client advertises is no longer the release
-    // it was built from.
-    expect(SIM_VERSION).toBe(manifest.version);
+  it("takes the protocol from SIM_VERSION's major", () => {
+    expect(SIM_VERSION).toMatch(/^\d+\.\d+\.\d+$/);
+    expect(PROTOCOL_VERSION).toBe(major(SIM_VERSION));
   });
 
-  it("takes the protocol from the major", () => {
-    expect(PROTOCOL_VERSION).toBe(Number(manifest.version.split(".")[0]));
+  it("is never behind the last release", () => {
+    // The manifest is dispat's: it holds the last released version until the
+    // next release writes both. Between releases SIM_VERSION may be ahead of
+    // it (a major already pinned with Release-As), and never behind.
+    expect(major(SIM_VERSION)).toBeGreaterThanOrEqual(major(manifest.version));
   });
 });
 
