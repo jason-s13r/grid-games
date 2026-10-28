@@ -1,16 +1,21 @@
 // The game room: the one place a game's moves are put in order.
 //
-// Every client runs the full simulation and validates every move, so the room
-// decides nothing about the rules. What it decides is *when*: each move is
-// stamped with the step it lands on, and a step is final once the room has said
-// so. It also keeps the log and a snapshot, so a client arriving late or coming
-// back tomorrow can be caught up, and it heartbeats for connected seats so the
-// abandonment rules see who is present.
+// Every client runs the full simulation on its own clock and validates every
+// move, so the room decides nothing about the rules. What it decides is *when*:
+// a move is stamped, the moment it arrives, with a step a little ahead of now
+// (LEAD_STEPS), and broadcast at once. Nothing is ever stamped below a step
+// already handed out, so every step before the current lead is final, and a
+// client that simulates up to "now" has every move it needs.
 //
-// It has no timer, socket or database of its own. Whatever hosts it (a Durable
-// Object, a host tab, a test) hands it connections and messages, calls `tick()`
-// while `wantsTicks()` says so, and supplies a store. That is what lets a test
-// run a room and six clients in one process with a clock it controls.
+// The room acts only when a message arrives. It keeps the log and a snapshot so
+// a client arriving late or coming back tomorrow can be caught up, and it runs
+// its own copy of the simulation lazily, catching up to now when it needs an
+// answer: for a newcomer, a hash comparison, or a seat. Between messages it
+// does nothing at all, which is what lets a Durable Object hosting it sleep.
+//
+// It has no timer, socket or database of its own. Whatever hosts it hands it
+// connections and messages, calls `tick()` at `wakeAt()` for a scheduled start,
+// and supplies a store.
 
 import {
   CONTROL,
@@ -54,9 +59,10 @@ import type {
 } from "./messages.js";
 import type { RoomStore } from "./store.js";
 
-/** How often a host should call `tick()` while the room wants ticks. Each tick
- *  seals about three steps, and a move waits at most this long to be stamped. */
-export const TICK_MS = 250;
+/** How far ahead of now a move is stamped: half a second. A client that
+ *  simulates up to now therefore has half a second for a move to reach it
+ *  before it is needed; one that arrives later than that is replayed. */
+export const LEAD_STEPS = 6;
 
 /** One open socket, as the host sees it. */
 export interface Connection {
@@ -84,15 +90,6 @@ interface StoredSeating {
   step: number;
 }
 
-/** A seat waiting for the next batch. `by` is the member index the
- *  ROSTER_AMEND is issued under: whoever approved or invited, or 0 for an
- *  empire nobody holds. */
-interface PendingSeat {
-  empire: number;
-  key: string;
-  by: number;
-}
-
 interface StoredPlayer {
   key: string;
   name: string;
@@ -115,13 +112,15 @@ export class Room {
   private genesis?: Genesis;
   private roster?: Roster;
   private sim?: Sim;
-  /** The next step to simulate. Every step before it is final. */
+  /** The room's own simulation step. */
   private next = 0;
-  private pending: Stamped[] = [];
+  /** Logged moves the room's simulation has not reached yet. */
+  private future: Stamped[] = [];
+  /** The highest step handed out. Nothing is stamped below it. */
+  private lastStamp = 0;
   private seqs: Record<string, number>;
   private readonly beats = new Map<string, number>();
   private seatings: StoredSeating[];
-  private pendingSeats: PendingSeat[] = [];
   private requests: Array<{ key: string; empire: number }>;
   private usedInvites: string[];
   private readonly checkpoints = new Map<number, number>();
@@ -150,6 +149,7 @@ export class Room {
     this.seatings = store.get<StoredSeating[]>("seatings") ?? [];
     this.requests = store.get<Array<{ key: string; empire: number }>>("requests") ?? [];
     this.usedInvites = store.get<string[]>("invites") ?? [];
+    this.lastStamp = store.get<number>("lastStamp") ?? 0;
 
     const genesis = store.get<Genesis>("genesis");
     if (genesis) this.load(genesis, store.get<number>("next") ?? 0);
@@ -176,16 +176,15 @@ export class Room {
     return this.sim?.ended ?? false;
   }
 
-  /** Whether the host should keep calling `tick()`: there is a game running
-   *  and somebody to tell about it. With nobody connected the room sleeps, and
-   *  the next tick after somebody arrives catches the world up. */
-  wantsTicks(): boolean {
-    if (this._phase === "playing") return !this.ended && this.connectedKeys().size > 0;
-    return false;
+  /** Bring the room's own simulation up to now. The room does this itself
+   *  whenever it needs an answer; it is public for tools and tests. */
+  catchUp(): number {
+    if (this.genesis) this.advance(stepAt(this.genesis.startedAt, this.now()));
+    return this.next;
   }
 
-  /** When the room next needs waking with nobody connected: the scheduled
-   *  start, if there is one. */
+  /** When the room next needs a `tick()`: the scheduled start, if there is
+   *  one. A running game needs none. */
   wakeAt(): number | undefined {
     return this._phase === "lobby" ? this.startsAt : undefined;
   }
@@ -294,10 +293,9 @@ export class Room {
       return;
     }
 
-    // Catch the world up before handing it over, so the client starts from now
-    // rather than from whenever the room last ticked. The key is set after, so
-    // this client is not sent a batch it has no state to apply to.
-    this.seal();
+    // The key is set after the catch-up, so this client is not sent moves it
+    // has no state to apply them to.
+    this.catchUp();
     peer.key = message.key;
     const name = cleanName(message.name);
     const known = this.players.find((p) => p.key === message.key);
@@ -392,7 +390,9 @@ export class Room {
       this.store.putSnapshot({ step: 0, hash: sim.hash(), bytes: new Uint8Array(sim.snapshot()) });
 
       for (const peer of this.peers.values()) {
-        if (peer.key) this.sendTo(peer.conn, { t: "start", genesis, you: this.you(peer.key) });
+        if (peer.key) {
+          this.sendTo(peer.conn, { t: "start", genesis, you: this.you(peer.key), now: this.now() });
+        }
       }
       this.broadcastPeople();
     } finally {
@@ -455,6 +455,7 @@ export class Room {
     );
     this.sim = sim;
     this.next = sim.step;
+    this.future = tail.filter((s) => s.move.step >= sim.step);
   }
 
   // --- moves -----------------------------------------------------------------
@@ -482,46 +483,60 @@ export class Room {
 
     this.seqs[key] = seq;
     this.store.put("seqs", this.seqs);
-    this.pending.push({ move, sig: message.sig });
+    this.stamp([{ move, sig: message.sig }], key);
   }
 
   // --- the clock -------------------------------------------------------------
 
-  /** Called by the host every TICK_MS while `wantsTicks()`, and at `wakeAt()`.
-   *  Starts a scheduled game when it is due, and seals the steps that have
-   *  passed. */
+  /** Called by the host at `wakeAt()`: starts a scheduled game when it is due. */
   async tick(): Promise<void> {
-    if (this._phase === "lobby") {
-      if (this.startsAt !== undefined && this.now() >= this.startsAt) await this.start();
-      return;
+    if (this._phase === "lobby" && this.startsAt !== undefined && this.now() >= this.startsAt) {
+      await this.start();
     }
-    this.seal();
   }
 
-  /** Stamp what is pending, simulate up to now, log it, and tell everybody. */
-  private seal(): void {
-    const sim = this.sim;
-    if (!sim || !this.genesis || sim.ended) return;
-    const target = stepAt(this.genesis.startedAt, this.now());
-    if (target <= this.next) return;
+  /** The lowest step a move stamped now may land on. Every step below it is
+   *  final: nothing can be stamped there any more. */
+  private openStep(): number {
+    return Math.max(stepAt(this.genesis!.startedAt, this.now()) + LEAD_STEPS, this.lastStamp);
+  }
 
-    const from = this.next;
-    const batch: Stamped[] = [];
-    for (const stamped of this.pending) {
-      stamped.move.step = from;
-      batch.push(stamped);
+  /** Put moves in the log at the open step, with a heartbeat for `key`'s seat
+   *  if one is due, and tell everybody. */
+  private stamp(moves: Stamped[], key?: string, at?: number): number {
+    const step = at ?? this.openStep();
+    const all = [...moves];
+    const beat = key ? this.heartbeat(key, step) : undefined;
+    if (beat) all.push(beat);
+    if (!all.length) return step;
+
+    for (const stamped of all) stamped.move.step = step;
+    this.lastStamp = step;
+    this.store.put("lastStamp", step);
+    this.store.append(all);
+    this.future.push(...all);
+
+    const message: ServerMessage = { t: "moves", moves: all, now: this.now() };
+    for (const peer of this.peers.values()) {
+      if (peer.key) this.sendTo(peer.conn, message);
     }
-    this.pending = [];
-    const seated = this.seat(from);
-    batch.push(...seated.moves);
-    batch.push(...this.heartbeats(from));
+    return step;
+  }
 
-    this.store.append(batch);
+  /** Simulate up to `to`, never past a step that could still receive a move. */
+  private advance(to: number): void {
+    const sim = this.sim;
+    if (!sim || !this.genesis) return;
+    const bound = Math.min(to, this.openStep());
+    if (bound <= sim.step || sim.ended) return;
+
+    const from = sim.step;
     const { checkpoints } = advanceTo(
       sim,
-      target,
-      batch.map((s) => s.move),
+      bound,
+      this.future.map((s) => s.move),
     );
+    this.future = this.future.filter((s) => s.move.step >= sim.step);
     for (const { step, hash } of checkpoints) this.checkpoints.set(step, hash);
     for (const step of this.checkpoints.keys()) {
       if (this.checkpoints.size <= KEEP_CHECKPOINTS) break;
@@ -537,63 +552,56 @@ export class Room {
         bytes: new Uint8Array(sim.snapshot()),
       });
     }
+  }
 
-    const message: ServerMessage = { t: "batch", from, upTo: this.next, moves: batch };
-    for (const peer of this.peers.values()) {
-      if (peer.key) this.sendTo(peer.conn, message);
-    }
-    if (seated.keys.length) {
-      for (const peer of this.peers.values()) {
-        if (peer.key && seated.keys.includes(peer.key)) {
-          this.sendTo(peer.conn, { t: "seated", you: this.you(peer.key) });
-        }
-      }
-      this.broadcastPeople();
-    }
+  /** A HEARTBEAT for `key`'s seat, once per heartbeat interval, issued when
+   *  that seat's client says anything at all. Unsigned: presence is something
+   *  the room observes, not something a seat claims. */
+  private heartbeat(key: string, step: number): Stamped | undefined {
+    const seat = this.roster?.seatOf(key);
+    if (!seat || !this.genesis) return undefined;
+    const last = this.beats.get(key);
+    if (last !== undefined && step - last < this.genesis.rules.heartbeatInterval) return undefined;
+    this.beats.set(key, step);
+    return {
+      move: { step, empire: seat.empire, member: seat.member, seq: 0, type: MOVE.HEARTBEAT, x: 0, y: 0 },
+    };
   }
 
   // --- seats after the start -------------------------------------------------
 
-  /** Turn waiting seats into ROSTER_AMEND moves at `step`, one per empire per
-   *  batch, and only where the simulation will accept them: the join window,
-   *  the seat cap and a still-living empire are all its rules. */
-  private seat(step: number): { moves: Stamped[]; keys: string[] } {
+  /** Seat `key` in `empire` with a ROSTER_AMEND the room issues under member
+   *  `by` (whoever approved or invited, or 0 for an empire nobody holds), if
+   *  the simulation will accept it: the join window, the seat cap and a living
+   *  empire are all its rules. The amendment gets a step of its own, and the
+   *  room catches up to it first, so it is judged against the state it will
+   *  land in. */
+  private seatNow(peer: Peer | undefined, empire: number, key: string, by: number): boolean {
     const sim = this.sim!;
     const roster = this.roster!;
-    const moves: Stamped[] = [];
-    const keys: string[] = [];
-    const touched = new Set<number>();
-    const later: PendingSeat[] = [];
+    if (roster.has(key)) return false;
+    const step = Math.max(this.openStep(), this.lastStamp + 1);
+    this.lastStamp = step;
+    this.store.put("lastStamp", step);
+    this.advance(step);
 
-    for (const want of this.pendingSeats) {
-      if (roster.has(want.key) || keys.includes(want.key)) continue;
-      if (touched.has(want.empire)) {
-        later.push(want);
-        continue;
-      }
-      const move: Move = {
-        step,
-        empire: want.empire,
-        member: want.by,
-        seq: 0,
-        type: MOVE.ROSTER_AMEND,
-        x: MEMBER.HUMAN,
-        y: 0,
-      };
-      if (!sim.validate(move)) continue;
-      touched.add(want.empire);
-      roster.amend(want.empire, want.key, MEMBER.HUMAN, step);
-      this.seatings.push({ empire: want.empire, key: want.key, step });
-      moves.push({ move });
-      keys.push(want.key);
-      this.requests = this.requests.filter((r) => r.key !== want.key);
+    const move: Move = { step, empire, member: by, seq: 0, type: MOVE.ROSTER_AMEND, x: MEMBER.HUMAN, y: 0 };
+    if (sim.step !== step || !sim.validate(move)) {
+      if (peer) this.error(peer, "that seat cannot be given now");
+      return false;
     }
-    this.pendingSeats = later;
-    if (moves.length) {
-      this.store.put("seatings", this.seatings);
-      this.store.put("requests", this.requests);
+    roster.amend(empire, key, MEMBER.HUMAN, step);
+    this.seatings.push({ empire, key, step });
+    this.requests = this.requests.filter((r) => r.key !== key);
+    this.store.put("seatings", this.seatings);
+    this.store.put("requests", this.requests);
+    this.stamp([{ move }], undefined, step);
+
+    for (const other of this.peers.values()) {
+      if (other.key === key) this.sendTo(other.conn, { t: "seated", you: this.you(key) });
     }
-    return { moves, keys };
+    this.broadcastPeople();
+    return true;
   }
 
   private canJoin(peer: Peer): boolean {
@@ -611,7 +619,7 @@ export class Room {
     if (!empire || !isVacant(empire) || empire.control !== CONTROL.HUMAN) {
       return this.error(peer, "that empire cannot be taken");
     }
-    this.pendingSeats.push({ empire: empireId as number, key: peer.key!, by: 0 });
+    this.seatNow(peer, empireId as number, peer.key!, 0);
   }
 
   private ask(peer: Peer, empireId: unknown): void {
@@ -640,7 +648,7 @@ export class Room {
     if (!request) return;
     const seat = this.roster?.seatOf(peer.key!);
     if (!seat || seat.empire !== request.empire) return this.error(peer, "only that empire can answer");
-    if (yes) this.pendingSeats.push({ empire: request.empire, key: request.key, by: seat.member });
+    if (yes) this.seatNow(peer, request.empire, request.key, seat.member);
     else this.dropRequest(request.key);
   }
 
@@ -655,9 +663,10 @@ export class Room {
     if (!inviter || inviter.empire !== invite.empire) {
       return this.error(peer, "whoever signed that invite is not in that empire");
     }
-    this.usedInvites.push(invite.id);
-    this.store.put("invites", this.usedInvites);
-    this.pendingSeats.push({ empire: invite.empire, key: peer.key!, by: inviter.member });
+    if (this.seatNow(peer, invite.empire, peer.key!, inviter.member)) {
+      this.usedInvites.push(invite.id);
+      this.store.put("invites", this.usedInvites);
+    }
   }
 
   private rename(key: string, raw: string): void {
@@ -699,26 +708,6 @@ export class Room {
     }
   }
 
-  /** A HEARTBEAT for every seat with a socket open, once per heartbeat
-   *  interval. Unsigned: presence is something the room observes, not
-   *  something a seat claims. */
-  private heartbeats(step: number): Stamped[] {
-    if (!this.roster || !this.genesis) return [];
-    const interval = this.genesis.rules.heartbeatInterval;
-    const out: Stamped[] = [];
-    for (const key of [...this.connectedKeys()].sort()) {
-      const seat = this.roster.seatOf(key);
-      if (!seat) continue;
-      const last = this.beats.get(key);
-      if (last !== undefined && step - last < interval) continue;
-      this.beats.set(key, step);
-      out.push({
-        move: { step, empire: seat.empire, member: seat.member, seq: 0, type: MOVE.HEARTBEAT, x: 0, y: 0 },
-      });
-    }
-    return out;
-  }
-
   // --- catching up -----------------------------------------------------------
 
   /** Everything a client needs to reach `next`, from its own state when the
@@ -733,7 +722,7 @@ export class Room {
       have.step >= (this.store.latestSnapshot()?.step ?? 0) &&
       (known === undefined || known === have.hash);
     if (usable) {
-      return { genesis, tail: this.store.movesFrom(have.step), upTo: this.next };
+      return { genesis, tail: this.store.movesFrom(have.step), upTo: this.next, now: this.now() };
     }
     const snapshot = this.store.latestSnapshot()!;
     return {
@@ -741,11 +730,17 @@ export class Room {
       snapshot: { step: snapshot.step, hash: snapshot.hash, data: toBase64Url(snapshot.bytes) },
       tail: this.store.movesFrom(snapshot.step),
       upTo: this.next,
+      now: this.now(),
     };
   }
 
   /** A client's hash at a checkpoint. A mismatch sends it the room's state. */
   private compare(peer: Peer, step: number, hash: number): void {
+    // Reports come every few seconds from every client, which makes them the
+    // natural carrier for a seat's heartbeat.
+    this.stamp([], peer.key);
+    if (!Number.isInteger(step)) return;
+    if (step > this.next) this.advance(step + 1);
     const ours = this.checkpoints.get(step);
     if (ours === undefined || ours === hash) return;
     this.sendTo(peer.conn, { t: "resync", game: this.catchup() });

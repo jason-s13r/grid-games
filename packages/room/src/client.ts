@@ -1,9 +1,13 @@
 // A client's side of a game room.
 //
-// It holds the client's own copy of the simulation and keeps it at the room's
-// step: a batch says which moves land on which steps and how far the world has
-// got, and the client simulates exactly that. Nothing it receives is board
-// state except a snapshot, and a snapshot is only ever used to start from.
+// It holds the client's own copy of the simulation and runs it on its own
+// clock, set by the room's: `advance()` simulates up to now, applying every
+// move the room has stamped. The room stamps moves half a second ahead
+// (LEAD_STEPS), so a move normally arrives before its step is simulated. One
+// that arrives late is not lost: the client keeps a second of snapshots for the
+// last few seconds, rewinds to the one before the move, and simulates forward
+// again. Nothing it receives is board state except a snapshot, and a snapshot
+// is only ever used to start from.
 //
 // No socket of its own. The host passes in `send` and calls `receive` with
 // whatever arrives, and calls `connected()` when a (re)connection opens.
@@ -20,7 +24,7 @@ import {
   signMove,
   toBase64Url,
 } from "@tessera/protocol";
-import { advanceTo } from "./advance.js";
+import { advanceTo, stepAt } from "./advance.js";
 import { decode, encode } from "./messages.js";
 import type { SignedInvite } from "@tessera/protocol";
 import type { Catchup, ClientMessage, LobbyView, People, Phase, ServerMessage, You } from "./messages.js";
@@ -31,7 +35,21 @@ export interface RoomClientOptions {
   name?: string;
   /** Sends one message on the current connection. */
   send: (text: string) => void;
+  /** The local clock, ms since the epoch. */
+  now?: () => number;
 }
+
+/** A hash report every 15 seconds of game time. They double as the seat's
+ *  presence: the room heartbeats a seat whose client has spoken lately. */
+const REPORT_EVERY = 12 * 15;
+/** A report waits this many steps, so a late move cannot change the state it
+ *  describes after it has been sent. */
+const REPORT_AFTER = 24;
+/** Rewind points: one a second, for the last ten seconds. */
+const REWIND_EVERY = 12;
+const REWIND_KEEP = 10;
+/** Clock samples kept for estimating the room's clock. */
+const CLOCK_SAMPLES = 32;
 
 export class RoomClient {
   phase: Phase | undefined;
@@ -42,8 +60,6 @@ export class RoomClient {
   /** Who is in the running game, and who is asking for a seat. */
   people: People = { people: [], requests: [] };
 
-  /** The world moved; `dirty` is what a renderer must repaint. */
-  onAdvance: ((dirty: Set<number>) => void) | null = null;
   /** The world was replaced wholesale (joined, resynced): repaint everything. */
   onReset: (() => void) | null = null;
   onLobby: ((lobby: LobbyView) => void) | null = null;
@@ -56,9 +72,97 @@ export class RoomClient {
   private queue: Promise<void> = Promise.resolve();
   private nextSeq = 0;
   private name: string | undefined;
+  private readonly now: () => number;
+
+  /** Every move known from the oldest rewind point on, in arrival order. */
+  private known: Move[] = [];
+  private rewind: Array<{ step: number; hash: number; bytes: ArrayBuffer }> = [];
+  /** The room's clock when we last heard from it. Our state is only known to be
+   *  right up to about then: after a connection drops, the client keeps
+   *  simulating, but without whatever was stamped in the meantime. */
+  private lastHeard = 0;
+  /** The rewind point offered to the room on reconnecting. */
+  private offered: { step: number; hash: number; bytes: ArrayBuffer } | undefined;
+  private reports = new Map<number, number>();
+  /** Recent checkpoint hashes, for comparing clients at one step. */
+  private history = new Map<number, number>();
+  /** (room clock - local clock) as observed, newest last. Each sample is low by
+   *  the message's travel time, so the largest is the closest. */
+  private offsets: number[] = [];
 
   constructor(private readonly options: RoomClientOptions) {
     this.name = options.name;
+    this.now = options.now ?? Date.now;
+  }
+
+  /** The room's clock as best this client can tell. Never ahead of it, which
+   *  is the safe side: a client that thinks it is earlier than it is simulates
+   *  less far, and waits rather than rewinds. */
+  roomNow(): number {
+    const offset = this.offsets.length ? Math.max(...this.offsets) : 0;
+    return this.now() + offset;
+  }
+
+  /** Simulate up to now. Returns the tiles that changed. A host calls this
+   *  every frame. */
+  advance(): Set<number> {
+    const sim = this.sim;
+    if (!sim || !this.genesis) return new Set();
+    const target = stepAt(this.genesis.startedAt, this.roomNow());
+    const dirty = new Set<number>();
+    while (sim.step < target && !sim.ended) {
+      // One rewind interval at a time, keeping a rewind point at each.
+      const to = Math.min(target, (Math.floor(sim.step / REWIND_EVERY) + 1) * REWIND_EVERY);
+      const result = advanceTo(sim, to, this.known);
+      for (const tile of result.dirty) dirty.add(tile);
+      for (const { step, hash } of result.checkpoints) {
+        if (step % REPORT_EVERY === 0) this.reports.set(step, hash);
+        this.remember(step, hash);
+      }
+      if (sim.step % REWIND_EVERY === 0) this.keepRewind();
+    }
+    for (const [step, hash] of this.reports) {
+      if (sim.step - step < REPORT_AFTER) continue;
+      this.reports.delete(step);
+      this.send({ t: "hash", step, hash });
+    }
+    return dirty;
+  }
+
+  /** This client's hash at a recent checkpoint step (every CHECKPOINT_EVERY),
+   *  if it still has it. */
+  hashAt(step: number): number | undefined {
+    return this.history.get(step);
+  }
+
+  private remember(step: number, hash: number): void {
+    this.history.set(step, hash);
+    for (const old of this.history.keys()) {
+      if (this.history.size <= 32) break;
+      this.history.delete(old);
+    }
+  }
+
+  private keepRewind(): void {
+    const sim = this.sim!;
+    this.rewind.push({ step: sim.step, hash: sim.hash(), bytes: sim.snapshot() });
+    if (this.rewind.length > REWIND_KEEP) this.rewind.shift();
+    const oldest = this.rewind[0]!.step;
+    this.known = this.known.filter((m) => m.step >= oldest);
+  }
+
+  private clock(roomNow: number): void {
+    this.offsets.push(roomNow - this.now());
+    if (this.offsets.length > CLOCK_SAMPLES) this.offsets.shift();
+    this.lastHeard = Math.max(this.lastHeard, roomNow);
+  }
+
+  /** The newest rewind point from before we last heard from the room: the
+   *  latest state this client knows to be complete. */
+  private trusted(): { step: number; hash: number; bytes: ArrayBuffer } | undefined {
+    if (!this.genesis) return undefined;
+    const heard = stepAt(this.genesis.startedAt, this.lastHeard);
+    return [...this.rewind].reverse().find((r) => r.step <= heard);
   }
 
   get key(): string {
@@ -161,14 +265,20 @@ export class RoomClient {
         return this.setLobby(message.lobby);
       case "start":
         this.phase = "playing";
+        this.clock(message.now);
         this.genesis = message.genesis;
         this.sim = new Sim(message.genesis);
+        this.known = [];
+        this.rewind = [];
+        this.reports.clear();
+        this.keepRewind();
         this.setYou(message.you);
         this.onStart?.(message.genesis);
         this.onReset?.();
         return;
-      case "batch":
-        return this.batch(message.from, message.upTo, message.moves.map((s) => s.move));
+      case "moves":
+        this.clock(message.now);
+        return this.moves(message.moves.map((s) => s.move));
       case "resync":
         return this.apply(message.game);
       case "seated":
@@ -196,29 +306,56 @@ export class RoomClient {
       nonce: toBase64Url(ours),
       proof,
       ...(this.name ? { name: this.name } : {}),
-      // A reconnecting client already holds most of the game. The room sends
-      // only what it is missing, unless it has reason to doubt this state.
-      ...(this.sim ? { have: { step: this.sim.step, hash: this.sim.hash() } } : {}),
+      // A reconnecting client already holds most of the game. It offers the
+      // last state it knows is complete, and the room sends only what came
+      // after, unless it has reason to doubt that state.
+      ...this.offer(),
     });
   }
 
-  private batch(from: number, upTo: number, moves: Move[]): void {
+  private moves(moves: Move[]): void {
     const sim = this.sim;
     if (!sim) return;
-    if (from !== sim.step) {
-      // A gap: something was missed. Ask for what is needed to close it rather
-      // than simulating past a step whose moves we never saw.
-      this.send({ t: "resume", have: { step: sim.step, hash: sim.hash() } });
+    this.known.push(...moves);
+    const earliest = Math.min(...moves.map((m) => m.step));
+    if (earliest >= sim.step) return;
+
+    // Late: rewind to before it and simulate forward again with it in.
+    const point = [...this.rewind].reverse().find((r) => r.step <= earliest);
+    if (!point) {
+      this.send({ t: "resume", ...this.offer() });
       return;
     }
-    const { dirty, checkpoints } = advanceTo(sim, upTo, moves);
-    for (const checkpoint of checkpoints) this.send({ t: "hash", ...checkpoint });
-    this.onAdvance?.(dirty);
+    const reached = sim.step;
+    sim.restore(point.bytes.slice(0));
+    this.rewind = this.rewind.filter((r) => r.step <= point.step);
+    for (const step of [...this.reports.keys()]) if (step > point.step) this.reports.delete(step);
+    while (sim.step < reached && !sim.ended) {
+      const to = Math.min(reached, (Math.floor(sim.step / REWIND_EVERY) + 1) * REWIND_EVERY);
+      const result = advanceTo(sim, to, this.known);
+      for (const { step, hash } of result.checkpoints) {
+        if (step % REPORT_EVERY === 0) this.reports.set(step, hash);
+        this.remember(step, hash);
+      }
+      if (sim.step % REWIND_EVERY === 0) this.keepRewind();
+    }
+    this.onReset?.();
+  }
+
+  private offer(): { have?: { step: number; hash: number } } {
+    this.offered = this.sim ? this.trusted() : undefined;
+    return this.offered ? { have: { step: this.offered.step, hash: this.offered.hash } } : {};
   }
 
   private apply(game: Catchup): void {
     this.phase = "playing";
     const fresh = this.genesis?.gameId !== game.genesis.gameId;
+    // Back to the state we offered, if the room is building on it.
+    if (!game.snapshot && !fresh && this.sim && this.offered) {
+      this.sim.restore(this.offered.bytes.slice(0));
+    }
+    this.offered = undefined;
+    this.clock(game.now);
     this.genesis = game.genesis;
     if (game.snapshot || fresh || !this.sim) {
       const sim = new Sim(game.genesis);
@@ -229,13 +366,14 @@ export class RoomClient {
       }
       this.sim = sim;
     }
-    advanceTo(
-      this.sim,
-      game.upTo,
-      game.tail.map((s) => s.move),
-    );
+    this.known = game.tail.map((s) => s.move);
+    this.rewind = [];
+    this.reports.clear();
+    this.keepRewind();
+    this.advance();
     this.onReset?.();
   }
+
 
   private setYou(you: You): void {
     this.you = you;

@@ -47,9 +47,13 @@ export interface Catchup {
   genesis: Genesis;
   /** Absent when the client's own state is a valid starting point. */
   snapshot?: SnapshotWire;
-  /** Moves from the snapshot's step (or the client's) up to `upTo`. */
+  /** Every logged move from the snapshot's step (or the client's), including
+   *  moves stamped for steps the room has not simulated yet. */
   tail: Stamped[];
+  /** The room's own simulation step; informational. */
   upTo: number;
+  /** The room's clock, ms since the epoch, for the client to set its own by. */
+  now: number;
 }
 
 export interface You {
@@ -87,8 +91,9 @@ export type ServerMessage =
   | { t: "challenge"; nonce: string }
   | { t: "welcome"; phase: Phase; you: You; lobby?: LobbyView; game?: Catchup }
   | { t: "lobby"; lobby: LobbyView }
-  | { t: "start"; genesis: Genesis; you: You }
-  | { t: "batch"; from: number; upTo: number; moves: Stamped[] }
+  | { t: "start"; genesis: Genesis; you: You; now: number }
+  /** Moves just stamped, and the room's clock when it stamped them. */
+  | { t: "moves"; moves: Stamped[]; now: number }
   | { t: "resync"; game: Catchup }
   | { t: "seated"; you: You }
   | { t: "people"; people: People }

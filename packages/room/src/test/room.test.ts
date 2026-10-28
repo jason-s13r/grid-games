@@ -143,12 +143,12 @@ describe("playing", () => {
     const watcher = await h.join(carol);
     await h.run(10_000);
 
-    expect(a.client.sim!.step).toBe(h.room.step);
-    expect(b.client.sim!.step).toBe(h.room.step);
-    expect(watcher.client.sim!.step).toBe(h.room.step);
-    expect(a.client.sim!.hash()).toBe(h.room.hash());
-    expect(b.client.sim!.hash()).toBe(h.room.hash());
-    expect(watcher.client.sim!.hash()).toBe(h.room.hash());
+    expect(a.client.sim!.step).toBe(h.roomStep());
+    expect(b.client.sim!.step).toBe(h.roomStep());
+    expect(watcher.client.sim!.step).toBe(h.roomStep());
+    expect(a.client.sim!.hash()).toBe(h.roomHash());
+    expect(b.client.sim!.hash()).toBe(h.roomHash());
+    expect(watcher.client.sim!.hash()).toBe(h.roomHash());
     expect(watcher.client.you!.seat).toBeUndefined();
   });
 
@@ -164,8 +164,8 @@ describe("playing", () => {
 
     expect(tilesOf(a.client)).toBe(before + 1);
     expect(b.client.sim!.state.owner[at.y * b.client.sim!.state.width + at.x]).toBe(1);
-    expect(a.client.sim!.hash()).toBe(h.room.hash());
-    expect(b.client.sim!.hash()).toBe(h.room.hash());
+    expect(a.client.sim!.hash()).toBe(h.roomHash());
+    expect(b.client.sim!.hash()).toBe(h.roomHash());
   });
 
   it("refuses a move from a key with no seat", async () => {
@@ -204,9 +204,44 @@ describe("playing", () => {
     await h.run(2_000);
     // Corrupt one tile the way a bug would.
     a.client.sim!.state.pop[0] = 9999;
-    expect(a.client.sim!.hash()).not.toBe(h.room.hash());
-    await h.run(6_000);
-    expect(a.client.sim!.hash()).toBe(h.room.hash());
+    expect(a.client.sim!.hash()).not.toBe(h.roomHash());
+    // The next hash report, every 15 seconds of game time, finds it.
+    await h.run(20_000);
+    expect(a.client.sim!.hash()).toBe(h.roomHash());
+  });
+});
+
+describe("late moves", () => {
+  it("rewinds and replays a move that arrives after its step", async () => {
+    const { h, a, b } = await started();
+    await h.run(3_000);
+    b.hold();
+    const at = aClaim(a.client)!;
+    await a.client.submit(MOVE.CLAIM, at.x, at.y);
+    await h.settle();
+    // Two seconds: well past the half-second lead the move was stamped with.
+    await h.run(2_000);
+    const owner = () => b.client.sim!.state.owner[at.y * b.client.sim!.state.width + at.x];
+    expect(owner()).toBe(0);
+    b.release();
+    await h.settle();
+    expect(owner()).toBe(1);
+    expect(b.client.sim!.hash()).toBe(h.roomHash());
+    expect(a.client.sim!.hash()).toBe(h.roomHash());
+  });
+
+  it("asks for the room's state when a move is older than it can rewind", async () => {
+    const { h, a, b } = await started();
+    await h.run(3_000);
+    b.hold();
+    const at = aClaim(a.client)!;
+    await a.client.submit(MOVE.CLAIM, at.x, at.y);
+    await h.settle();
+    await h.run(30_000, 1000);
+    b.release();
+    await h.settle();
+    await h.run(1_000);
+    expect(b.client.sim!.hash()).toBe(h.roomHash());
   });
 });
 
@@ -218,8 +253,8 @@ describe("catching up", () => {
     await h.run(120_000, 1000);
     b.reconnect();
     await h.settle();
-    expect(b.client.sim!.step).toBe(h.room.step);
-    expect(b.client.sim!.hash()).toBe(h.room.hash());
+    expect(b.client.sim!.step).toBe(h.roomStep());
+    expect(b.client.sim!.hash()).toBe(h.roomHash());
     await h.run(2_000);
     expect(b.client.sim!.hash()).toBe(a.client.sim!.hash());
   });
@@ -228,8 +263,8 @@ describe("catching up", () => {
     const { h } = await started();
     await h.run((SNAPSHOT_EVERY / STEPS_PER_SECOND) * 1000 * 2 + 3_000, 1000);
     const late = await h.join(dave);
-    expect(late.client.sim!.step).toBe(h.room.step);
-    expect(late.client.sim!.hash()).toBe(h.room.hash());
+    expect(late.client.sim!.step).toBe(h.roomStep());
+    expect(late.client.sim!.hash()).toBe(h.roomHash());
   });
 
   it("catches the world up after nobody was connected", async () => {
@@ -237,18 +272,17 @@ describe("catching up", () => {
     await h.run(2_000);
     a.drop();
     b.drop();
-    expect(h.room.wantsTicks()).toBe(false);
     h.clock.advance(6 * 60 * 60 * 1000); // six hours with the room asleep
     a.reconnect();
     await h.settle();
     // Six hours is long enough for a bot to finish off two absent empires, so
     // the room either reached now or stopped where the game ended.
     const now = (6 * 60 * 60 + 2) * STEPS_PER_SECOND;
-    expect(h.room.ended || h.room.step === now).toBe(true);
-    expect(h.room.step).toBeGreaterThan(STEPS_PER_SECOND * 60 * 20);
-    expect(a.client.sim!.step).toBe(h.room.step);
+    expect(h.room.ended || h.roomStep() === now).toBe(true);
+    expect(h.roomStep()).toBeGreaterThan(STEPS_PER_SECOND * 60 * 20);
+    expect(a.client.sim!.step).toBe(h.roomStep());
     expect(a.client.sim!.ended).toBe(h.room.ended);
-    expect(a.client.sim!.hash()).toBe(h.room.hash());
+    expect(a.client.sim!.hash()).toBe(h.roomHash());
   });
 
   it("survives the room being rebuilt from its store", async () => {
@@ -258,21 +292,21 @@ describe("catching up", () => {
     await a.client.submit(MOVE.CLAIM, at.x, at.y);
     await h.settle();
     await h.run(1_000);
-    const step = h.room.step;
-    const hash = h.room.hash();
+    const step = h.roomStep();
+    const hash = h.roomHash();
 
     a.drop();
     b.drop();
     h.restart();
-    expect(h.room.step).toBe(step);
-    expect(h.room.hash()).toBe(hash);
+    expect(h.roomStep()).toBe(step);
+    expect(h.roomHash()).toBe(hash);
 
     a.reconnect();
     b.reconnect();
     await h.settle();
     await h.run(2_000);
-    expect(a.client.sim!.hash()).toBe(h.room.hash());
-    expect(b.client.sim!.hash()).toBe(h.room.hash());
+    expect(a.client.sim!.hash()).toBe(h.roomHash());
+    expect(b.client.sim!.hash()).toBe(h.roomHash());
     // The seq count came back with the room, so a's next move is accepted.
     const next = aClaim(a.client)!;
     await a.client.submit(MOVE.CLAIM, next.x, next.y);
@@ -291,13 +325,13 @@ describe("hosting", () => {
     a.reattach(h.room);
     b.reattach(h.room);
     await h.run(2_000);
-    expect(a.client.sim!.hash()).toBe(h.room.hash());
+    expect(a.client.sim!.hash()).toBe(h.roomHash());
     const at = aClaim(a.client)!;
     await a.client.submit(MOVE.CLAIM, at.x, at.y);
     await h.settle();
     await h.run(1_000);
     expect(a.errors).toEqual([]);
-    expect(b.client.sim!.hash()).toBe(h.room.hash());
+    expect(b.client.sim!.hash()).toBe(h.roomHash());
   });
 });
 
@@ -324,10 +358,10 @@ describe("joining a game that has started", () => {
     expect(c.client.you!.seat).toBeUndefined();
     c.client.claim(2);
     await h.settle();
-    await h.run(500);
+    await h.run(1_000);
     expect(c.client.you!.seat).toEqual({ empire: 2, member: 0 });
     expect(a.client.sim!.state.empires[1]!.members).toHaveLength(1);
-    expect(c.client.sim!.hash()).toBe(h.room.hash());
+    expect(c.client.sim!.hash()).toBe(h.roomHash());
     // And the new seat can play.
     await h.run(1_000);
     const at = aClaim(c.client)!;
@@ -355,11 +389,11 @@ describe("joining a game that has started", () => {
 
     a.client.approve(carol.key);
     await h.settle();
-    await h.run(500);
+    await h.run(1_000);
     expect(c.client.you!.seat).toEqual({ empire: 1, member: 1 });
     expect(a.client.people.requests).toEqual([]);
     expect(a.client.people.people.find((p) => p.key === carol.key)!.seat).toEqual({ empire: 1, member: 1 });
-    expect(c.client.sim!.hash()).toBe(h.room.hash());
+    expect(c.client.sim!.hash()).toBe(h.roomHash());
   });
 
   it("lets only that empire answer a request", async () => {
@@ -367,13 +401,13 @@ describe("joining a game that has started", () => {
     const c = await h.join(carol);
     c.client.claim(2);
     await h.settle();
-    await h.run(500);
+    await h.run(1_000);
     const d = await h.join(dave);
     d.client.ask(1);
     await h.settle();
     c.client.approve(dave.key);
     await h.settle();
-    await h.run(500);
+    await h.run(1_000);
     expect(d.client.you!.seat).toBeUndefined();
     expect(c.errors).toContain("only that empire can answer");
   });
@@ -385,7 +419,7 @@ describe("joining a game that has started", () => {
     const c = await h.join(carol);
     c.client.redeem(invite);
     await h.settle();
-    await h.run(500);
+    await h.run(1_000);
     expect(c.client.you!.seat).toEqual({ empire: 1, member: 1 });
 
     const d = await h.join(dave);
@@ -409,7 +443,7 @@ describe("joining a game that has started", () => {
     const c = await h.join(carol);
     c.client.claim(2);
     await h.settle();
-    await h.run(500);
+    await h.run(1_000);
     expect(c.client.you!.seat).toBeUndefined();
   });
 
@@ -418,12 +452,12 @@ describe("joining a game that has started", () => {
     const c = await h.join(carol);
     c.client.claim(2);
     await h.settle();
-    await h.run(500);
-    const hash = h.room.hash();
+    await h.run(1_000);
+    const hash = h.roomHash();
     a.drop();
     c.drop();
     h.restart();
-    expect(h.room.hash()).toBe(hash);
+    expect(h.roomHash()).toBe(hash);
     c.reconnect();
     await h.settle();
     expect(c.client.you!.seat).toEqual({ empire: 2, member: 0 });

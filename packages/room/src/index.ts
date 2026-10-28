@@ -1,4 +1,4 @@
-export { Room, TICK_MS } from "./room.js";
+export { Room, LEAD_STEPS } from "./room.js";
 export type { Connection, RoomOptions } from "./room.js";
 export { RoomClient } from "./client.js";
 export type { RoomClientOptions } from "./client.js";

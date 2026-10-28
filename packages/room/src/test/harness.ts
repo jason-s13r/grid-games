@@ -29,6 +29,10 @@ export interface Linked {
   /** Hand this client's open socket to a rebuilt room, as a woken Durable
    *  Object does with the sockets it kept. */
   reattach(room: Room): void;
+  /** Hold everything the room sends this client, as a slow network would. */
+  hold(): void;
+  /** Deliver what was held, in order. */
+  release(): void;
 }
 
 let ids = 0;
@@ -38,6 +42,7 @@ export class Harness {
   readonly store = new MemoryStore();
   room: Room;
   private readonly pending = new Set<Promise<void>>();
+  private readonly clients: RoomClient[] = [];
 
   constructor(config: Partial<RoomConfig> & { creator: string }) {
     Room.create(this.store, {
@@ -62,8 +67,10 @@ export class Harness {
     const errors: string[] = [];
     let id = "";
     let open = false;
+    let held: string[] | undefined;
     const client = new RoomClient({
       identity,
+      now: this.clock.now,
       roomId: this.room.id,
       ...(name ? { name } : {}),
       send: (text) => {
@@ -71,11 +78,14 @@ export class Harness {
       },
     });
     client.onError = (message) => errors.push(message);
+    this.clients.push(client);
 
     const socket = (myId: string) => ({
       id: myId,
       send: (text: string) => {
-        if (open && id === myId) this.track(client.receive(text));
+        if (!open || id !== myId) return;
+        if (held) held.push(text);
+        else this.track(client.receive(text));
       },
     });
     const connect = (): void => {
@@ -95,16 +105,37 @@ export class Harness {
       },
       reconnect: connect,
       reattach: (room) => room.reattach(socket(id), identity.key),
+      hold: () => {
+        held = [];
+      },
+      release: () => {
+        const texts = held ?? [];
+        held = undefined;
+        for (const text of texts) this.track(client.receive(text));
+      },
     };
   }
 
-  /** Advance the clock in ticks, letting everything settle after each. */
-  async run(ms: number, tickMs = 250): Promise<void> {
-    for (let t = 0; t < ms; t += tickMs) {
-      this.clock.advance(tickMs);
+  /** Advance the clock in frames, letting every client simulate up to now and
+   *  everything settle after each. The room is not ticked: it acts on
+   *  messages, as it does when hosted, except for a scheduled start. */
+  async run(ms: number, frameMs = 250): Promise<void> {
+    for (let t = 0; t < ms; t += frameMs) {
+      this.clock.advance(frameMs);
       await this.room.tick();
+      for (const client of this.clients) client.advance();
       await this.settle();
     }
+  }
+
+  /** The room's step and hash, caught up to now, to compare clients against. */
+  roomStep(): number {
+    return this.room.catchUp();
+  }
+
+  roomHash(): number | undefined {
+    this.room.catchUp();
+    return this.room.hash();
   }
 
   async settle(): Promise<void> {

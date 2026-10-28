@@ -59,31 +59,37 @@ Three consequences run through the rest of the repository:
 ## The game room
 
 [`packages/room`](packages/room) is the one place a game's moves are put in
-order. Every client runs the full simulation and validates every move, so the
-room decides nothing about the rules; it decides **when**. Each move is stamped
-with the step it lands on, and a step is final once the room has sealed it.
+order. Every client runs the full simulation on its own clock and validates
+every move, so the room decides nothing about the rules; it decides **when**.
 
-- **The clock.** While anybody is connected the host calls `tick()` every
-  250 ms. Each tick stamps the moves received since the last one onto the next
-  unsealed step, simulates up to the current wall-clock step, logs the batch and
-  broadcasts `{ from, upTo, moves }`. Clients simulate exactly that, so they need
-  no clock of their own and no agreement with each other.
+- **Stamping.** A move is stamped the moment it arrives with a step half a
+  second ahead of now (`LEAD_STEPS`) and broadcast at once, with the room's
+  clock. Nothing is ever stamped below a step already handed out, so every
+  step before the current lead is final.
+- **Clients keep time.** A client sets its clock by the room's (from the
+  timestamps on messages, erring early) and simulates up to now every frame,
+  applying the moves it has. A move normally arrives before its step. One that
+  arrives late is replayed: the client keeps a rewind point every second for
+  the last ten seconds, restores the one before the move and simulates forward
+  again; anything older asks the room for its state.
 - **Moves** are signed by the seat's key over everything but the step, which
   the room supplies. `seq` only rises per seat, so a signed move cannot be
-  replayed. Players' moves are checked against the roster before they are
-  accepted.
-- **Presence.** The room injects an unsigned `HEARTBEAT` for each connected
-  seat once per heartbeat interval, so the abandonment rules see who is here.
-- **Catching up.** A client says where it is when it connects. The room sends
-  the log tail from there, or its latest snapshot and the tail after it. Clients
-  report their hash every five seconds of game time; a mismatch gets the room's
-  state back.
-- **Sleeping.** With nobody connected the room stops ticking. The next tick
-  simulates everything since, which is cheap because the world is event-driven.
+  replayed.
+- **Presence.** Every client reports its state hash every 15 seconds of game
+  time. That report is also what keeps a seat present: the room stamps an
+  unsigned `HEARTBEAT` for the seat when one is due. A mismatched hash gets the
+  room's state back.
+- **The room's own simulation is lazy.** It catches up to now only when it
+  needs an answer: a newcomer's snapshot, a hash to compare, a seat to judge.
+  It keeps the log and a snapshot a minute, and between messages it does
+  nothing at all.
+- **Seats after the start** (taking an open empire, a member's approval, a
+  member's signed invite) are `ROSTER_AMEND` moves the room issues at a step of
+  their own, after catching up to it, so the simulation's rules decide them.
 
 The room has no timer, socket or database of its own: a host hands it
-connections, ticks and a store. The tests run a room and several clients in one
-process with a clock they turn.
+connections and a store, and calls `tick()` only for a scheduled start. The
+tests run a room and several clients in one process with a clock they turn.
 
 ## The Worker
 
@@ -94,9 +100,8 @@ static assets (`/g/<room>` falls back to the client), creates games at
 Each game is one `GameRoom` Durable Object, addressed by its room id, holding a
 `Room` over its SQLite storage. Sockets use the hibernation API and carry their
 proved key in their attachment, so a woken object takes them back without a new
-handshake. While anybody is connected an alarm fires every 250 ms and the room
-seals the steps since the last one; with nobody connected there is no alarm
-except a scheduled start, and the next connection catches the world up.
+handshake. Nothing runs between messages, so the object hibernates and costs
+nothing while a game is quiet; the only alarm is for a scheduled start.
 
 ## The simulation
 
@@ -199,7 +204,7 @@ game.
 
 `Driver` ([`game/Driver.ts`](apps/web/src/game/Driver.ts)) is the boundary:
 `LocalGame` queues moves for a future step and applies them through `advance()`
-exactly as an online driver will apply the batches a game room sends. Solo play
+exactly as `OnlineGame` applies the moves a game room stamps. Solo play
 is the same simulation with a different source of moves, which is why
 `Controls` and `main.ts` never learn which one they have.
 
