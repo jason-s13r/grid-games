@@ -24,6 +24,9 @@ import { Shell } from "./view/Shell";
 import { Flags, injectThemeCss, setFlags } from "./view/palette";
 import { OnlineGame } from "./game/Online";
 import { OnlinePanel } from "./view/Online";
+import { PeoplePanel } from "./view/People";
+import { fromBase64Url, toBase64Url, utf8, fromUtf8 } from "@tessera/protocol";
+import type { SignedInvite } from "@tessera/protocol";
 import { RoomLink, createGame, roomIdFrom } from "./net/room";
 
 const pick = <T extends Element>(selector: string): T => {
@@ -141,6 +144,7 @@ void showName();
 nameEl.addEventListener("change", () => {
   nameEl.value = setMyName(nameEl.value);
   void showName();
+  if (nameEl.value) link?.client.setName(nameEl.value);
 });
 
 let MAP = { ...MAP_SIZES.medium! };
@@ -411,6 +415,40 @@ pick<HTMLButtonElement>('[data-action="leave"]').addEventListener("click", () =>
 
 /** The room this tab is in, if any. */
 let link: RoomLink | undefined;
+/** An invite this tab arrived with, redeemed once the game is on screen. */
+let arrivedWith: SignedInvite | undefined;
+
+const people = new PeoplePanel(pick<HTMLElement>("[data-people]"), pick<HTMLElement>("[data-people-panel]"), {
+  approve: (key) => link?.client.approve(key),
+  decline: (key) => link?.client.decline(key),
+  withdraw: () => link?.client.withdraw(),
+  invite: async () => {
+    const current = link;
+    const signed = await current?.client.invite();
+    if (!current || !signed) return undefined;
+    return `${location.origin}/g/${current.roomId}?invite=${encodeInvite(signed)}`;
+  },
+});
+
+const encodeInvite = (signed: SignedInvite): string => toBase64Url(utf8(JSON.stringify(signed)));
+function decodeInvite(text: string | null): SignedInvite | undefined {
+  const bytes = text ? fromBase64Url(text) : null;
+  if (!bytes) return undefined;
+  try {
+    return JSON.parse(fromUtf8(bytes)) as SignedInvite;
+  } catch {
+    return undefined;
+  }
+}
+
+/** The two doors into a running game, on the standings list: take an empire
+ *  nobody holds, or ask one that somebody does. */
+pick<HTMLElement>("[data-standings]").addEventListener("click", (event) => {
+  const button = (event.target as HTMLElement).closest<HTMLElement>("[data-claim], [data-ask]");
+  if (!button || !link) return;
+  if (button.dataset.claim) link.client.claim(Number(button.dataset.claim));
+  else link.client.ask(Number(button.dataset.ask));
+});
 /** What to do once we are in the lobby of a game we just created. */
 let afterCreate: { start: boolean } | undefined;
 
@@ -500,6 +538,18 @@ async function enterRoom(roomId: string): Promise<void> {
     mount(new OnlineGame(client));
     online.playing(roomId);
     shell.show("game");
+    showPeople();
+    if (arrivedWith && !client.you?.seat) client.redeem(arrivedWith);
+    arrivedWith = undefined;
+  };
+  const showPeople = (): void => {
+    if (link === opened) people.set(client.people, identity.key, client.you?.seat?.empire ?? 0);
+  };
+  client.onPeople = showPeople;
+  client.onSeated = () => {
+    showPeople();
+    // A spectator who has just been given a seat wants to see their empire.
+    if (link === opened) centreOnCapital();
   };
   opened.connect();
 }
@@ -510,6 +560,7 @@ function leaveRoom(): void {
   link.close();
   link = undefined;
   afterCreate = undefined;
+  people.set(null);
   if (location.pathname.startsWith("/g/")) history.pushState(null, "", "/");
   online.home();
 }
@@ -553,7 +604,11 @@ requestAnimationFrame(frame);
 
 // A game link opens that game.
 const linked = location.pathname.startsWith("/g/") ? roomIdFrom(location.pathname) : null;
-if (linked) void enterRoom(linked);
+if (linked) {
+  arrivedWith = decodeInvite(new URLSearchParams(location.search).get("invite"));
+  if (location.search) history.replaceState(null, "", location.pathname);
+  void enterRoom(linked);
+}
 
 Object.assign(window as unknown as Record<string, unknown>, {
   tessera: {
