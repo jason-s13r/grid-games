@@ -13,7 +13,8 @@
   },
   "dependencies": {
     "@tessera/protocol": "workspace:*",
-    "@tessera/sim": "workspace:*"
+    "@tessera/sim": "workspace:*",
+    "@tessera/room": "workspace:*"
   },
   "devDependencies": {
     "@parcel/transformer-sass": "2.16.4",

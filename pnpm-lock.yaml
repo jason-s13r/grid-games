@@ -17,6 +17,9 @@ importers:
       '@tessera/protocol':
         specifier: workspace:*
         version: link:../../packages/protocol
+      '@tessera/room':
+        specifier: workspace:*
+        version: link:../../packages/room
       '@tessera/sim':
         specifier: workspace:*
         version: link:../../packages/sim

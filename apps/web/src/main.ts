@@ -21,7 +21,10 @@ import { Minimap } from "./view/Minimap";
 import { Tabs } from "./view/Tabs";
 import { Controls } from "./view/Controls";
 import { Shell } from "./view/Shell";
-import { injectThemeCss } from "./view/palette";
+import { Flags, injectThemeCss, setFlags } from "./view/palette";
+import { OnlineGame } from "./game/Online";
+import { OnlinePanel } from "./view/Online";
+import { RoomLink, createGame, roomIdFrom } from "./net/room";
 
 const pick = <T extends Element>(selector: string): T => {
   const el = document.querySelector<T>(selector);
@@ -102,6 +105,11 @@ lengthEl.innerHTML = COMMON_DURATIONS.map(
   (d, i) => `<option value="${d.steps}"${i === 4 ? " selected" : ""}>${d.label}</option>`,
 ).join("");
 
+const onlineLengthEl = pick<HTMLSelectElement>('[data-online="length"]');
+onlineLengthEl.innerHTML = COMMON_DURATIONS.map(
+  (d) => `<option value="${d.steps}"${d.steps === hours(240) ? " selected" : ""}>${d.label}</option>`,
+).join("");
+
 /** The duration the setup screen is asking for. Read at the moment a game
  *  starts rather than cached, the same way the map size is, so changing the
  *  dropdown and pressing start agree. */
@@ -111,6 +119,8 @@ const duration = () => durationRules(Number(lengthEl.value));
  *  profile. It renders itself, so nothing here has to know how many there are —
  *  and there is one of it, read by a solo game and a hosted one alike. */
 const rivals = new Rivals(pick<HTMLElement>('[data-cfg="rivals"]'));
+/** The online form's bots: its own picker, so the two forms do not share one. */
+const onlineRivals = new Rivals(pick<HTMLElement>('[data-online="rivals"]'));
 
 const soloSetup = () => ({ bots: rivals.list, duration: duration(), ...mapSize() });
 
@@ -170,6 +180,7 @@ function start(seed: number): void {
 
 /** A fresh solo game from whatever the form currently says. */
 function startSolo(): void {
+  leaveRoom();
   start(seedFrom(String(Date.now())));
   shell.show("game");
 }
@@ -203,6 +214,8 @@ rivals.onChange = () => setup.refresh();
  *  the driver interface is the whole of the difference. */
 function mount(driver: Driver): void {
   game = driver;
+  // Which house each empire flies in this game, bound before anything draws.
+  setFlags(new Flags(driver.sim.state.genesis.empires));
   MAP = { width: driver.sim.state.width, height: driver.sim.state.height };
   tilesEl.replaceChildren();
 
@@ -390,8 +403,116 @@ pick<HTMLButtonElement>('[data-action="pause"]').addEventListener("click", (even
 });
 
 pick<HTMLButtonElement>('[data-action="leave"]').addEventListener("click", () => {
+  if (link) leaveRoom();
   shell.left();
 });
+
+// --- online ------------------------------------------------------------------
+
+/** The room this tab is in, if any. */
+let link: RoomLink | undefined;
+/** What to do once we are in the lobby of a game we just created. */
+let afterCreate: { start: boolean } | undefined;
+
+const online = new OnlinePanel(
+  {
+    root: pick<HTMLElement>("[data-online-card]"),
+    form: pick<HTMLElement>("[data-online-form]"),
+    body: pick<HTMLElement>("[data-online-body]"),
+  },
+  {
+    create: () => void createRoom(),
+    join: (input) => {
+      const id = roomIdFrom(input);
+      if (!id) return online.home(`"${input.trim()}" is not a game link or code.`);
+      void enterRoom(id);
+    },
+    pick: (empire) => link?.client.pickEmpire(empire),
+    start: () => link?.client.start(),
+    leave: () => {
+      leaveRoom();
+      shell.left();
+    },
+  },
+);
+
+async function createRoom(): Promise<void> {
+  const form = online.read();
+  if (form.start === "scheduled" && !form.startAt) return online.home("Pick a start time.");
+  const identity = await myIdentity();
+  try {
+    const id = await createGame({
+      creator: identity.key,
+      empires: form.empires,
+      seatsPerEmpire: form.seatsPerEmpire,
+      bots: onlineRivals.list,
+      map: form.map,
+      hours: form.hours,
+      ...(form.startAt ? { startAt: form.startAt } : {}),
+    });
+    afterCreate = { start: form.start === "now" };
+    await enterRoom(id);
+  } catch (error) {
+    online.home(`Could not create the game: ${(error as Error).message}`);
+  }
+}
+
+/** Open a game's room. Its lobby shows on the menu; once it is running, the
+ *  board takes over. */
+async function enterRoom(roomId: string): Promise<void> {
+  leaveRoom();
+  if (location.pathname !== `/g/${roomId}`) history.pushState(null, "", `/g/${roomId}`);
+  online.connecting(roomId);
+  shell.show("menu");
+
+  const identity = await myIdentity();
+  const opened = new RoomLink({
+    roomId,
+    identity,
+    name: myName(),
+    onState: (state) => {
+      if (link !== opened) return;
+      if (state === "retrying" && !opened.client.sim) online.connecting(roomId, "Reconnecting…");
+    },
+  });
+  link = opened;
+  const client = opened.client;
+
+  client.onError = (message) => {
+    if (link === opened && !client.sim) online.connecting(roomId, message);
+  };
+  client.onLobby = (lobby) => {
+    if (link !== opened) return;
+    online.lobby(roomId, lobby, identity.key);
+    if (afterCreate && lobby.creator === identity.key) {
+      const me = lobby.players.find((p) => p.key === identity.key);
+      if (me && me.empire === null) client.pickEmpire(0);
+      else if (me && afterCreate.start) {
+        afterCreate = undefined;
+        client.start();
+      } else afterCreate = undefined;
+    }
+  };
+  // The first full picture of a running game — at the start, or on arriving
+  // at one already going — is when the board takes over.
+  client.onReset = () => {
+    if (link !== opened || !client.sim) return;
+    mount(new OnlineGame(client));
+    online.playing(roomId);
+    shell.show("game");
+  };
+  opened.connect();
+}
+
+/** Put down the room this tab is in, if any. */
+function leaveRoom(): void {
+  if (!link) return;
+  link.close();
+  link = undefined;
+  afterCreate = undefined;
+  if (location.pathname.startsWith("/g/")) history.pushState(null, "", "/");
+  online.home();
+}
 
 pick<HTMLButtonElement>('[data-action="resume"]').addEventListener("click", () => {
   shell.show("game");
@@ -429,6 +550,10 @@ function frame(now: number): void {
 
 start(seedFrom("tessera"));
 requestAnimationFrame(frame);
+
+// A game link opens that game.
+const linked = location.pathname.startsWith("/g/") ? roomIdFrom(location.pathname) : null;
+if (linked) void enterRoom(linked);
 
 Object.assign(window as unknown as Record<string, unknown>, {
   tessera: {

@@ -34,8 +34,10 @@ Online play is being rebuilt on Cloudflare and will be served from
 - Every client still runs the full simulation and validates every move.
   Cloudflare keeps time and records; the players keep the rules.
 
-The room and the Worker run; the web client still plays solo until its online
-screens land.
+The menu creates an online game or joins one by link, shows its lobby while
+people pick empires, and switches to the board when it starts. A reload, or a
+link opened tomorrow, catches up to wherever the game has got to; a link opened
+by somebody without a seat spectates.
 
 ## Layout
 

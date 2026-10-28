@@ -95,6 +95,7 @@ dependencies:
   web:
     - sim
     - protocol
+    - room
   # The Worker serves web's build as its static assets, so a web release is a
   # worker release too.
   worker:

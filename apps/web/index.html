@@ -144,6 +144,53 @@
             <div class="setup-foot" data-setup-foot></div>
           </section>
 
+          <!-- Playing with other people: create a game, join one, and its
+               lobby while it fills. See view/Online.ts. -->
+          <section class="card setup" data-online-card>
+            <div class="setup-form" data-online-form>
+              <h2>Online</h2>
+              <p class="card-tag">Play with other people. The game keeps running
+              while everybody is away, so it can last for days.</p>
+              <div class="field">
+                <label for="online-map">Map</label>
+                <select id="online-map" data-online="map">
+                  <option value="small">small &mdash; 96&times;72</option>
+                  <option value="medium" selected>medium &mdash; 160&times;112</option>
+                  <option value="large">large &mdash; 256&times;176</option>
+                </select>
+              </div>
+              <div class="field">
+                <label for="online-length">Length</label>
+                <select id="online-length" data-online="length"></select>
+              </div>
+              <div class="field">
+                <label for="online-empires">Empires for people</label>
+                <input id="online-empires" type="number" min="1" max="8" value="2" data-online="empires" />
+              </div>
+              <div class="field">
+                <label for="online-seats">Players per empire</label>
+                <input id="online-seats" type="number" min="1" max="4" value="2" data-online="seats" />
+              </div>
+              <div class="field field-stacked">
+                <label>Bot empires</label>
+                <div class="rivals" data-online="rivals"></div>
+              </div>
+              <div class="field">
+                <label for="online-start">Start</label>
+                <select id="online-start" data-online="start">
+                  <option value="lobby" selected>when I press start</option>
+                  <option value="now">straight away</option>
+                  <option value="scheduled">at a set time</option>
+                </select>
+              </div>
+              <div class="field" data-online="start-at-field" hidden>
+                <label for="online-start-at">Starts at</label>
+                <input id="online-start-at" type="datetime-local" data-online="start-at" />
+              </div>
+            </div>
+            <div data-online-body></div>
+          </section>
+
           <details class="settings" data-settings>
             <summary>Settings</summary>
             <div class="settings-body">
