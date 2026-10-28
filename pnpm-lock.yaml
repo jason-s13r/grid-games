@@ -12,6 +12,25 @@ importers:
         specifier: 3.2.7
         version: 3.2.7(@vitest/browser@3.2.7)(lightningcss@1.33.0)(sass@1.103.1)
 
+  apps/bot:
+    dependencies:
+      '@tessera/protocol':
+        specifier: workspace:*
+        version: link:../../packages/protocol
+      '@tessera/room':
+        specifier: workspace:*
+        version: link:../../packages/room
+      '@tessera/sim':
+        specifier: workspace:*
+        version: link:../../packages/sim
+    devDependencies:
+      '@types/node':
+        specifier: 22.7.5
+        version: 22.7.5
+      typescript:
+        specifier: 5.6.3
+        version: 5.6.3
+
   apps/prototype:
     devDependencies:
       '@parcel/transformer-sass':

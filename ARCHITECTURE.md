@@ -54,6 +54,7 @@ Three consequences run through the rest of the repository:
 | [`packages/protocol`](packages/protocol) | sim | keys, signed moves and messages, the genesis record |
 | [`packages/room`](packages/room) | sim, protocol | the game room that orders moves, and its client |
 | [`apps/web`](apps/web) | sim, protocol | rendering and input |
+| [`apps/bot`](apps/bot) | sim, protocol, room | playing one seat, as a program |
 | [`apps/worker`](apps/worker) | sim, protocol, room | serving the client, creating games, hosting rooms |
 
 [`apps/prototype`](apps/prototype) is the original single-player game, frozen.
@@ -184,7 +185,7 @@ twenty minutes in. The rules a contributor has to keep:
 
 One targeting policy ([`policy.ts`](packages/sim/src/policy.ts)), two homes:
 
-| | **SimBot** | **Bot client** (planned) |
+| | **SimBot** | **Bot client** ([`apps/bot`](apps/bot)) |
 |---|---|---|
 | Runs | inside every client's sim | as its own program, connected like a player |
 | Controls | a whole bot empire | one seat in a human empire |
@@ -194,6 +195,13 @@ One targeting policy ([`policy.ts`](packages/sim/src/policy.ts)), two homes:
 A bot client must **not** touch the shared stream: a draw made on one client and
 nowhere else is precisely a desync. `policy()` takes optional `forced` and
 `focus` arguments for it, and a SimBot passes neither.
+
+A bot client says so in its hello, and the room seats it as a `BOT` member, so
+everybody can see what holds that seat. It cannot take an open empire on its
+own: it comes in by an invite or a player's approval, the same two doors as a
+latecomer, and unlike a human it may use them after the join window closes.
+That is night cover for a team that asked for it, never a bot an empire did not
+choose.
 
 Difficulty is a `BotProfile` in the genesis record, so "the bots were on hard" is
 a fact of the game rather than something someone remembers. A bot is not

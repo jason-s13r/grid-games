@@ -1,0 +1,26 @@
+{
+  "name": "@tessera/bot",
+  "version": "0.0.0",
+  "private": true,
+  "description": "A program that holds one seat in an online game: night cover for an empire whose players are away.",
+  "license": "MIT",
+  "type": "module",
+  "bin": {
+    "tessera-bot": "./dist/main.js"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc --noEmit -p tsconfig.test.json",
+    "start": "node dist/main.js",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@tessera/protocol": "workspace:*",
+    "@tessera/room": "workspace:*",
+    "@tessera/sim": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "22.7.5",
+    "typescript": "5.6.3"
+  }
+}

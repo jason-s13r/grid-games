@@ -47,6 +47,7 @@ by somebody without a seat spectates.
 | [`packages/protocol`](packages/protocol) | `@tessera/protocol` — identities, signed moves and messages, the genesis record. |
 | [`packages/room`](packages/room) | `@tessera/room` — the game room that orders moves, and the client side of it. |
 | [`apps/web`](apps/web) | The browser client: virtualised viewport, LOD renderer, minimap. |
+| [`apps/bot`](apps/bot) | `tessera-bot` — a program that holds one seat while its player sleeps. |
 | [`apps/worker`](apps/worker) | The Cloudflare Worker: serves the client, creates games, hosts each one in a Durable Object. |
 | [`apps/prototype`](apps/prototype) | The original single-player prototype, frozen as reference and served at `/prototype/`. |
 
@@ -58,6 +59,7 @@ pnpm dev            # everything at http://localhost:8787: client, API, game roo
 pnpm dev:solo       # the client alone at http://localhost:1234, solo play only
 pnpm test           # rules, determinism, protocol, room, client
 pnpm replay         # headless: run a game, print the state hash
+node apps/bot/dist/main.js "<invite link>"   # night cover for your empire (--help)
 pnpm --filter @tessera/worker smoke   # two players through a running `pnpm dev`
 ```
 
