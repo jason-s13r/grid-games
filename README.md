@@ -1,5 +1,6 @@
 # Tessera
 
+
 A browser recreation of the grid territory game **Empire Attack**.
 
 > **Credit where it's due.** Empire Attack was conceived by
