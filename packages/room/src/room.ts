@@ -23,9 +23,12 @@ import {
   simbot,
 } from "@tessera/sim";
 import type { EmpireSpec, Genesis, Move } from "@tessera/sim";
+import { isVacant } from "@tessera/sim";
+import type { SignedInvite } from "@tessera/protocol";
 import {
   NONCE_BYTES,
   Roster,
+  verifyInvite,
   cleanName,
   fromBase64Url,
   inspectGenesis,
@@ -42,6 +45,7 @@ import type {
   ClientMessage,
   LobbyPlayer,
   LobbyView,
+  People,
   Phase,
   RoomConfig,
   ServerMessage,
@@ -72,6 +76,23 @@ interface Peer {
   queue: Promise<void>;
 }
 
+/** A seat given after the start, in the order it was given. The roster is the
+ *  genesis plus these, replayed. */
+interface StoredSeating {
+  empire: number;
+  key: string;
+  step: number;
+}
+
+/** A seat waiting for the next batch. `by` is the member index the
+ *  ROSTER_AMEND is issued under: whoever approved or invited, or 0 for an
+ *  empire nobody holds. */
+interface PendingSeat {
+  empire: number;
+  key: string;
+  by: number;
+}
+
 interface StoredPlayer {
   key: string;
   name: string;
@@ -99,6 +120,10 @@ export class Room {
   private pending: Stamped[] = [];
   private seqs: Record<string, number>;
   private readonly beats = new Map<string, number>();
+  private seatings: StoredSeating[];
+  private pendingSeats: PendingSeat[] = [];
+  private requests: Array<{ key: string; empire: number }>;
+  private usedInvites: string[];
   private readonly checkpoints = new Map<number, number>();
 
   /** Set up a new room's storage. The room itself is built with `new Room`. */
@@ -122,6 +147,9 @@ export class Room {
     this.players = store.get<StoredPlayer[]>("players") ?? [];
     this.startsAt = store.get<number | null>("startsAt") ?? undefined;
     this.seqs = store.get<Record<string, number>>("seqs") ?? {};
+    this.seatings = store.get<StoredSeating[]>("seatings") ?? [];
+    this.requests = store.get<Array<{ key: string; empire: number }>>("requests") ?? [];
+    this.usedInvites = store.get<string[]>("invites") ?? [];
 
     const genesis = store.get<Genesis>("genesis");
     if (genesis) this.load(genesis, store.get<number>("next") ?? 0);
@@ -188,7 +216,9 @@ export class Room {
   disconnect(id: string): void {
     const peer = this.peers.get(id);
     this.peers.delete(id);
-    if (peer?.key && this._phase === "lobby") this.broadcastLobby();
+    if (!peer?.key) return;
+    if (this._phase === "lobby") this.broadcastLobby();
+    else if (!this.connectedKeys().has(peer.key)) this.broadcastPeople();
   }
 
   /** Handle one message from one socket. Resolves once it has been handled;
@@ -218,6 +248,20 @@ export class Room {
       case "resume":
         if (this.genesis) this.sendTo(peer.conn, { t: "resync", game: this.catchup(message.have) });
         return;
+      case "claim":
+        return this.claim(peer, message.empire);
+      case "ask":
+        return this.ask(peer, message.empire);
+      case "withdraw":
+        return this.dropRequest(peer.key);
+      case "approve":
+        return this.answer(peer, message.key, true);
+      case "decline":
+        return this.answer(peer, message.key, false);
+      case "redeem":
+        return this.redeem(peer, message.invite);
+      case "name":
+        return this.rename(peer.key, message.name);
     }
   }
 
@@ -255,12 +299,18 @@ export class Room {
     // this client is not sent a batch it has no state to apply to.
     this.seal();
     peer.key = message.key;
+    const name = cleanName(message.name);
+    const known = this.players.find((p) => p.key === message.key);
+    if (!known) this.players.push({ key: message.key, name, empire: null });
+    else if (name) known.name = name;
+    this.store.put("players", this.players);
     this.sendTo(peer.conn, {
       t: "welcome",
       phase: "playing",
       you: this.you(message.key),
       game: this.catchup(message.have),
     });
+    this.broadcastPeople();
   }
 
   // --- the lobby -------------------------------------------------------------
@@ -344,6 +394,7 @@ export class Room {
       for (const peer of this.peers.values()) {
         if (peer.key) this.sendTo(peer.conn, { t: "start", genesis, you: this.you(peer.key) });
       }
+      this.broadcastPeople();
     } finally {
       this.starting = false;
     }
@@ -387,6 +438,9 @@ export class Room {
   private load(genesis: Genesis, next: number): void {
     this.genesis = genesis;
     this.roster = Roster.fromGenesis(genesis);
+    for (const seating of this.seatings) {
+      this.roster.amend(seating.empire, seating.key, MEMBER.HUMAN, seating.step);
+    }
     const sim = new Sim(genesis);
     const snapshot = this.store.latestSnapshot();
     let tail: Stamped[] = [];
@@ -458,6 +512,8 @@ export class Room {
       batch.push(stamped);
     }
     this.pending = [];
+    const seated = this.seat(from);
+    batch.push(...seated.moves);
     batch.push(...this.heartbeats(from));
 
     this.store.append(batch);
@@ -485,6 +541,161 @@ export class Room {
     const message: ServerMessage = { t: "batch", from, upTo: this.next, moves: batch };
     for (const peer of this.peers.values()) {
       if (peer.key) this.sendTo(peer.conn, message);
+    }
+    if (seated.keys.length) {
+      for (const peer of this.peers.values()) {
+        if (peer.key && seated.keys.includes(peer.key)) {
+          this.sendTo(peer.conn, { t: "seated", you: this.you(peer.key) });
+        }
+      }
+      this.broadcastPeople();
+    }
+  }
+
+  // --- seats after the start -------------------------------------------------
+
+  /** Turn waiting seats into ROSTER_AMEND moves at `step`, one per empire per
+   *  batch, and only where the simulation will accept them: the join window,
+   *  the seat cap and a still-living empire are all its rules. */
+  private seat(step: number): { moves: Stamped[]; keys: string[] } {
+    const sim = this.sim!;
+    const roster = this.roster!;
+    const moves: Stamped[] = [];
+    const keys: string[] = [];
+    const touched = new Set<number>();
+    const later: PendingSeat[] = [];
+
+    for (const want of this.pendingSeats) {
+      if (roster.has(want.key) || keys.includes(want.key)) continue;
+      if (touched.has(want.empire)) {
+        later.push(want);
+        continue;
+      }
+      const move: Move = {
+        step,
+        empire: want.empire,
+        member: want.by,
+        seq: 0,
+        type: MOVE.ROSTER_AMEND,
+        x: MEMBER.HUMAN,
+        y: 0,
+      };
+      if (!sim.validate(move)) continue;
+      touched.add(want.empire);
+      roster.amend(want.empire, want.key, MEMBER.HUMAN, step);
+      this.seatings.push({ empire: want.empire, key: want.key, step });
+      moves.push({ move });
+      keys.push(want.key);
+      this.requests = this.requests.filter((r) => r.key !== want.key);
+    }
+    this.pendingSeats = later;
+    if (moves.length) {
+      this.store.put("seatings", this.seatings);
+      this.store.put("requests", this.requests);
+    }
+    return { moves, keys };
+  }
+
+  private canJoin(peer: Peer): boolean {
+    if (this._phase !== "playing" || !this.sim || this.ended) return false;
+    if (this.roster!.has(peer.key!)) {
+      this.error(peer, "you already hold a seat");
+      return false;
+    }
+    return true;
+  }
+
+  private claim(peer: Peer, empireId: unknown): void {
+    if (!this.canJoin(peer) || !Number.isInteger(empireId)) return;
+    const empire = this.sim!.state.empires[(empireId as number) - 1];
+    if (!empire || !isVacant(empire) || empire.control !== CONTROL.HUMAN) {
+      return this.error(peer, "that empire cannot be taken");
+    }
+    this.pendingSeats.push({ empire: empireId as number, key: peer.key!, by: 0 });
+  }
+
+  private ask(peer: Peer, empireId: unknown): void {
+    if (!this.canJoin(peer) || !Number.isInteger(empireId)) return;
+    const empire = this.sim!.state.empires[(empireId as number) - 1];
+    if (!empire || isVacant(empire) || !empire.alive || empire.control !== CONTROL.HUMAN) {
+      return this.error(peer, "that empire cannot seat anybody");
+    }
+    this.requests = this.requests.filter((r) => r.key !== peer.key);
+    this.requests.push({ key: peer.key!, empire: empireId as number });
+    this.store.put("requests", this.requests);
+    this.broadcastPeople();
+  }
+
+  private dropRequest(key: string): void {
+    const before = this.requests.length;
+    this.requests = this.requests.filter((r) => r.key !== key);
+    if (this.requests.length === before) return;
+    this.store.put("requests", this.requests);
+    this.broadcastPeople();
+  }
+
+  /** A member of the asked-for empire says yes or no. */
+  private answer(peer: Peer, key: unknown, yes: boolean): void {
+    const request = this.requests.find((r) => r.key === key);
+    if (!request) return;
+    const seat = this.roster?.seatOf(peer.key!);
+    if (!seat || seat.empire !== request.empire) return this.error(peer, "only that empire can answer");
+    if (yes) this.pendingSeats.push({ empire: request.empire, key: request.key, by: seat.member });
+    else this.dropRequest(request.key);
+  }
+
+  private async redeem(peer: Peer, signed: SignedInvite): Promise<void> {
+    if (!this.canJoin(peer) || !this.genesis) return;
+    const ok = await verifyInvite(this.genesis.gameId!, signed);
+    if (!ok) return this.error(peer, "that invite did not verify");
+    const { invite } = signed;
+    if (invite.expires * 1000 < this.now()) return this.error(peer, "that invite has expired");
+    if (this.usedInvites.includes(invite.id)) return this.error(peer, "that invite has been used");
+    const inviter = this.roster!.seatOf(invite.by);
+    if (!inviter || inviter.empire !== invite.empire) {
+      return this.error(peer, "whoever signed that invite is not in that empire");
+    }
+    this.usedInvites.push(invite.id);
+    this.store.put("invites", this.usedInvites);
+    this.pendingSeats.push({ empire: invite.empire, key: peer.key!, by: inviter.member });
+  }
+
+  private rename(key: string, raw: string): void {
+    const name = cleanName(raw);
+    const player = this.players.find((p) => p.key === key);
+    if (!player || !name || player.name === name) return;
+    player.name = name;
+    this.store.put("players", this.players);
+    if (this._phase === "lobby") this.broadcastLobby();
+    else this.broadcastPeople();
+  }
+
+  private peopleView(): People {
+    const online = this.connectedKeys();
+    const names = new Map(this.players.map((p) => [p.key, p.name]));
+    const seen = new Set<string>();
+    const people = [];
+    for (const seat of this.roster?.all() ?? []) {
+      seen.add(seat.key);
+      people.push({
+        key: seat.key,
+        name: names.get(seat.key) ?? "",
+        connected: online.has(seat.key),
+        seat: { empire: seat.empire, member: seat.member },
+      });
+    }
+    for (const key of online) {
+      if (!seen.has(key)) people.push({ key, name: names.get(key) ?? "", connected: true });
+    }
+    const requests = this.requests.map((r) => ({ ...r, name: names.get(r.key) ?? "" }));
+    return { people, requests };
+  }
+
+  private broadcastPeople(): void {
+    if (this._phase !== "playing") return;
+    const people = this.peopleView();
+    for (const peer of this.peers.values()) {
+      if (peer.key) this.sendTo(peer.conn, { t: "people", people });
     }
   }
 

@@ -300,3 +300,138 @@ describe("hosting", () => {
     expect(b.client.sim!.hash()).toBe(h.room.hash());
   });
 });
+
+describe("joining a game that has started", () => {
+  async function withOpenEmpire(joinShare?: number) {
+    const h = new Harness({
+      creator: alice.key,
+      empires: 3,
+      bots: ["easy"],
+      ...(joinShare !== undefined ? { joinShare } : {}),
+    });
+    const a = await h.join(alice, "alice");
+    a.client.pickEmpire(0);
+    await h.settle();
+    a.client.start();
+    await h.settle();
+    await h.run(2_000);
+    return { h, a };
+  }
+
+  it("seats somebody who takes an open empire", async () => {
+    const { h, a } = await withOpenEmpire();
+    const c = await h.join(carol, "carol");
+    expect(c.client.you!.seat).toBeUndefined();
+    c.client.claim(2);
+    await h.settle();
+    await h.run(500);
+    expect(c.client.you!.seat).toEqual({ empire: 2, member: 0 });
+    expect(a.client.sim!.state.empires[1]!.members).toHaveLength(1);
+    expect(c.client.sim!.hash()).toBe(h.room.hash());
+    // And the new seat can play.
+    await h.run(1_000);
+    const at = aClaim(c.client)!;
+    await c.client.submit(MOVE.CLAIM, at.x, at.y);
+    await h.settle();
+    await h.run(1_000);
+    expect(c.errors).toEqual([]);
+    expect(a.client.sim!.state.owner[at.y * a.client.sim!.state.width + at.x]).toBe(2);
+  });
+
+  it("refuses an empire somebody already holds", async () => {
+    const { h } = await withOpenEmpire();
+    const c = await h.join(carol);
+    c.client.claim(1);
+    await h.settle();
+    expect(c.errors).toContain("that empire cannot be taken");
+  });
+
+  it("seats somebody an empire's member approves", async () => {
+    const { h, a } = await withOpenEmpire();
+    const c = await h.join(carol, "carol");
+    c.client.ask(1);
+    await h.settle();
+    expect(a.client.people.requests).toEqual([{ key: carol.key, name: "carol", empire: 1 }]);
+
+    a.client.approve(carol.key);
+    await h.settle();
+    await h.run(500);
+    expect(c.client.you!.seat).toEqual({ empire: 1, member: 1 });
+    expect(a.client.people.requests).toEqual([]);
+    expect(a.client.people.people.find((p) => p.key === carol.key)!.seat).toEqual({ empire: 1, member: 1 });
+    expect(c.client.sim!.hash()).toBe(h.room.hash());
+  });
+
+  it("lets only that empire answer a request", async () => {
+    const { h } = await withOpenEmpire();
+    const c = await h.join(carol);
+    c.client.claim(2);
+    await h.settle();
+    await h.run(500);
+    const d = await h.join(dave);
+    d.client.ask(1);
+    await h.settle();
+    c.client.approve(dave.key);
+    await h.settle();
+    await h.run(500);
+    expect(d.client.you!.seat).toBeUndefined();
+    expect(c.errors).toContain("only that empire can answer");
+  });
+
+  it("seats somebody holding a member's invite, once", async () => {
+    const { h, a } = await withOpenEmpire();
+    // The harness clock runs ahead of the real one; give the invite room.
+    const invite = (await a.client.invite(365 * 24 * 3600 * 1000))!;
+    const c = await h.join(carol);
+    c.client.redeem(invite);
+    await h.settle();
+    await h.run(500);
+    expect(c.client.you!.seat).toEqual({ empire: 1, member: 1 });
+
+    const d = await h.join(dave);
+    d.client.redeem(invite);
+    await h.settle();
+    expect(d.errors).toContain("that invite has been used");
+  });
+
+  it("refuses a forged invite", async () => {
+    const { h, a } = await withOpenEmpire();
+    // The harness clock runs ahead of the real one; give the invite room.
+    const invite = (await a.client.invite(365 * 24 * 3600 * 1000))!;
+    const c = await h.join(carol);
+    c.client.redeem({ ...invite, invite: { ...invite.invite, empire: 2 } });
+    await h.settle();
+    expect(c.errors).toContain("that invite did not verify");
+  });
+
+  it("closes the door when the join window does", async () => {
+    const { h } = await withOpenEmpire(0);
+    const c = await h.join(carol);
+    c.client.claim(2);
+    await h.settle();
+    await h.run(500);
+    expect(c.client.you!.seat).toBeUndefined();
+  });
+
+  it("keeps late seats when the room is rebuilt", async () => {
+    const { h, a } = await withOpenEmpire();
+    const c = await h.join(carol);
+    c.client.claim(2);
+    await h.settle();
+    await h.run(500);
+    const hash = h.room.hash();
+    a.drop();
+    c.drop();
+    h.restart();
+    expect(h.room.hash()).toBe(hash);
+    c.reconnect();
+    await h.settle();
+    expect(c.client.you!.seat).toEqual({ empire: 2, member: 0 });
+    await h.run(1_000);
+    const at = aClaim(c.client)!;
+    await c.client.submit(MOVE.CLAIM, at.x, at.y);
+    await h.settle();
+    await h.run(1_000);
+    expect(c.errors).toEqual([]);
+  });
+});

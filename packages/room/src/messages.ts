@@ -5,6 +5,7 @@
 // and the rest is the room telling a client what it decided.
 
 import type { BotChoice, Genesis, Move, MoveType } from "@tessera/sim";
+import type { SignedInvite } from "@tessera/protocol";
 
 /** A move as it sits in the log: stamped with its step by the room, and signed
  *  by the seat that made it. Moves the room makes itself (heartbeats for
@@ -62,6 +63,26 @@ export interface You {
 
 export type Phase = "lobby" | "playing";
 
+/** Somebody in a running game, seated or watching. */
+export interface Person {
+  key: string;
+  name: string;
+  connected: boolean;
+  seat?: { empire: number; member: number };
+}
+
+/** Somebody asking an empire for a seat. Any member of that empire may answer. */
+export interface SeatRequest {
+  key: string;
+  name: string;
+  empire: number;
+}
+
+export interface People {
+  people: Person[];
+  requests: SeatRequest[];
+}
+
 export type ServerMessage =
   | { t: "challenge"; nonce: string }
   | { t: "welcome"; phase: Phase; you: You; lobby?: LobbyView; game?: Catchup }
@@ -69,6 +90,8 @@ export type ServerMessage =
   | { t: "start"; genesis: Genesis; you: You }
   | { t: "batch"; from: number; upTo: number; moves: Stamped[] }
   | { t: "resync"; game: Catchup }
+  | { t: "seated"; you: You }
+  | { t: "people"; people: People }
   | { t: "error"; message: string };
 
 export type ClientMessage =
@@ -85,7 +108,18 @@ export type ClientMessage =
   | { t: "start" }
   | { t: "move"; move: { seq: number; type: MoveType; x: number; y: number }; sig: string }
   | { t: "hash"; step: number; hash: number }
-  | { t: "resume"; have?: { step: number; hash: number } };
+  | { t: "resume"; have?: { step: number; hash: number } }
+  /** Take an empire nobody holds. */
+  | { t: "claim"; empire: number }
+  /** Ask an empire for a seat. */
+  | { t: "ask"; empire: number }
+  | { t: "withdraw" }
+  /** A member of an empire answering somebody's request. */
+  | { t: "approve"; key: string }
+  | { t: "decline"; key: string }
+  /** Join through an invite a member signed. */
+  | { t: "redeem"; invite: SignedInvite }
+  | { t: "name"; name: string };
 
 /** How a room is set up when it is created. Fixed for the room's life. */
 export interface RoomConfig {

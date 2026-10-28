@@ -16,12 +16,14 @@ import {
   fromBase64Url,
   proveHello,
   randomBytes,
+  signInvite,
   signMove,
   toBase64Url,
 } from "@tessera/protocol";
 import { advanceTo } from "./advance.js";
 import { decode, encode } from "./messages.js";
-import type { Catchup, ClientMessage, LobbyView, Phase, ServerMessage, You } from "./messages.js";
+import type { SignedInvite } from "@tessera/protocol";
+import type { Catchup, ClientMessage, LobbyView, People, Phase, ServerMessage, You } from "./messages.js";
 
 export interface RoomClientOptions {
   identity: Identity;
@@ -37,6 +39,8 @@ export class RoomClient {
   genesis: Genesis | undefined;
   sim: Sim | undefined;
   you: You | undefined;
+  /** Who is in the running game, and who is asking for a seat. */
+  people: People = { people: [], requests: [] };
 
   /** The world moved; `dirty` is what a renderer must repaint. */
   onAdvance: ((dirty: Set<number>) => void) | null = null;
@@ -45,6 +49,9 @@ export class RoomClient {
   onLobby: ((lobby: LobbyView) => void) | null = null;
   onStart: ((genesis: Genesis) => void) | null = null;
   onError: ((message: string) => void) | null = null;
+  onPeople: ((people: People) => void) | null = null;
+  /** This client was given a seat after the start. */
+  onSeated: ((you: You) => void) | null = null;
 
   private queue: Promise<void> = Promise.resolve();
   private nextSeq = 0;
@@ -76,7 +83,46 @@ export class RoomClient {
 
   setName(name: string): void {
     this.name = name;
-    this.send({ t: "lobby", name });
+    this.send(this.phase === "playing" ? { t: "name", name } : { t: "lobby", name });
+  }
+
+  /** Take an empire nobody holds. */
+  claim(empire: number): void {
+    this.send({ t: "claim", empire });
+  }
+
+  /** Ask an empire for a seat; its members decide. */
+  ask(empire: number): void {
+    this.send({ t: "ask", empire });
+  }
+
+  withdraw(): void {
+    this.send({ t: "withdraw" });
+  }
+
+  approve(key: string): void {
+    this.send({ t: "approve", key });
+  }
+
+  decline(key: string): void {
+    this.send({ t: "decline", key });
+  }
+
+  /** An invite to this client's empire, signed here. Undefined without a seat. */
+  async invite(validForMs = 7 * 24 * 60 * 60 * 1000): Promise<SignedInvite | undefined> {
+    const seat = this.you?.seat;
+    const gameId = this.genesis?.gameId;
+    if (!seat || !gameId) return undefined;
+    return signInvite(this.options.identity, gameId, {
+      empire: seat.empire,
+      id: toBase64Url(randomBytes(12)),
+      expires: Math.floor((Date.now() + validForMs) / 1000),
+      by: this.key,
+    });
+  }
+
+  redeem(invite: SignedInvite): void {
+    this.send({ t: "redeem", invite });
   }
 
   pickEmpire(empire: number | null): void {
@@ -125,6 +171,14 @@ export class RoomClient {
         return this.batch(message.from, message.upTo, message.moves.map((s) => s.move));
       case "resync":
         return this.apply(message.game);
+      case "seated":
+        this.setYou(message.you);
+        this.onSeated?.(message.you);
+        return;
+      case "people":
+        this.people = message.people;
+        this.onPeople?.(message.people);
+        return;
       case "error":
         this.onError?.(message.message);
         return;
