@@ -4,14 +4,15 @@
   "private": true,
   "packageManager": "pnpm@9.12.3",
   "scripts": {
-    "dev": "pnpm --filter \"./packages/*\" build && pnpm --filter @tessera/web build && pnpm --parallel --filter @tessera/web --filter @tessera/worker run watch",
-    "build": "pnpm -r build",
+    "dev": "pnpm --filter \"./packages/*\" build && pnpm --filter @tessera/web --filter @tessera/prototype build && pnpm run assets && pnpm --parallel --filter @tessera/web --filter @tessera/worker run watch",
+    "build": "pnpm -r build && pnpm run assets",
     "test": "pnpm -r test",
     "typecheck": "pnpm -r typecheck",
     "replay": "pnpm --filter @tessera/sim replay",
     "clean": "rm -rf apps/*/dist packages/*/dist .parcel-cache apps/*/.parcel-cache",
     "dev:solo": "pnpm --filter @tessera/web dev",
-    "deploy": "pnpm build && pnpm --filter @tessera/worker run deploy"
+    "deploy": "pnpm build && pnpm --filter @tessera/worker run deploy",
+    "assets": "rm -rf apps/web/dist/prototype && cp -R apps/prototype/dist apps/web/dist/prototype"
   },
   "devDependencies": {
     "vitest": "3.2.7"

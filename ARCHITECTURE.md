@@ -56,6 +56,9 @@ Three consequences run through the rest of the repository:
 | [`apps/web`](apps/web) | sim, protocol | rendering and input |
 | [`apps/worker`](apps/worker) | sim, protocol, room | serving the client, creating games, hosting rooms |
 
+[`apps/prototype`](apps/prototype) is the original single-player game, frozen.
+Nothing depends on it; the Worker serves its build at `/prototype/`.
+
 ## The game room
 
 [`packages/room`](packages/room) is the one place a game's moves are put in

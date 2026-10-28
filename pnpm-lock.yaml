@@ -12,6 +12,18 @@ importers:
         specifier: 3.2.7
         version: 3.2.7(@vitest/browser@3.2.7)(lightningcss@1.33.0)(sass@1.103.1)
 
+  apps/prototype:
+    devDependencies:
+      '@parcel/transformer-sass':
+        specifier: 2.16.4
+        version: 2.16.4(@parcel/core@2.16.4(@swc/helpers@0.5.23))
+      parcel:
+        specifier: 2.16.4
+        version: 2.16.4(@swc/helpers@0.5.23)
+      typescript:
+        specifier: 5.6.3
+        version: 5.6.3
+
   apps/web:
     dependencies:
       '@tessera/protocol':

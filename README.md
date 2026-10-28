@@ -48,6 +48,7 @@ by somebody without a seat spectates.
 | [`packages/room`](packages/room) | `@tessera/room` — the game room that orders moves, and the client side of it. |
 | [`apps/web`](apps/web) | The browser client: virtualised viewport, LOD renderer, minimap. |
 | [`apps/worker`](apps/worker) | The Cloudflare Worker: serves the client, creates games, hosts each one in a Durable Object. |
+| [`apps/prototype`](apps/prototype) | The original single-player prototype, frozen as reference and served at `/prototype/`. |
 
 ## Running it
 
