@@ -1,13 +1,20 @@
 // One game, hosted in one Durable Object.
 //
 // The room logic lives in @tessera/room; this file gives it what a Durable
-// Object has: hibernatable WebSockets, SQLite storage and an alarm. While
-// anybody is connected the alarm fires every TICK_MS and the room seals the
-// steps that have passed. With nobody connected there is no alarm (except a
-// scheduled start), the object can be evicted, and the next connection wakes it
-// and catches the world up.
+// Object has: hibernatable WebSockets, SQLite storage, timers and an alarm.
+//
+// While anybody is connected, an in-memory timer ticks every TICK_MS and the
+// room seals the steps that have passed. A timer costs compute time only; an
+// alarm would also cost a request and a row written per tick, which is about
+// 14,400 of each per hour of play. So the alarm is kept for what a timer
+// cannot do: waking the object for a scheduled start, and a slow fallback tick
+// in case the object is evicted with players still connected. With nobody
+// connected nothing runs, and the next connection catches the world up.
 
 import { DurableObject } from "cloudflare:workers";
+
+/** The fallback alarm while players are connected. */
+const FALLBACK_MS = 30_000;
 import { Room, TICK_MS } from "@tessera/room";
 import type { Connection, RoomConfig } from "@tessera/room";
 import { SqlStore } from "./store.js";
@@ -29,6 +36,10 @@ export interface RoomInfo {
 export class GameRoom extends DurableObject<Env> {
   private readonly store: SqlStore;
   private room: Room | undefined;
+  private timer: ReturnType<typeof setInterval> | undefined;
+  private ticking = false;
+  /** The alarm as last read or set, so a tick does not have to ask storage. */
+  private alarmAt: number | null | undefined;
 
   constructor(ctx: DurableObjectState, env: Env) {
     super(ctx, env);
@@ -93,10 +104,22 @@ export class GameRoom extends DurableObject<Env> {
   }
 
   override async alarm(): Promise<void> {
+    this.alarmAt = null; // it has fired
     const room = this.load();
     if (!room) return;
     await room.tick();
     await this.schedule();
+  }
+
+  private async tick(): Promise<void> {
+    if (this.ticking || !this.room) return;
+    this.ticking = true;
+    try {
+      await this.room.tick();
+      if (!this.room.wantsTicks()) await this.schedule();
+    } finally {
+      this.ticking = false;
+    }
   }
 
   private drop(ws: WebSocket): void {
@@ -122,18 +145,33 @@ export class GameRoom extends DurableObject<Env> {
   private async schedule(): Promise<void> {
     const room = this.room;
     if (!room) return;
-    const current = await this.ctx.storage.getAlarm();
+    if (this.alarmAt === undefined) this.alarmAt = await this.ctx.storage.getAlarm();
+
     if (room.wantsTicks()) {
-      const at = Date.now() + TICK_MS;
-      if (current === null || current > at) await this.ctx.storage.setAlarm(at);
+      this.timer ??= setInterval(() => void this.tick(), TICK_MS);
+      const now = Date.now();
+      if (this.alarmAt === null || this.alarmAt < now || this.alarmAt > now + FALLBACK_MS) {
+        await this.setAlarm(now + FALLBACK_MS);
+      }
       return;
+    }
+
+    if (this.timer) {
+      clearInterval(this.timer);
+      this.timer = undefined;
     }
     const wake = room.wakeAt();
     if (wake !== undefined) {
-      if (current !== wake) await this.ctx.storage.setAlarm(wake);
-    } else if (current !== null) {
+      if (this.alarmAt !== wake) await this.setAlarm(wake);
+    } else if (this.alarmAt !== null) {
       await this.ctx.storage.deleteAlarm();
+      this.alarmAt = null;
     }
+  }
+
+  private async setAlarm(at: number): Promise<void> {
+    await this.ctx.storage.setAlarm(at);
+    this.alarmAt = at;
   }
 }
 
