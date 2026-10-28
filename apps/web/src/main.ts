@@ -614,6 +614,7 @@ Object.assign(window as unknown as Record<string, unknown>, {
   tessera: {
     get game() { return game; },
     get camera() { return camera; },
+    get client() { return link?.client; },
     MIN_ZOOM,
     MAX_ZOOM,
   },

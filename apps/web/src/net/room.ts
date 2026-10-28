@@ -24,6 +24,10 @@ export class RoomLink {
   private attempts = 0;
   private closed = false;
   private retry: ReturnType<typeof setTimeout> | undefined;
+  /** Hidden tabs get no animation frames, so the game would stop advancing,
+   *  and stop sending the hash reports that keep a seat present. A slow timer
+   *  keeps both going; browsers throttle it, which is fine for this. */
+  private readonly background = setInterval(() => this.client.advance(), 1000);
 
   constructor(private readonly options: RoomLinkOptions) {
     this.client = new RoomClient({
@@ -46,6 +50,7 @@ export class RoomLink {
 
   close(): void {
     this.closed = true;
+    clearInterval(this.background);
     clearTimeout(this.retry);
     this.socket?.close();
     this.options.onState?.("closed");

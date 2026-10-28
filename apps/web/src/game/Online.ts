@@ -1,7 +1,7 @@
 // An online game: the moves come from a game room.
 //
-// The room decides which step each move lands on and sends the moves in
-// batches; the RoomClient simulates them. This driver adapts that to what the
+// The room decides which step each move lands on; the RoomClient simulates up
+// to now on its own clock, every frame. This driver adapts that to what the
 // view needs: the current simulation, the tiles changed since the last frame,
 // and a way to send a move.
 
@@ -14,14 +14,10 @@ export class OnlineGame implements Driver {
   readonly online = true;
   readonly running = true;
 
-  private dirty = new Set<number>();
-  /** The world was replaced (joined, resynced): repaint all of it. */
+  /** The world was replaced (joined, resynced, rewound): repaint all of it. */
   private repaint = true;
 
   constructor(private readonly client: RoomClient) {
-    client.onAdvance = (dirty) => {
-      for (const tile of dirty) this.dirty.add(tile);
-    };
     client.onReset = () => {
       this.repaint = true;
     };
@@ -31,13 +27,22 @@ export class OnlineGame implements Driver {
     return this.client.sim!;
   }
 
+  /** The seat, once our simulation has reached the step that created it. A
+   *  seat given mid-game is announced before the ROSTER_AMEND lands, half a
+   *  second later, and until then there is no member to draw. */
+  private get seat(): { empire: number; member: number } | undefined {
+    const seat = this.client.you?.seat;
+    if (!seat || !this.sim.state.empires[seat.empire - 1]?.members[seat.member]) return undefined;
+    return seat;
+  }
+
   /** 0 while spectating: an empire id no seat can hold. */
   get empire(): number {
-    return this.client.you?.seat?.empire ?? 0;
+    return this.seat?.empire ?? 0;
   }
 
   get member(): number {
-    return this.client.you?.seat?.member ?? 0;
+    return this.seat?.member ?? 0;
   }
 
   pause(): void {}
@@ -62,16 +67,12 @@ export class OnlineGame implements Driver {
   }
 
   tick(): Set<number> {
-    if (this.repaint) {
-      this.repaint = false;
-      this.dirty.clear();
-      const all = new Set<number>();
-      for (let i = 0; i < this.sim.state.owner.length; i++) all.add(i);
-      return all;
-    }
-    const dirty = this.dirty;
-    this.dirty = new Set();
-    return dirty;
+    const dirty = this.client.advance();
+    if (!this.repaint) return dirty;
+    this.repaint = false;
+    const all = new Set<number>();
+    for (let i = 0; i < this.sim.state.owner.length; i++) all.add(i);
+    return all;
   }
 
   status(): string {
