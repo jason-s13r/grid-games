@@ -13,8 +13,10 @@ import {
   encodeMessage,
   encodeMove,
   signMessage,
+  signInvite,
   signMove,
   verifyMessage,
+  verifyInvite,
   verifyMove,
 } from "../records.js";
 import type { SignedMove } from "../records.js";
@@ -130,5 +132,25 @@ describe("chat", () => {
     const chat = await signMessage(f.bob, f.gameId, { ...message, member: 1, body: "hi" });
     const huge = { ...chat, message: { ...chat.message, body: "x".repeat(4096) } };
     await expect(verifyMessage(f.roster, f.gameId, huge)).resolves.toBe(false);
+  });
+});
+
+describe("invites", () => {
+  const invite = () => ({ empire: 1, id: "abcdefghijklmnop", expires: 2_000_000_000, by: f.alice.key });
+
+  it("verifies against the key it names", async () => {
+    const signed = await signInvite(f.alice, f.gameId, invite());
+    await expect(verifyInvite(f.gameId, signed)).resolves.toBe(true);
+  });
+
+  it("is refused when edited, retargeted or moved to another game", async () => {
+    const signed = await signInvite(f.alice, f.gameId, invite());
+    await expect(verifyInvite(f.gameId, { ...signed, invite: { ...signed.invite, empire: 2 } })).resolves.toBe(false);
+    await expect(verifyInvite(f.gameId, { ...signed, invite: { ...signed.invite, by: f.bob.key } })).resolves.toBe(false);
+    await expect(verifyInvite("another-game", signed)).resolves.toBe(false);
+  });
+
+  it("is a refusal, not a throw, for garbage", async () => {
+    await expect(verifyInvite(f.gameId, { invite: null, sig: "x" } as never)).resolves.toBe(false);
   });
 });

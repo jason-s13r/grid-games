@@ -230,3 +230,66 @@ export async function verifyHello(
     return false;
   }
 }
+
+// --- invites -----------------------------------------------------------------
+
+const TAG_INVITE = "tessera/invite/1";
+
+/** "Whoever holds this may join my empire." Signed by a seated member, so it
+ *  can be checked by anybody who knows the roster: a room today, a peer in a
+ *  game with no room tomorrow. */
+export interface Invite {
+  empire: number;
+  /** Random, base64url. A room accepts each id once. */
+  id: string;
+  /** Seconds since the epoch after which it is refused. */
+  expires: number;
+  /** The inviting member's key. */
+  by: MemberKey;
+}
+
+export interface SignedInvite {
+  invite: Invite;
+  sig: string;
+}
+
+export function encodeInvite(gameId: string, invite: Invite): Uint8Array {
+  const id = utf8(invite.id);
+  const by = utf8(invite.by);
+  if (!(u8(invite.empire) && invite.empire >= 1 && u32(invite.expires))) {
+    throw new Error("invite field out of range");
+  }
+  if (!u16(id.length) || !u16(by.length)) throw new Error("invite field out of range");
+  const record = new Writer(9 + id.length + by.length)
+    .u8(invite.empire)
+    .u32(invite.expires)
+    .u16(id.length)
+    .raw(id)
+    .u16(by.length)
+    .raw(by)
+    .finish();
+  return concat(preamble(TAG_INVITE, gameId), record);
+}
+
+export async function signInvite(
+  identity: Identity,
+  gameId: string,
+  invite: Invite,
+): Promise<SignedInvite> {
+  return { invite, sig: await identity.sign(encodeInvite(gameId, invite)) };
+}
+
+/** True when the invite is well formed and signed by the key it names. Whether
+ *  that key may invite into that empire is the roster's question, asked by
+ *  the caller. */
+export async function verifyInvite(gameId: string, signed: SignedInvite): Promise<boolean> {
+  try {
+    if (!signed?.invite || typeof signed.sig !== "string") return false;
+    const { empire, id, expires, by } = signed.invite;
+    if (typeof id !== "string" || typeof by !== "string" || id.length > 64) return false;
+    if (!Number.isInteger(empire) || !Number.isInteger(expires)) return false;
+    return await verify(by, signed.sig, encodeInvite(gameId, signed.invite));
+  } catch {
+    return false;
+  }
+}

@@ -11,6 +11,9 @@ export {
   CHANNEL,
   NONCE_BYTES,
   encodeHello,
+  encodeInvite,
+  signInvite,
+  verifyInvite,
   encodeMessage,
   encodeMove,
   messageInRange,
@@ -22,4 +25,4 @@ export {
   verifyMessage,
   verifyMove,
 } from "./records.js";
-export type { Channel, Message, SignedMessage, SignedMove } from "./records.js";
+export type { Channel, Invite, Message, SignedInvite, SignedMessage, SignedMove } from "./records.js";
