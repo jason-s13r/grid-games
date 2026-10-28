@@ -17,7 +17,8 @@
   "dependencies": {
     "@tessera/protocol": "workspace:*",
     "@tessera/room": "workspace:*",
-    "@tessera/sim": "workspace:*"
+    "@tessera/sim": "workspace:*",
+    "@tessera/web": "workspace:*"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "5.20261006.1",

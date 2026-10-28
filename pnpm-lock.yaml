@@ -82,6 +82,9 @@ importers:
       '@tessera/sim':
         specifier: workspace:*
         version: link:../../packages/sim
+      '@tessera/web':
+        specifier: workspace:*
+        version: link:../web
     devDependencies:
       '@cloudflare/workers-types':
         specifier: 5.20261006.1
