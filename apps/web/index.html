@@ -101,6 +101,14 @@
            asks for it. See view/Tabs.ts. -->
       <nav class="tabs" data-tabs aria-label="Panels"></nav>
 
+      <!-- Online games only. See view/Chat.ts. -->
+      <aside class="side side-right" data-chat-section hidden>
+        <details class="acc acc-chat" data-acc="chat" open>
+          <summary>Chat</summary>
+          <div class="acc-body" data-chat></div>
+        </details>
+      </aside>
+
       <!-- The setup screen. Lobby, teams and game configuration live here and
            nowhere else, so nothing about starting a game competes with playing
            one. -->

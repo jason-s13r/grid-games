@@ -25,6 +25,7 @@ import { Flags, injectThemeCss, setFlags } from "./view/palette";
 import { OnlineGame } from "./game/Online";
 import { OnlinePanel } from "./view/Online";
 import { PeoplePanel } from "./view/People";
+import { ChatPanel } from "./view/Chat";
 import { fromBase64Url, toBase64Url, utf8, fromUtf8 } from "@tessera/protocol";
 import type { SignedInvite } from "@tessera/protocol";
 import { RoomLink, createGame, roomIdFrom } from "./net/room";
@@ -238,7 +239,8 @@ function mount(driver: Driver): void {
     zoomhint: pick<HTMLElement>("[data-zoomhint]"),
   });
 
-  appEl.dataset.chat = "off";
+  // A chat column for an online game; none for a solo one.
+  appEl.dataset.chat = driver.online ? "on" : "off";
 
   // An online game runs on wall-clock time with other people in it, so there
   // is nothing to pause. Derived from the driver rather than from its kind.
@@ -441,6 +443,10 @@ function decodeInvite(text: string | null): SignedInvite | undefined {
   }
 }
 
+const chat = new ChatPanel(pick<HTMLElement>("[data-chat]"), pick<HTMLElement>("[data-chat-section]"), (text, channel) =>
+  link?.client.say(text, channel),
+);
+
 /** The two doors into a running game, on the standings list: take an empire
  *  nobody holds, or ask one that somebody does. */
 pick<HTMLElement>("[data-standings]").addEventListener("click", (event) => {
@@ -538,6 +544,7 @@ async function enterRoom(roomId: string): Promise<void> {
     mount(new OnlineGame(client));
     online.playing(roomId);
     shell.show("game");
+    chat.open(client.chat, identity.key, !!client.you?.seat);
     showPeople();
     if (arrivedWith && !client.you?.seat) client.redeem(arrivedWith);
     arrivedWith = undefined;
@@ -546,8 +553,12 @@ async function enterRoom(roomId: string): Promise<void> {
     if (link === opened) people.set(client.people, identity.key, client.you?.seat?.empire ?? 0);
   };
   client.onPeople = showPeople;
+  client.onChat = (lines) => {
+    if (link === opened) chat.add(lines, identity.key);
+  };
   client.onSeated = () => {
     showPeople();
+    chat.seated(true);
     // A spectator who has just been given a seat wants to see their empire.
     if (link === opened) centreOnCapital();
   };
@@ -561,6 +572,7 @@ function leaveRoom(): void {
   link = undefined;
   afterCreate = undefined;
   people.set(null);
+  chat.close();
   if (location.pathname.startsWith("/g/")) history.pushState(null, "", "/");
   online.home();
 }
