@@ -25,6 +25,7 @@ import {
   Sim,
   durationRules,
   makeGenesis,
+  minutes,
   simbot,
 } from "@tessera/sim";
 import type { EmpireSpec, Genesis, Move } from "@tessera/sim";
@@ -163,11 +164,12 @@ export class Room {
     this.seatings = store.get<StoredSeating[]>("seatings") ?? [];
     this.requests = store.get<Array<{ key: string; empire: number }>>("requests") ?? [];
     this.usedInvites = store.get<string[]>("invites") ?? [];
-    this.lastStamp = store.get<number>("lastStamp") ?? 0;
+    // Not stored on every stamp: the log's last step says the same thing.
+    this.lastStamp = Math.max(store.get<number>("lastStamp") ?? 0, store.lastStep());
     this.chat = store.get<ChatLine[]>("chat") ?? [];
 
     const genesis = store.get<Genesis>("genesis");
-    if (genesis) this.load(genesis, store.get<number>("next") ?? 0);
+    if (genesis) this.load(genesis);
   }
 
   get phase(): Phase {
@@ -407,11 +409,9 @@ export class Room {
 
       this.store.put("genesis", genesis);
       this.store.put("phase", "playing");
-      this.store.put("next", 0);
       this._phase = "playing";
-      this.load(genesis, 0);
-      const sim = this.sim!;
-      this.store.putSnapshot({ step: 0, hash: sim.hash(), bytes: new Uint8Array(sim.snapshot()) });
+      this.load(genesis);
+      this.keepSnapshot();
 
       for (const peer of this.peers.values()) {
         if (peer.key) {
@@ -449,6 +449,13 @@ export class Room {
         rules: {
           ...durationRules(config.duration, config.joinShare),
           maxSeats: this.seatsPerEmpire(),
+          // Presence, as the room stamps it for a connected seat. Every beat is
+          // a row in the room's log, and the only thing that needs one this
+          // often is the empire list's "live" dot; abandonment is measured in
+          // hours. The sim's defaults (30s, 2min) were set for a mesh where
+          // every peer paid for its own beats.
+          heartbeatInterval: minutes(3),
+          livenessWindow: minutes(5),
         },
         empires,
       }),
@@ -458,8 +465,14 @@ export class Room {
     return genesis;
   }
 
-  /** Build the simulation for a started game and bring it to `next`. */
-  private load(genesis: Genesis, next: number): void {
+  /** Build the simulation for a started game from its snapshot, with the moves
+   *  logged since waiting to be simulated. It is brought up to date when an
+   *  answer needs it, not here: a room woken by one message often needs none.
+   *
+   *  The sequence numbers and heartbeat times kept since the snapshot are
+   *  recovered from those same moves, which is what lets the room write them
+   *  only with the snapshot rather than on every move. */
+  private load(genesis: Genesis): void {
     this.genesis = genesis;
     this.roster = Roster.fromGenesis(genesis);
     for (const seating of this.seatings) {
@@ -472,14 +485,24 @@ export class Room {
       sim.restore(snapshot.bytes.slice().buffer);
       tail = this.store.movesFrom(snapshot.step);
     }
-    advanceTo(
-      sim,
-      next,
-      tail.map((s) => s.move),
-    );
     this.sim = sim;
     this.next = sim.step;
     this.future = tail.filter((s) => s.move.step >= sim.step);
+
+    for (const seat of this.roster.all()) this.beats.set(seat.key, sim.step);
+    for (const { move, sig } of tail) {
+      const key = this.roster.keyOf(move.empire, move.member);
+      if (!key) continue;
+      if (move.type === MOVE.HEARTBEAT) this.beats.set(key, Math.max(this.beats.get(key) ?? 0, move.step));
+      else if (sig && move.seq > (this.seqs[key] ?? -1)) this.seqs[key] = move.seq;
+    }
+  }
+
+  /** The state at the room's step, and the sequence numbers that go with it. */
+  private keepSnapshot(): void {
+    const sim = this.sim!;
+    this.store.putSnapshot({ step: sim.step, hash: sim.hash(), bytes: new Uint8Array(sim.snapshot()) });
+    this.store.put("seqs", this.seqs);
   }
 
   // --- moves -----------------------------------------------------------------
@@ -506,7 +529,6 @@ export class Room {
     if (!(seq > (this.seqs[key] ?? -1))) return this.error(peer, "stale seq");
 
     this.seqs[key] = seq;
-    this.store.put("seqs", this.seqs);
     this.stamp([{ move, sig: message.sig }], key);
   }
 
@@ -536,7 +558,6 @@ export class Room {
 
     for (const stamped of all) stamped.move.step = step;
     this.lastStamp = step;
-    this.store.put("lastStamp", step);
     this.store.append(all);
     this.future.push(...all);
 
@@ -568,13 +589,8 @@ export class Room {
     }
 
     this.next = sim.step;
-    this.store.put("next", this.next);
     if (Math.floor(this.next / SNAPSHOT_EVERY) > Math.floor(from / SNAPSHOT_EVERY) || sim.ended) {
-      this.store.putSnapshot({
-        step: this.next,
-        hash: sim.hash(),
-        bytes: new Uint8Array(sim.snapshot()),
-      });
+      this.keepSnapshot();
     }
   }
 
@@ -606,7 +622,6 @@ export class Room {
     if (roster.has(key)) return false;
     const step = Math.max(this.openStep(), this.lastStamp + 1);
     this.lastStamp = step;
-    this.store.put("lastStamp", step);
     this.advance(step);
 
     // A bot is seated as one. The simulation lets a bot seat in after the join

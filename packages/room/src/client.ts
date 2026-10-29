@@ -50,9 +50,11 @@ export interface RoomClientOptions {
   bot?: boolean;
 }
 
-/** A hash report every 15 seconds of game time. They double as the seat's
- *  presence: the room heartbeats a seat whose client has spoken lately. */
-const REPORT_EVERY = 12 * 15;
+/** A hash report every minute of game time. They double as the seat's
+ *  presence: the room heartbeats a seat whose client has spoken lately. Each
+ *  one can wake the room's Durable Object, which reads its state back in, so
+ *  this is the main dial on what an idle open tab costs. */
+const REPORT_EVERY = 12 * 60;
 /** A report waits this many steps, so a late move cannot change the state it
  *  describes after it has been sent. */
 const REPORT_AFTER = 24;

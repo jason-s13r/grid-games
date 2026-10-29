@@ -13,6 +13,7 @@ import { DurableObject } from "cloudflare:workers";
 import { Room } from "@tessera/room";
 import type { Connection, RoomConfig } from "@tessera/room";
 import { SqlStore } from "./store.js";
+import type { StoreUsage } from "./store.js";
 import type { Env } from "./env.js";
 
 /** What each socket carries across hibernation. */
@@ -26,6 +27,8 @@ export interface RoomInfo {
   phase: "lobby" | "playing";
   step: number;
   ended: boolean;
+  /** SQLite rows this object has read and written since it last woke. */
+  storage: StoreUsage;
 }
 
 export class GameRoom extends DurableObject<Env> {
@@ -36,7 +39,7 @@ export class GameRoom extends DurableObject<Env> {
 
   constructor(ctx: DurableObjectState, env: Env) {
     super(ctx, env);
-    this.store = new SqlStore(ctx.storage.sql);
+    this.store = new SqlStore(ctx.storage);
   }
 
   /** Create the room. False if this object already holds one. */
@@ -51,7 +54,7 @@ export class GameRoom extends DurableObject<Env> {
   async info(): Promise<RoomInfo | null> {
     const room = this.load();
     if (!room) return null;
-    return { roomId: room.id, phase: room.phase, step: room.step, ended: room.ended };
+    return { roomId: room.id, phase: room.phase, step: room.step, ended: room.ended, storage: this.store.usage };
   }
 
   override async fetch(request: Request): Promise<Response> {

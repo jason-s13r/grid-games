@@ -10,9 +10,11 @@ import type { Move, Sim } from "@tessera/sim";
 /** Five seconds of game time between hash comparisons. */
 export const CHECKPOINT_EVERY = STEPS_PER_SECOND * 5;
 
-/** One minute of game time between snapshots the room keeps. A multiple of
- *  CHECKPOINT_EVERY, so every snapshot step also has a recorded hash. */
-export const SNAPSHOT_EVERY = STEPS_PER_SECOND * 60;
+/** Two minutes of game time between snapshots the room keeps. A multiple of
+ *  CHECKPOINT_EVERY, so every snapshot step also has a recorded hash. Each is
+ *  a write; the moves since the last one are what a woken room reads, so this
+ *  trades one against the other. */
+export const SNAPSHOT_EVERY = STEPS_PER_SECOND * 120;
 
 export interface Advanced {
   /** Tiles that changed, for a renderer. */

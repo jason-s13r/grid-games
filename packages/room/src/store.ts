@@ -20,6 +20,8 @@ export interface RoomStore {
   append(moves: readonly Stamped[]): void;
   /** Every logged move at or after `step`, in log order. */
   movesFrom(step: number): Stamped[];
+  /** The step of the last move logged, or 0. */
+  lastStep(): number;
   /** Keep a snapshot, replacing any older one. */
   putSnapshot(snapshot: StoredSnapshot): void;
   latestSnapshot(): StoredSnapshot | undefined;
@@ -47,6 +49,10 @@ export class MemoryStore implements RoomStore {
 
   movesFrom(step: number): Stamped[] {
     return this.log.filter((entry) => entry.move.step >= step);
+  }
+
+  lastStep(): number {
+    return this.log.at(-1)?.move.step ?? 0;
   }
 
   putSnapshot(snapshot: StoredSnapshot): void {

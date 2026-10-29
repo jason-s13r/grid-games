@@ -188,14 +188,46 @@ describe("playing", () => {
     expect(a.errors).toContain("stale seq");
   });
 
+  it("still refuses a reused sequence number after the room is rebuilt", async () => {
+    const { h, a } = await started();
+    await h.run(5_000);
+    const at = aClaim(a.client)!;
+    await a.client.submit(MOVE.CLAIM, at.x, at.y);
+    await h.settle();
+    // Rebuilt before any snapshot holds the count: it comes back from the log.
+    h.restart();
+    a.reattach(h.room);
+    (a.client as unknown as { nextSeq: number }).nextSeq = 0;
+    await a.client.submit(MOVE.CLAIM, at.x, at.y);
+    await h.settle();
+    expect(a.errors).toContain("stale seq");
+  });
+
+  it("does not beat early for a room that keeps being rebuilt", async () => {
+    const { h, a, b } = await started();
+    b.drop();
+    const log = (): number =>
+      h.store.movesFrom(0).filter((s) => s.move.type === MOVE.HEARTBEAT && s.move.empire === 1).length;
+    for (let i = 0; i < 6; i++) {
+      await h.run(60_000, 1000);
+      h.restart();
+      a.reattach(h.room);
+    }
+    // Six minutes, a beat every three: the first, and two more.
+    expect(log()).toBeLessThanOrEqual(3);
+  });
+
   it("heartbeats for connected seats only", async () => {
     const { h, a, b } = await started();
     b.drop();
-    await h.run(65_000, 1000);
+    await h.run(7 * 60_000, 1000);
     const members = a.client.sim!.state.empires.map((e) => e.members[0]?.lastBeat ?? -1);
     const step = a.client.sim!.step;
-    // Alice is here: beaten within the last interval. Bob left at once.
-    expect(step - members[0]!).toBeLessThanOrEqual(a.client.genesis!.rules.heartbeatInterval);
+    const rules = a.client.genesis!.rules;
+    // Alice is here: beaten within the last interval, give or take a report,
+    // and so live by the sim's own measure. Bob left at once.
+    expect(members[0]).toBeGreaterThan(rules.heartbeatInterval);
+    expect(step - members[0]!).toBeLessThanOrEqual(rules.livenessWindow);
     expect(members[1]).toBe(0);
   });
 
@@ -205,8 +237,8 @@ describe("playing", () => {
     // Corrupt one tile the way a bug would.
     a.client.sim!.state.pop[0] = 9999;
     expect(a.client.sim!.hash()).not.toBe(h.roomHash());
-    // The next hash report, every 15 seconds of game time, finds it.
-    await h.run(20_000);
+    // The next hash report, every minute of game time, finds it.
+    await h.run(65_000, 1000);
     expect(a.client.sim!.hash()).toBe(h.roomHash());
   });
 });
