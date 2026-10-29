@@ -22,9 +22,20 @@
   },
   "migrations": [{ "tag": "v1", "new_sqlite_classes": ["GameRoom"] }],
 
+  // Listings, players and results. No database_id: `wrangler deploy` creates
+  // the database on first deploy and binds it. The schema is in migrations/,
+  // applied by `pnpm deploy` after the Worker is up, and locally by `pnpm dev`.
+  "d1_databases": [{ "binding": "DB", "database_name": "tessera", "migrations_dir": "migrations" }],
+
+  // Finished games, whole, for replays. Created on first deploy like the
+  // database. A room deletes its own storage KEEP_DAYS after archiving.
+  "r2_buckets": [{ "binding": "ARCHIVE", "bucket_name": "tessera-archive" }],
+
   "vars": {
     // The game length the create form offers first.
-    "DEFAULT_DURATION_DAYS": "10"
+    "DEFAULT_DURATION_DAYS": "10",
+    // How long a finished game's room keeps its storage once it is archived.
+    "KEEP_DAYS": "30"
   },
 
   "observability": { "enabled": true }

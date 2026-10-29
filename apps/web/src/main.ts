@@ -26,6 +26,9 @@ import { OnlineGame } from "./game/Online";
 import { OnlinePanel } from "./view/Online";
 import { PeoplePanel } from "./view/People";
 import { ChatPanel } from "./view/Chat";
+import { GamesPanel } from "./view/Games";
+import { ReplayGame, SPEEDS } from "./game/Replay";
+import type { Archive } from "./game/Replay";
 import { fromBase64Url, toBase64Url, utf8, fromUtf8 } from "@tessera/protocol";
 import type { SignedInvite } from "@tessera/protocol";
 import { RoomLink, createGame, roomIdFrom } from "./net/room";
@@ -246,6 +249,8 @@ function mount(driver: Driver): void {
   // is nothing to pause. Derived from the driver rather than from its kind.
   pick<HTMLButtonElement>('[data-action="pause"]').disabled = driver.online || !driver.running;
   pick<HTMLButtonElement>('[data-action="pause"]').textContent = "Pause";
+  speedEl.hidden = !(driver instanceof ReplayGame);
+  if (driver instanceof ReplayGame) speedEl.textContent = `×${driver.speed}`;
 
   mapImage.paintAll(game.sim.state);
   centred = false;
@@ -408,6 +413,14 @@ pick<HTMLButtonElement>('[data-action="pause"]').addEventListener("click", (even
   }
 });
 
+const speedEl = pick<HTMLButtonElement>('[data-action="speed"]');
+speedEl.addEventListener("click", () => {
+  if (!(game instanceof ReplayGame)) return;
+  const next = SPEEDS[(SPEEDS.indexOf(game.speed as (typeof SPEEDS)[number]) + 1) % SPEEDS.length]!;
+  game.setSpeed(next);
+  speedEl.textContent = `×${next}`;
+});
+
 pick<HTMLButtonElement>('[data-action="leave"]').addEventListener("click", () => {
   if (link) leaveRoom();
   shell.left();
@@ -480,6 +493,13 @@ const online = new OnlinePanel(
   },
 );
 
+const games = new GamesPanel(pick<HTMLElement>("[data-games]"), {
+  open: (id) => void enterRoom(id),
+  replay: (id) => void openReplay(id),
+  me: async () => (await myIdentity()).key,
+});
+games.show("open");
+
 async function createRoom(): Promise<void> {
   const form = online.read();
   if (form.start === "scheduled" && !form.startAt) return online.home("Pick a start time.");
@@ -492,6 +512,7 @@ async function createRoom(): Promise<void> {
       bots: onlineRivals.list,
       map: form.map,
       hours: form.hours,
+      public: form.public,
       ...(form.startAt ? { startAt: form.startAt } : {}),
     });
     afterCreate = { start: form.start === "now" };
@@ -501,9 +522,32 @@ async function createRoom(): Promise<void> {
   }
 }
 
+/** Watch a finished game from its archive. */
+async function openReplay(roomId: string): Promise<void> {
+  leaveRoom();
+  online.connecting(roomId, "Fetching the replay…");
+  try {
+    const response = await fetch(`/api/games/${roomId}/archive`);
+    if (!response.ok) throw new Error(response.status === 404 ? "it has no archive yet" : `the server said ${response.status}`);
+    const archive = (await response.json()) as Archive;
+    if (location.pathname !== `/g/${roomId}`) history.pushState(null, "", `/g/${roomId}`);
+    mount(new ReplayGame(archive));
+    online.home();
+    shell.show("game");
+  } catch (error) {
+    online.home(`Could not open that replay: ${(error as Error).message}`);
+  }
+}
+
 /** Open a game's room. Its lobby shows on the menu; once it is running, the
- *  board takes over. */
+ *  board takes over. A game whose room has been archived away opens as its
+ *  replay. */
 async function enterRoom(roomId: string): Promise<void> {
+  const known = await fetch(`/api/games/${roomId}`)
+    .then((r) => (r.ok ? (r.json() as Promise<{ archived?: boolean; phase?: string }>) : null))
+    .catch(() => undefined);
+  if (known === null) return online.home(`There is no game "${roomId}".`);
+  if (known?.archived && known.phase === "ended") return openReplay(roomId);
   leaveRoom();
   if (location.pathname !== `/g/${roomId}`) history.pushState(null, "", `/g/${roomId}`);
   online.connecting(roomId);

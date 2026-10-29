@@ -9,6 +9,7 @@ import { Room } from "../room.js";
 import { RoomClient } from "../client.js";
 import { MemoryStore } from "../store.js";
 import type { RoomConfig } from "../messages.js";
+import type { GameResult, GameSummary, PlayerRecord, RoomEvents } from "../record.js";
 
 export class Clock {
   constructor(public time = 1_800_000_000_000) {}
@@ -43,6 +44,15 @@ export class Harness {
   room: Room;
   private readonly pending = new Set<Promise<void>>();
   private readonly clients: RoomClient[] = [];
+  /** Everything the room reported, in order. */
+  readonly games: GameSummary[] = [];
+  readonly players: PlayerRecord[] = [];
+  readonly results: GameResult[] = [];
+  private readonly events: RoomEvents = {
+    game: (summary) => this.games.push(summary),
+    player: (record) => this.players.push(record),
+    ended: (result) => this.results.push(result),
+  };
 
   constructor(config: Partial<RoomConfig> & { creator: string }) {
     Room.create(this.store, {
@@ -54,13 +64,13 @@ export class Harness {
       duration: 12 * 60 * 30,
       ...config,
     });
-    this.room = new Room(this.store, { now: this.clock.now });
+    this.room = new Room(this.store, { now: this.clock.now, events: this.events });
   }
 
   /** Throw the room away and build it again from its store, as a Durable
    *  Object waking up after eviction would. Every connection is lost. */
   restart(): void {
-    this.room = new Room(this.store, { now: this.clock.now });
+    this.room = new Room(this.store, { now: this.clock.now, events: this.events });
   }
 
   async join(identity: Identity, name?: string, options: { bot?: boolean } = {}): Promise<Linked> {

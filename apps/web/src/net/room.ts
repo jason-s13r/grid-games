@@ -98,6 +98,7 @@ export interface CreateGame {
   map: "small" | "medium" | "large";
   hours: number;
   startAt?: number;
+  public?: boolean;
 }
 
 /** Ask the Worker for a new room. Returns its id, or throws with the reason. */

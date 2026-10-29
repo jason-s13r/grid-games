@@ -26,6 +26,8 @@ export interface CreateRequest {
   joinShare?: number;
   /** Start on its own at this time, ms since the epoch. */
   startAt?: number;
+  /** Show it in the public list of games. */
+  public?: boolean;
 }
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -102,5 +104,7 @@ export function configFrom(
     duration,
     joinShare,
     ...(request.startAt !== undefined ? { startAt: request.startAt } : {}),
+    public: request.public === true,
+    createdAt: now,
   };
 }

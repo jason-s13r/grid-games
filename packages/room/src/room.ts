@@ -22,8 +22,10 @@ import {
   MEMBER,
   MOVE,
   SEAT_CEILING,
+  SIM_VERSION,
   Sim,
   durationRules,
+  hex,
   makeGenesis,
   minutes,
   simbot,
@@ -46,6 +48,8 @@ import {
 } from "@tessera/protocol";
 import { SNAPSHOT_EVERY, advanceTo, stepAt } from "./advance.js";
 import { decode, encode } from "./messages.js";
+import { resultOf, timeOf } from "./record.js";
+import type { GameArchive, GameResult, GameSummary, RoomEvents } from "./record.js";
 import type {
   Catchup,
   ClientMessage,
@@ -74,7 +78,14 @@ export interface Connection {
 
 export interface RoomOptions {
   now?: () => number;
+  /** Where the room reports listings, players and results. */
+  events?: RoomEvents;
 }
+
+/** How often a running game with nobody in it wakes to see whether it has
+ *  ended: an abandoned table ends on the sim's own clock, and nobody would
+ *  otherwise be there to notice. */
+const CHECK_EVERY_MS = 12 * 3600_000;
 
 interface Peer {
   conn: Connection;
@@ -114,6 +125,7 @@ const KEEP_CHECKPOINTS = 64;
 
 export class Room {
   private readonly now: () => number;
+  private readonly events: RoomEvents;
   private readonly config: RoomConfig;
   private readonly peers = new Map<string, Peer>();
 
@@ -139,6 +151,8 @@ export class Room {
   private chat: ChatLine[];
   private readonly spoke = new Map<string, number>();
   private readonly checkpoints = new Map<number, number>();
+  /** The result has been reported. */
+  private finished: boolean;
 
   /** Set up a new room's storage. The room itself is built with `new Room`. */
   static create(store: RoomStore, config: RoomConfig): void {
@@ -154,6 +168,7 @@ export class Room {
     options: RoomOptions = {},
   ) {
     this.now = options.now ?? Date.now;
+    this.events = options.events ?? {};
     const config = store.get<RoomConfig>("config");
     if (!config) throw new Error("no room in this store");
     this.config = config;
@@ -167,6 +182,7 @@ export class Room {
     // Not stored on every stamp: the log's last step says the same thing.
     this.lastStamp = Math.max(store.get<number>("lastStamp") ?? 0, store.lastStep());
     this.chat = store.get<ChatLine[]>("chat") ?? [];
+    this.finished = store.get<boolean>("finished") ?? false;
 
     const genesis = store.get<Genesis>("genesis");
     if (genesis) this.load(genesis);
@@ -201,9 +217,52 @@ export class Room {
   }
 
   /** When the room next needs a `tick()`: the scheduled start, if there is
-   *  one. A running game needs none. */
+   *  one, and while a game runs, its end and a check every twelve hours for
+   *  a table that has ended on its own. On a fixed grid from the start, so
+   *  the answer does not move between calls and the host need not reset an
+   *  alarm on every message. */
   wakeAt(): number | undefined {
-    return this._phase === "lobby" ? this.startsAt : undefined;
+    if (this._phase === "lobby") return this.startsAt;
+    if (this.finished || !this.genesis) return undefined;
+    const start = this.genesis.startedAt;
+    const next = start + (Math.floor((this.now() - start) / CHECK_EVERY_MS) + 1) * CHECK_EVERY_MS;
+    const end = this.endsAt();
+    return end === undefined ? next : Math.min(next, end + 1000);
+  }
+
+  /** The game as a listing shows it. */
+  summary(): GameSummary {
+    const { config } = this;
+    const summary: GameSummary = {
+      roomId: config.roomId,
+      creator: config.creator,
+      public: config.public ?? false,
+      phase: this.finished ? "ended" : this._phase,
+      createdAt: config.createdAt ?? 0,
+      map: config.map,
+      empires: config.empires,
+      seatsPerEmpire: this.seatsPerEmpire(),
+      bots: config.bots.length,
+      players: this.roster ? this.players.filter((p) => this.roster!.has(p.key)).length : this.players.length,
+    };
+    if (this.startsAt !== undefined && this._phase === "lobby") summary.startsAt = this.startsAt;
+    const genesis = this.genesis;
+    if (genesis) {
+      summary.startedAt = genesis.startedAt;
+      summary.simVersion = SIM_VERSION;
+      const window = genesis.rules.joinWindow ?? 0;
+      if (window > 0) summary.joinUntil = timeOf(genesis.startedAt, window);
+      const end = this.endsAt();
+      if (end !== undefined) summary.endsAt = end;
+      if (this.finished && this.sim) summary.endedAt = timeOf(genesis.startedAt, this.sim.step);
+    }
+    return summary;
+  }
+
+  private endsAt(): number | undefined {
+    const genesis = this.genesis;
+    if (!genesis || genesis.rules.endStep <= 0) return undefined;
+    return timeOf(genesis.startedAt, genesis.rules.endStep);
   }
 
   // --- connections -----------------------------------------------------------
@@ -302,6 +361,8 @@ export class Room {
         Object.assign(known, bot);
       } else {
         this.players.push({ key: message.key, name, empire: null, ...bot });
+        this.recordPlayer(message.key);
+        this.events.game?.(this.summary());
       }
       this.store.put("players", this.players);
       this.sendTo(peer.conn, {
@@ -419,6 +480,8 @@ export class Room {
         }
       }
       this.broadcastPeople();
+      for (const player of this.players) if (this.roster!.has(player.key)) this.recordPlayer(player.key);
+      this.events.game?.(this.summary());
     } finally {
       this.starting = false;
     }
@@ -538,6 +601,8 @@ export class Room {
   async tick(): Promise<void> {
     if (this._phase === "lobby" && this.startsAt !== undefined && this.now() >= this.startsAt) {
       await this.start();
+    } else if (this._phase === "playing") {
+      this.catchUp();
     }
   }
 
@@ -592,6 +657,63 @@ export class Room {
     if (Math.floor(this.next / SNAPSHOT_EVERY) > Math.floor(from / SNAPSHOT_EVERY) || sim.ended) {
       this.keepSnapshot();
     }
+    if (sim.ended) this.finish();
+  }
+
+  /** Report the result, once. */
+  private finish(): void {
+    if (this.finished || !this.sim || !this.roster) return;
+    this.finished = true;
+    this.store.put("finished", true);
+    this.events.ended?.(this.result());
+    this.events.game?.(this.summary());
+  }
+
+  private result(): GameResult {
+    const bySeat = new Map<string, { key: string; name: string; bot: boolean }>();
+    for (const player of this.players) {
+      const seat = this.roster!.seatOf(player.key);
+      if (seat) {
+        bySeat.set(`${seat.empire}:${seat.member}`, { key: player.key, name: player.name, bot: this.isBot(player.key) });
+      }
+    }
+    return resultOf(this.sim!, this.config.roomId, (e, m) => bySeat.get(`${e}:${m}`));
+  }
+
+  /** The whole game, once it has ended: for an archive. Reads the entire
+   *  log, which is the one time anything does. */
+  archive(): GameArchive | undefined {
+    if (!this.finished || !this.sim || !this.genesis || !this.roster) return undefined;
+    const players = this.players.flatMap((p) => {
+      const seat = this.roster!.seatOf(p.key);
+      return seat ? [{ key: p.key, name: p.name, empire: seat.empire, member: seat.member, bot: this.isBot(p.key) }] : [];
+    });
+    return {
+      format: "tessera/archive/1",
+      roomId: this.config.roomId,
+      genesis: this.genesis,
+      players,
+      moveLog: this.store.movesFrom(0).filter((s) => s.move.step < this.sim!.step),
+      steps: this.sim.step,
+      hash: hex(this.sim.hash()),
+      result: this.result(),
+    };
+  }
+
+  /** Report one player's place in the game. */
+  private recordPlayer(key: string): void {
+    if (!this.events.player) return;
+    const player = this.players.find((p) => p.key === key);
+    if (!player) return;
+    const empire = this.roster ? (this.roster.seatOf(key)?.empire ?? null) : player.empire === null ? null : player.empire + 1;
+    this.events.player({
+      roomId: this.config.roomId,
+      key,
+      name: player.name,
+      empire,
+      bot: player.bot === true,
+      at: this.now(),
+    });
   }
 
   /** A HEARTBEAT for `key`'s seat, once per heartbeat interval, issued when
@@ -645,6 +767,8 @@ export class Room {
       if (other.key === key) this.sendTo(other.conn, { t: "seated", you: this.you(key) });
     }
     this.broadcastPeople();
+    this.recordPlayer(key);
+    this.events.game?.(this.summary());
     return true;
   }
 

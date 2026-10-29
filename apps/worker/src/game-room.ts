@@ -6,14 +6,23 @@
 // The room acts only when a message arrives: it stamps moves, catches its own
 // simulation up when it needs to, and sends. Between messages nothing runs, so
 // the object can hibernate and costs nothing, and clients keep their own
-// clocks. The alarm is for one thing only: waking the object for a scheduled
-// start.
+// clocks. The alarm wakes the object for a scheduled start, for the end of a
+// running game, and twice a day while one runs to see whether it has ended on
+// its own.
+//
+// What the room reports (a listing row, a player, a result) goes to D1. The
+// writes are collected while a handler runs and waited for before it returns.
+//
+// A game that has ended is archived to R2, and some days later (KEEP_DAYS)
+// the object deletes its own storage: from then on the archive is the game.
 
 import { DurableObject } from "cloudflare:workers";
 import { Room } from "@tessera/room";
-import type { Connection, RoomConfig } from "@tessera/room";
+import type { Connection, RoomConfig, RoomEvents } from "@tessera/room";
 import { SqlStore } from "./store.js";
 import type { StoreUsage } from "./store.js";
+import { writeGame, writePlayer, writeResult } from "./records.js";
+import { writeArchive } from "./archive.js";
 import type { Env } from "./env.js";
 
 /** What each socket carries across hibernation. */
@@ -27,15 +36,19 @@ export interface RoomInfo {
   phase: "lobby" | "playing";
   step: number;
   ended: boolean;
+  /** Its archive is written: a replay can be watched. */
+  archived: boolean;
   /** SQLite rows this object has read and written since it last woke. */
   storage: StoreUsage;
 }
 
 export class GameRoom extends DurableObject<Env> {
-  private readonly store: SqlStore;
+  private store: SqlStore;
   private room: Room | undefined;
   /** The alarm as last read or set, so a message does not have to ask storage. */
   private alarmAt: number | null | undefined;
+  /** D1 writes started by the current handler. */
+  private writes: Promise<unknown>[] = [];
 
   constructor(ctx: DurableObjectState, env: Env) {
     super(ctx, env);
@@ -46,15 +59,20 @@ export class GameRoom extends DurableObject<Env> {
   async init(config: RoomConfig): Promise<boolean> {
     if (this.store.get("config")) return false;
     Room.create(this.store, config);
-    this.load();
+    const room = this.load()!;
+    this.events().game?.(room.summary());
     await this.schedule();
+    await this.flush();
     return true;
   }
 
   async info(): Promise<RoomInfo | null> {
     const room = this.load();
     if (!room) return null;
-    return { roomId: room.id, phase: room.phase, step: room.step, ended: room.ended, storage: this.store.usage };
+    return { roomId: room.id, phase: room.phase, step: room.step, ended: room.ended,
+      archived: this.store.get("archivedAt") !== undefined,
+      storage: this.store.usage,
+    };
   }
 
   override async fetch(request: Request): Promise<Response> {
@@ -84,6 +102,7 @@ export class GameRoom extends DurableObject<Env> {
     const key = room.keyOf(attachment.id);
     if (key && key !== attachment.key) ws.serializeAttachment({ ...attachment, key });
     await this.schedule();
+    await this.flush();
   }
 
   override async webSocketClose(ws: WebSocket, code: number): Promise<void> {
@@ -103,8 +122,11 @@ export class GameRoom extends DurableObject<Env> {
     this.alarmAt = null; // it has fired
     const room = this.load();
     if (!room) return;
+    const until = this.keptUntil();
+    if (until !== undefined && Date.now() >= until) return this.forget();
     await room.tick();
     await this.schedule();
+    await this.flush();
   }
 
   private drop(ws: WebSocket): void {
@@ -117,7 +139,7 @@ export class GameRoom extends DurableObject<Env> {
   private load(): Room | undefined {
     if (this.room) return this.room;
     if (!this.store.get("config")) return undefined;
-    const room = new Room(this.store);
+    const room = new Room(this.store, { events: this.events() });
     for (const ws of this.ctx.getWebSockets()) {
       const attachment = ws.deserializeAttachment() as Attachment | null;
       if (attachment) room.reattach(connection(ws, attachment.id), attachment.key);
@@ -126,12 +148,75 @@ export class GameRoom extends DurableObject<Env> {
     return room;
   }
 
-  /** An alarm for a scheduled start, and none otherwise. */
+  /** The room's reports, as D1 writes. None without a database. */
+  private events(): RoomEvents {
+    const db = this.env.DB;
+    if (!db) return {};
+    const keep = (write: () => Promise<unknown>): void => {
+      this.writes.push(
+        write().catch((error: unknown) => console.error("D1 write failed", error)),
+      );
+    };
+    return {
+      game: (summary) => keep(() => writeGame(db, summary, Date.now())),
+      player: (record) => keep(() => writePlayer(db, record)),
+      ended: (result) => keep(() => writeResult(db, result)),
+    };
+  }
+
+  private async flush(): Promise<void> {
+    const writes = this.writes;
+    this.writes = [];
+    await Promise.all(writes);
+    await this.archive();
+  }
+
+  /** Write a finished game to R2, once. Tried again on the next wake if it
+   *  fails, so a game is never deleted unarchived. */
+  private async archive(): Promise<void> {
+    const room = this.room;
+    if (!room?.ended || !this.env.ARCHIVE || this.store.get("archivedAt")) return;
+    const archive = room.archive();
+    if (!archive) return;
+    try {
+      await writeArchive(this.env.ARCHIVE, archive);
+      this.store.put("archivedAt", Date.now());
+      await this.schedule();
+    } catch (error) {
+      console.error("archive failed", error);
+    }
+  }
+
+  /** When an archived game's storage goes, or undefined to keep it. */
+  private keptUntil(): number | undefined {
+    const at = this.store.get<number>("archivedAt");
+    if (at === undefined) return undefined;
+    const days = Number(this.env.KEEP_DAYS);
+    return at + (Number.isFinite(days) && days >= 0 ? days : 30) * 86_400_000;
+  }
+
+  /** Delete everything: the game lives on as its archive. */
+  private async forget(): Promise<void> {
+    for (const ws of this.ctx.getWebSockets()) {
+      try {
+        ws.close(1000, "this game has been archived");
+      } catch {
+        // Already closed.
+      }
+    }
+    await this.ctx.storage.deleteAlarm();
+    await this.ctx.storage.deleteAll();
+    this.room = undefined;
+    this.alarmAt = null;
+    this.store = new SqlStore(this.ctx.storage);
+  }
+
+  /** An alarm whenever the room asks for one, and none otherwise. */
   private async schedule(): Promise<void> {
     const room = this.room;
     if (!room) return;
     if (this.alarmAt === undefined) this.alarmAt = await this.ctx.storage.getAlarm();
-    const wake = room.wakeAt();
+    const wake = room.wakeAt() ?? this.keptUntil();
     if (wake !== undefined) {
       if (this.alarmAt !== wake) await this.setAlarm(wake);
     } else if (this.alarmAt !== null) {

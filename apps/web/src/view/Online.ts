@@ -110,6 +110,7 @@ export class OnlinePanel {
     seatsPerEmpire: number;
     start: StartMode;
     startAt?: number;
+    public: boolean;
   } {
     const value = (name: string): string =>
       this.els.form.querySelector<HTMLInputElement | HTMLSelectElement>(`[data-online="${name}"]`)?.value ?? "";
@@ -121,6 +122,7 @@ export class OnlinePanel {
       empires: Math.max(1, Math.min(8, Number(value("empires")) || 2)),
       seatsPerEmpire: Math.max(1, Math.min(4, Number(value("seats")) || 2)),
       start,
+      public: this.els.form.querySelector<HTMLInputElement>('[data-online="public"]')?.checked ?? false,
       ...(start === "scheduled" && Number.isFinite(at) ? { startAt: at } : {}),
     };
   }

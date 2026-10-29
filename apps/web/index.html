@@ -31,6 +31,7 @@
         <div class="topbar-end">
           <div class="clock" data-clock></div>
           <span class="version" data-version></span>
+          <button data-action="speed" class="btn" title="Replay speed: game time per second" hidden>×600</button>
           <button data-action="pause" class="btn">Pause</button>
           <button data-action="leave" class="btn">Leave</button>
         </div>
@@ -202,8 +203,18 @@
                 <label for="online-start-at">Starts at</label>
                 <input id="online-start-at" type="datetime-local" data-online="start-at" />
               </div>
+              <label class="field field-check">
+                <input type="checkbox" data-online="public" />
+                List it publicly, so anybody can find and join it
+              </label>
             </div>
             <div data-online-body></div>
+          </section>
+
+          <!-- Public games, your games, and the leaderboard. See view/Games.ts. -->
+          <section class="card setup" data-games-card>
+            <h2>Games</h2>
+            <div data-games></div>
           </section>
 
           <details class="settings" data-settings>

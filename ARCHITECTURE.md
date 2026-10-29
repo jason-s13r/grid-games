@@ -79,21 +79,25 @@ every move, so the room decides nothing about the rules; it decides **when**.
 - **Moves** are signed by the seat's key over everything but the step, which
   the room supplies. `seq` only rises per seat, so a signed move cannot be
   replayed.
-- **Presence.** Every client reports its state hash every 15 seconds of game
+- **Presence.** Every client reports its state hash every minute of game
   time. That report is also what keeps a seat present: the room stamps an
   unsigned `HEARTBEAT` for the seat when one is due. A mismatched hash gets the
   room's state back.
 - **The room's own simulation is lazy.** It catches up to now only when it
   needs an answer: a newcomer's snapshot, a hash to compare, a seat to judge.
-  It keeps the log and a snapshot a minute, and between messages it does
-  nothing at all.
+  It keeps the log and a snapshot every two minutes, and between messages it
+  does nothing at all.
 - **Seats after the start** (taking an open empire, a member's approval, a
   member's signed invite) are `ROSTER_AMEND` moves the room issues at a step of
   their own, after catching up to it, so the simulation's rules decide them.
 
 The room has no timer, socket or database of its own: a host hands it
-connections and a store, and calls `tick()` only for a scheduled start. The
-tests run a room and several clients in one process with a clock they turn.
+connections and a store, and calls `tick()` when `wakeAt()` says (a scheduled
+start, a game's end, and a check twice a day while one runs). It reports
+through hooks: a listing row when the lobby or phase changes, a player when
+someone joins or is seated, and the result when the game ends. When it has
+ended, `archive()` gives the whole game. The tests run a room and several
+clients in one process with a clock they turn.
 
 ## The Worker
 
@@ -105,7 +109,30 @@ Each game is one `GameRoom` Durable Object, addressed by its room id, holding a
 `Room` over its SQLite storage. Sockets use the hibernation API and carry their
 proved key in their attachment, so a woken object takes them back without a new
 handshake. Nothing runs between messages, so the object hibernates and costs
-nothing while a game is quiet; the only alarm is for a scheduled start.
+nothing while a game is quiet.
+
+**Cost.** Durable Object SQLite is billed by rows read and written, rows
+scanned included, and the free tier allows 5M read and 100k written a day
+across every Durable Object on the account. A game wakes its object thousands
+of times a day, so what a wake costs is what matters. The store reads the
+small values once (cached), the last snapshot, and the moves since it: about a
+dozen rows plus two minutes of moves. Moves are one row per stamp, keyed by
+`(step, n)` in a `WITHOUT ROWID` table, so a range of steps is a range of the
+key and a write is one row. The room writes its sequence numbers only with a
+snapshot and recovers them from the moves after it. `/api/games/:id` shows the
+rows read and written since the object last woke.
+
+**Records** go to D1 (`apps/worker/migrations`): `games` (the listing),
+`seats` (who was in which game), `results` (one row per seat in a finished
+game) and `players` (each key's latest name). The object collects the writes
+while it handles a message and waits for them before it returns. A failed
+write is logged and dropped; a game never waits on its listing.
+
+**Archives** go to R2 as `games/<room>.json.gz` when a game ends: the genesis
+record, every stamped move with its signature, who sat where, and the result,
+in the shape `pnpm replay --log` reads. `KEEP_DAYS` after that, the object
+deletes its own storage, and from then on the archive is the game:
+`/api/games/<room>/archive` serves it, and the client plays it back.
 
 ## The simulation
 

@@ -164,6 +164,10 @@ export interface RoomConfig {
   joinShare?: number;
   /** Start on its own at this time, ms since the epoch. */
   startAt?: number;
+  /** Shown in the public list of games. */
+  public?: boolean;
+  /** When the room was made, ms since the epoch. */
+  createdAt?: number;
 }
 
 const MAX_MESSAGE = 4 * 1024 * 1024;

@@ -1626,3 +1626,38 @@ a.btn {
   font-size: 11px;
   text-align: center;
 }
+
+// A checkbox and its sentence, left to right, rather than a field's label and
+// control at either end.
+.field-check {
+  justify-content: flex-start;
+  cursor: pointer;
+  input { margin: 0; }
+}
+
+// The games card: tabs, then a list of games or a table of players.
+.games-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-bottom: 8px;
+  .btn { width: auto; flex: none; }
+}
+.games-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 6px;
+}
+.games-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+  th, td {
+    text-align: left;
+    padding: 3px 6px;
+    border-bottom: 1px solid var(--edge);
+  }
+  td:nth-child(n + 3), th:nth-child(n + 3) { text-align: right; }
+}

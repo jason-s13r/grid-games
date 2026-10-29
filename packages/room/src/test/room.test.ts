@@ -4,10 +4,10 @@
 // clients that apply the same batches reach the same hash as the room.
 
 import { beforeAll, describe, expect, it } from "vitest";
-import { MOVE, STEPS_PER_SECOND } from "@tessera/sim";
+import { MOVE, STEPS_PER_SECOND, Sim, hex } from "@tessera/sim";
 import type { Identity } from "@tessera/protocol";
 import type { RoomClient } from "../client.js";
-import { SNAPSHOT_EVERY } from "../advance.js";
+import { SNAPSHOT_EVERY, advanceTo } from "../advance.js";
 import { Harness, identities } from "./harness.js";
 import type { Linked } from "./harness.js";
 
@@ -572,5 +572,57 @@ describe("bots", () => {
     bot.client.claim(2);
     await h.settle();
     expect(bot.errors).toContain("a bot joins by invite or approval");
+  });
+});
+
+describe("records", () => {
+  it("reports who joins and a listing row as the lobby fills and the game starts", async () => {
+    const { h } = await started();
+    const lobby = h.players.filter((p) => p.empire === null).map((p) => p.name);
+    expect(lobby).toEqual(["alice", "bob"]);
+    const seated = h.players.filter((p) => p.empire !== null);
+    expect(seated.map((p) => [p.name, p.empire])).toEqual([
+      ["alice", 1],
+      ["bob", 2],
+    ]);
+
+    const last = h.games.at(-1)!;
+    expect(last.phase).toBe("playing");
+    expect(last.players).toBe(2);
+    expect(last.startedAt).toBe(h.clock.time);
+    expect(last.endsAt).toBe(last.startedAt! + 30 * 60_000);
+    expect(h.room.wakeAt()).toBe(last.endsAt! + 1000);
+  });
+
+  it("reports the result once, when the game ends with nobody there to see it", async () => {
+    const { h, a, b } = await started();
+    a.drop();
+    b.drop();
+    await h.settle();
+    h.clock.advance(31 * 60_000);
+    await h.room.tick();
+    await h.room.tick();
+
+    expect(h.results).toHaveLength(1);
+    const result = h.results[0]!;
+    expect(result.winner).toBeGreaterThan(0);
+    expect(result.empires[0]!.place).toBe(1);
+    expect(result.empires[0]!.id).toBe(result.winner);
+    const seats = result.empires.flatMap((e) => e.seats.map((s) => s.name)).sort();
+    expect(seats).toEqual(["alice", "bob"]);
+    expect(h.games.at(-1)!.phase).toBe("ended");
+    expect(h.room.wakeAt()).toBeUndefined();
+
+    // Its archive replays to the same end.
+    const archive = h.room.archive()!;
+    const replay = new Sim(archive.genesis);
+    advanceTo(replay, archive.steps, archive.moveLog.map((s) => s.move));
+    expect(hex(replay.hash())).toBe(archive.hash);
+    expect(archive.players.map((p) => p.name).sort()).toEqual(["alice", "bob"]);
+
+    // A woken room does not report it again.
+    h.restart();
+    await h.room.tick();
+    expect(h.results).toHaveLength(1);
   });
 });

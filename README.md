@@ -34,11 +34,15 @@ Online play is being rebuilt on Cloudflare and will be served from
   snapshots, and keeps the game running while nobody is connected.
 - Every client still runs the full simulation and validates every move.
   Cloudflare keeps time and records; the players keep the rules.
+- D1 keeps the public list of games, each player's games and results, and
+  the leaderboard. R2 keeps every finished game whole, for replays.
 
 The menu creates an online game or joins one by link, shows its lobby while
 people pick empires, and switches to the board when it starts. A reload, or a
 link opened tomorrow, catches up to wherever the game has got to; a link opened
-by somebody without a seat spectates.
+by somebody without a seat spectates. The menu also lists public games to
+join or watch, your own games, and the leaderboard; a finished game opens as a
+replay.
 
 ## Layout
 
@@ -66,8 +70,12 @@ pnpm --filter @tessera/worker smoke   # two players through a running `pnpm dev`
 
 `pnpm dev` builds the packages and the client, then runs Parcel in watch mode
 beside `wrangler dev`, which serves the client's build, the API and the
-Durable Objects on one port. Game state lives in `apps/worker/.wrangler/`
-between runs.
+Durable Objects on one port. Game state, the local D1 database and the local
+R2 bucket live in `apps/worker/.wrangler/` between runs.
+
+`pnpm deploy` deploys the Worker and then applies the D1 schema in
+`apps/worker/migrations`. The first deploy creates the database and the
+bucket.
 
 `pnpm replay` is the load-bearing tool. Node and a browser must agree on the
 hash for the same seed and move log. `--log <file>` replays a recorded game
