@@ -23,7 +23,8 @@ import {
 import { makeGenesis, Sim } from "../sim.js";
 import { SIM_VERSION } from "../version.js";
 import { humans } from "../specs.js";
-import type { Genesis } from "../types.js";
+import type { Genesis, Move } from "../types.js";
+import { hex } from "../hash.js";
 import { RECORDED } from "./fixtures/index.js";
 
 const genesisAt = (protocol: number): Genesis => ({
@@ -123,15 +124,22 @@ describe("the fixture set", () => {
     }
   });
 
-  it("proves the bump moved nothing", () => {
+  it("differs between versions only where a rule is gated on one", () => {
     // record() is deterministic in the seed and draws its hand from
-    // Rng(seed ^ 0x5eed); none of that reads the protocol number. So two
-    // fixtures recorded at the same seed under different versions must reach
-    // the same hash, and that is a stronger claim than "crossenv still
-    // passes": crossenv proves each fixture reproduces itself, and this
-    // proves the bump changed nothing about what a game *is*.
-    const hashes = new Set(RECORDED.map((r) => r.hash));
-    expect(hashes.size, [...hashes].join(" != ")).toBe(1);
+    // Rng(seed ^ 0x5eed); none of that reads the protocol number. So every
+    // fixture is the same game, and where two versions reach different hashes
+    // it is because a rule reads the version. Replaying the newest fixture's
+    // moves under each older version's number must reach that version's own
+    // recorded hash: the gates are the whole difference, and an ungated
+    // change to the rules would show up here.
+    const [newest, ...older] = [...RECORDED].sort((a, b) => b.genesis.protocol - a.genesis.protocol);
+    for (const recorded of older) {
+      const sim = new Sim({ ...newest!.genesis, protocol: recorded.genesis.protocol });
+      const byStep = new Map<number, Move[]>();
+      for (const move of newest!.moveLog) byStep.set(move.step, [...(byStep.get(move.step) ?? []), move]);
+      while (sim.step < newest!.steps) sim.advance(byStep.get(sim.step) ?? []);
+      expect(hex(sim.hash()), `v${recorded.genesis.protocol}`).toBe(recorded.hash);
+    }
   });
 
   it("records the same game under every version", () => {

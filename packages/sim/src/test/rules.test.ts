@@ -583,6 +583,28 @@ describe("win conditions", () => {
     });
   });
 
+  // A move is a seat saying it is there, so from v4 it counts as presence the
+  // way a heartbeat does. A v3 game keeps counting heartbeats alone.
+  describe("a move is presence", () => {
+    const moved = (protocol?: number): number => {
+      const sim = arena([humans(1), humans(1)], 1, {}, protocol ? { protocol } : {});
+      own(sim, 5, 5, 1);
+      own(sim, 15, 15, 2);
+      sim.state.step = 600;
+      sim.state.empires[0]!.members[0]!.popTimer = 50;
+      expect(claimNow(sim, 1, 0, 6, 5)).toBe(true);
+      return sim.state.empires[0]!.members[0]!.lastBeat;
+    };
+
+    it("from v4", () => {
+      expect(moved()).toBe(600);
+    });
+
+    it("not in a v3 game", () => {
+      expect(moved(3)).not.toBe(600);
+    });
+  });
+
   // The wall-clock model makes a timeout the natural end of a scheduled game:
   // nobody has to be present for the last step, so the result has to fall out
   // of the state rather than out of who was still watching.

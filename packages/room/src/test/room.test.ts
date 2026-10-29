@@ -217,6 +217,27 @@ describe("playing", () => {
     expect(log()).toBeLessThanOrEqual(3);
   });
 
+  it("sends no heartbeat for a seat that keeps moving", async () => {
+    const { h, a, b } = await started();
+    b.drop();
+    const beats = (): number =>
+      h.store.movesFrom(0).filter((s) => s.move.type === MOVE.HEARTBEAT && s.move.empire === 1).length;
+    await h.run(5_000, 1000);
+    const before = beats();
+    // A claim a minute for seven minutes: more often than the beat interval.
+    for (let i = 0; i < 7; i++) {
+      const at = aClaim(a.client);
+      if (at) await a.client.submit(MOVE.CLAIM, at.x, at.y);
+      await h.settle();
+      await h.run(60_000, 1000);
+    }
+    expect(beats()).toBe(before);
+    // And the sim agrees she is there.
+    const rules = a.client.genesis!.rules;
+    const member = a.client.sim!.state.empires[0]!.members[0]!;
+    expect(a.client.sim!.step - member.lastBeat).toBeLessThanOrEqual(rules.livenessWindow);
+  });
+
   it("heartbeats for connected seats only", async () => {
     const { h, a, b } = await started();
     b.drop();

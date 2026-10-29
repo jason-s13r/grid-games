@@ -468,6 +468,12 @@ export function applyMove(state: State, move: Move, dirty: DirtySet): void {
 
   bump(empire, member, STAT.MOVES);
 
+  // Anything a seat does says it is there. From v4 a move counts as presence
+  // like a heartbeat does, so a heartbeat is only needed for a seat that is
+  // connected and idle. Before v4 only the heartbeat counted, and a v3 game
+  // keeps that rule.
+  if (member && state.genesis.protocol >= 4) member.lastBeat = state.step;
+
   switch (move.type) {
     case MOVE.HEARTBEAT:
       member.lastBeat = state.step;

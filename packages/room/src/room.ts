@@ -553,12 +553,20 @@ export class Room {
     this.future = tail.filter((s) => s.move.step >= sim.step);
 
     for (const seat of this.roster.all()) this.beats.set(seat.key, sim.step);
+    const presence = this.movesArePresence();
     for (const { move, sig } of tail) {
       const key = this.roster.keyOf(move.empire, move.member);
       if (!key) continue;
-      if (move.type === MOVE.HEARTBEAT) this.beats.set(key, Math.max(this.beats.get(key) ?? 0, move.step));
-      else if (sig && move.seq > (this.seqs[key] ?? -1)) this.seqs[key] = move.seq;
+      if (move.type === MOVE.HEARTBEAT || (sig && presence)) {
+        this.beats.set(key, Math.max(this.beats.get(key) ?? 0, move.step));
+      }
+      if (sig && move.seq > (this.seqs[key] ?? -1)) this.seqs[key] = move.seq;
     }
+  }
+
+  /** Whether the sim counts any move as its seat's presence: v4 on. */
+  private movesArePresence(): boolean {
+    return (this.genesis?.protocol ?? 0) >= 4;
   }
 
   /** The state at the room's step, and the sequence numbers that go with it. */
@@ -617,6 +625,9 @@ export class Room {
   private stamp(moves: Stamped[], key?: string, at?: number): number {
     const step = at ?? this.openStep();
     const all = [...moves];
+    // A seat's own move is its presence (from v4), so it resets the beat
+    // rather than bringing one along.
+    if (key && moves.length && this.movesArePresence()) this.beats.set(key, step);
     const beat = key ? this.heartbeat(key, step) : undefined;
     if (beat) all.push(beat);
     if (!all.length) return step;

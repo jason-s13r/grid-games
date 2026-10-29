@@ -79,10 +79,11 @@ every move, so the room decides nothing about the rules; it decides **when**.
 - **Moves** are signed by the seat's key over everything but the step, which
   the room supplies. `seq` only rises per seat, so a signed move cannot be
   replayed.
-- **Presence.** Every client reports its state hash every minute of game
-  time. That report is also what keeps a seat present: the room stamps an
-  unsigned `HEARTBEAT` for the seat when one is due. A mismatched hash gets the
-  room's state back.
+- **Presence.** Any move a seat makes counts as its presence (from v4). For a
+  seat that is connected but idle, the hash report every minute of game time
+  keeps it present: the room stamps an unsigned `HEARTBEAT` when the seat has
+  done nothing for the heartbeat interval. A mismatched hash gets the room's
+  state back.
 - **The room's own simulation is lazy.** It catches up to now only when it
   needs an answer: a newcomer's snapshot, a hash to compare, a seat to judge.
   It keeps the log and a snapshot every two minutes, and between messages it
