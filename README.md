@@ -73,9 +73,10 @@ beside `wrangler dev`, which serves the client's build, the API and the
 Durable Objects on one port. Game state, the local D1 database and the local
 R2 bucket live in `apps/worker/.wrangler/` between runs.
 
-`pnpm deploy` deploys the Worker and then applies the D1 schema in
-`apps/worker/migrations`. The first deploy creates the database and the
-bucket.
+`pnpm deploy` creates the R2 bucket if it is missing, deploys the Worker
+(which creates the D1 database on the first deploy), and then applies the D1
+schema in `apps/worker/migrations`. R2 has to be switched on for the account
+once, in the Cloudflare dashboard.
 
 `pnpm replay` is the load-bearing tool. Node and a browser must agree on the
 hash for the same seed and move log. `--log <file>` replays a recorded game

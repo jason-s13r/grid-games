@@ -27,8 +27,10 @@
   // applied by `pnpm deploy` after the Worker is up, and locally by `pnpm dev`.
   "d1_databases": [{ "binding": "DB", "database_name": "tessera", "migrations_dir": "migrations" }],
 
-  // Finished games, whole, for replays. Created on first deploy like the
-  // database. A room deletes its own storage KEEP_DAYS after archiving.
+  // Finished games, whole, for replays. Wrangler creates the database on
+  // deploy but expects the bucket to exist, so `pnpm deploy` creates it first
+  // (and carries on if it already exists). A room deletes its own storage
+  // KEEP_DAYS after archiving.
   "r2_buckets": [{ "binding": "ARCHIVE", "bucket_name": "tessera-archive" }],
 
   "vars": {
