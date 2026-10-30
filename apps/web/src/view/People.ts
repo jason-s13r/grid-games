@@ -101,20 +101,15 @@ export class PeoplePanel {
            <button class="btn btn-small" type="button" data-people-action="withdraw">Withdraw</button></p>`
       : "";
 
-    const rows = people
-      .slice()
-      .sort((a, b) => (a.seat?.empire ?? 99) - (b.seat?.empire ?? 99))
-      .map((p) => {
-        const theme = p.seat ? empireTheme(p.seat.empire) : undefined;
-        return `<div class="roster-row${p.connected ? "" : " afk"}">
-          <span>${theme ? `<span class="swatch" style="background:${theme.c1}"></span> ` : ""}${name(p)}${p.bot ? " (bot)" : ""}${
-            p.key === this.me ? " (you)" : ""
-          }</span>
-          <span>${theme ? escape(theme.name) : "watching"}</span>
-        </div>`;
-      })
-      .join("");
+    // The players are listed under their empires in the standings; here are
+    // the people holding no seat.
+    const watching = people.filter((p) => !p.seat);
+    const watchers = watching.length
+      ? `<p class="hint">Watching: ${watching
+          .map((p) => `${name(p)}${p.key === this.me ? " (you)" : ""}${p.connected ? "" : " (away)"}`)
+          .join(", ")}</p>`
+      : "";
 
-    this.root.innerHTML = `${requestRows}${waiting}${invite}<div class="roster">${rows}</div>`;
+    this.root.innerHTML = `${requestRows}${waiting}${invite}${watchers}`;
   }
 }

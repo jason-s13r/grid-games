@@ -28,8 +28,6 @@ const elementsFor = () => ({
   acts: stub(),
   storeHead: stub(),
   standings: stub(),
-  roster: stub(),
-  rosterPanel: stub(),
   clock: stub(),
   banner: stub(),
   zoomhint: stub(),

@@ -67,38 +67,25 @@ h1, h2, h3, .brand, .screen-brand {
   font-family: var(--font-display);
 }
 
-// The status bar across the top, and under it the board with a column either
-// side: standings and people on the left; the minimap, the store and chat on
-// the right. The columns cost the board almost nothing: a 4:3 board was
-// letterboxing that width away regardless.
+// The status bar across the top; under it the board, with the minimap, the
+// standings and the store in a column on the right, and in an online game the
+// chat under the board, as wide as it.
 .app {
   display: grid;
-  grid-template-columns: 250px minmax(0, 1fr) 290px;
+  grid-template-columns: minmax(0, 1fr) 290px;
   // The middle row is the scrubber's, and it is `auto` rather than a fixed
   // height: the strip is `hidden` in every game that is not a replay, generates
   // no box, and the row collapses to nothing.
-  grid-template-rows: auto auto 1fr;
+  grid-template-rows: auto auto minmax(0, 1fr) auto;
   // Light behind everything, so a phone with no tab open shows an empty
   // panel rather than the dark page.
   background: var(--side);
   grid-template-areas:
-    "top   top   top"
-    "scrub scrub scrub"
-    "left  stage right";
+    "top   top"
+    "scrub scrub"
+    "stage right"
+    "chat  right";
   height: 100dvh;
-}
-
-// A solo game has nothing for the left column (no people, no chat), so it
-// goes and the board takes the width.
-@media (min-width: 901px) {
-  .app:not(:has(.side-left .acc:not([hidden]))) {
-    grid-template-columns: minmax(0, 1fr) 290px;
-    grid-template-areas:
-      "top   top"
-      "scrub scrub"
-      "stage right";
-    .side-left { display: none; }
-  }
 }
 
 
@@ -683,8 +670,16 @@ h1, h2, h3, .brand, .screen-brand {
   background: var(--side);
 }
 
-.side-left { grid-area: left; border-right: 1px solid var(--edge); }
 .side-right { grid-area: right; border-left: 1px solid var(--edge); }
+
+// Chat under the board: a fixed height, so long lines read as lines.
+.side-bottom {
+  grid-area: chat;
+  height: 210px;
+  border-top: 1px solid var(--edge);
+  .acc-chat > summary { display: none; }
+  .acc-chat > .acc-body { padding-top: 10px; }
+}
 
 .acc {
   border-bottom: 1px solid var(--edge);
@@ -1277,6 +1272,69 @@ a.btn {
   padding: 3px 0;
   &.dead { opacity: 0.4; text-decoration: line-through; }
 }
+
+// An empire that has people in it opens to list them. The marker sits in the
+// gutter so the swatches still line up with the empires that do not open.
+.standing-group {
+  > summary {
+    position: relative;
+    cursor: pointer;
+    list-style: none;
+    &::-webkit-details-marker { display: none; }
+    &::before {
+      content: "";
+      position: absolute;
+      left: -11px;
+      top: 50%;
+      border-left: 4px solid var(--muted);
+      border-top: 3.5px solid transparent;
+      border-bottom: 3.5px solid transparent;
+      transform: translateY(-50%);
+      transition: transform 120ms ease;
+    }
+    &:hover .standing-name { text-decoration: underline; }
+  }
+  &[open] > summary::before { transform: translateY(-50%) rotate(90deg); }
+}
+
+// The people in an empire, indented under it.
+.members {
+  display: grid;
+  gap: 1px;
+  margin: 0 0 6px 18px;
+  padding-left: 8px;
+  border-left: 2px solid #dfe6e0;
+}
+.member {
+  display: grid;
+  grid-template-columns: 8px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  &.afk .member-name { color: var(--muted); }
+  .tag { margin-left: 4px; }
+}
+.member-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.member-bank { font-size: 11px; font-variant-numeric: tabular-nums; color: var(--muted); }
+.dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #c9d3cc;
+  &.on { background: #3ba36b; }
+}
+
+// Requests to join your empire, the invite link and who is watching, under
+// the standings.
+.people-extra {
+  display: grid;
+  gap: 8px;
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--edge);
+  &:has(> div:empty) { display: none; }
+  > div { display: grid; gap: 8px; }
+}
 .standing-tiles { font-variant-numeric: tabular-nums; font-weight: 600; }
 .standing-meta { font-size: 10px; color: var(--muted); min-width: 26px; text-align: right; }
 
@@ -1730,8 +1788,8 @@ a.btn {
     grid-template-rows: auto auto auto minmax(0, 1fr);
     height: 100dvh;
   }
-  .side-left,
-  .side-right { grid-area: panel; }
+  .side-right,
+  .side-bottom { grid-area: panel; height: auto; border-top: none; }
 
   // The HUD is a row of facts and there is not a row's worth of width, so it
   // wraps onto a second line rather than pushing the buttons off the edge.
@@ -1796,16 +1854,17 @@ a.btn {
 // on the right, holding the tabs and the open panel, as on a phone held
 // sideways.
 @media (min-width: 901px) and (max-aspect-ratio: 3/2) {
-  .app,
-  .app:not(:has(.side-left .acc:not([hidden]))) {
+  .app {
     grid-template-columns: minmax(0, 1fr) 320px;
     grid-template-areas: "top top" "scrub scrub" "stage tabs" "stage panel";
     grid-template-rows: auto auto auto minmax(0, 1fr);
   }
-  .side-left,
-  .side-right {
+  .side-right,
+  .side-bottom {
     display: flex;
     grid-area: panel;
+    height: auto;
+    border-top: none;
     border-left: 2px solid var(--line);
   }
   // Wrapped onto a second row rather than scrolled: there is height to spare

@@ -31,28 +31,6 @@
         </div>
       </header>
 
-      <!-- People, seats and chat: an online game's column. Collapsible so a phone can shut what it is not reading. Native
-           <details> rather than a bespoke toggle: it is keyboard-operable and
-           remembers its own state without a line of script. -->
-      <aside class="side side-left">
-        <!-- Who is in an online game, requests to join your empire, and the
-             invite link. See view/People.ts. -->
-        <details class="acc" data-acc="people" data-people-panel hidden open>
-          <summary>People</summary>
-          <div class="acc-body" data-people></div>
-        </details>
-
-        <details class="acc" data-acc="roster" data-roster-panel hidden open>
-          <summary>Your seats</summary>
-          <div class="acc-body" data-roster></div>
-        </details>
-
-        <!-- Online games only, and it takes the rest of the column. See view/Chat.ts. -->
-        <details class="acc acc-chat" data-acc="chat" data-chat-section hidden open>
-          <summary>Chat</summary>
-          <div class="acc-body" data-chat></div>
-        </details>
-      </aside>
 
       <main class="stage">
         <!-- Fixed 4:3, centred, letterboxed. Everyone plays the same shape of
@@ -99,9 +77,17 @@
           </div>
         </details>
 
+        <!-- Every empire, and under each the people playing it. Requests to
+             join yours, the invite link and who is watching follow the list.
+             See view/Controls.ts and view/People.ts. -->
         <details class="acc" data-acc="standings" open>
           <summary>Standings</summary>
-          <div class="acc-body" data-standings></div>
+          <div class="acc-body">
+            <div data-standings></div>
+            <div class="people-extra" data-people-panel hidden>
+              <div data-people></div>
+            </div>
+          </div>
         </details>
 
         <!-- The store. On a phone it is one of the tabs under the board. -->
@@ -114,6 +100,15 @@
           </div>
         </details>
 
+      </aside>
+
+      <!-- Chat, under the board, as wide as it: online games only. See
+           view/Chat.ts. -->
+      <aside class="side side-bottom" data-chat-section hidden>
+        <details class="acc acc-chat" data-acc="chat" open>
+          <summary>Chat</summary>
+          <div class="acc-body" data-chat></div>
+        </details>
       </aside>
 
       <!-- The setup screen. Lobby, teams and game configuration live here and

@@ -235,8 +235,6 @@ function mount(driver: Driver, options: { background?: boolean } = {}): void {
     acts: pick<HTMLElement>("[data-acts]"),
     storeHead: pick<HTMLElement>("[data-store-head]"),
     standings: pick<HTMLElement>("[data-standings]"),
-    roster: pick<HTMLElement>("[data-roster]"),
-    rosterPanel: pick<HTMLElement>("[data-roster-panel]"),
     clock: pick<HTMLElement>("[data-clock]"),
     banner: pick<HTMLElement>("[data-banner]"),
     zoomhint: pick<HTMLElement>("[data-zoomhint]"),
@@ -481,6 +479,8 @@ const chat = new ChatPanel(pick<HTMLElement>("[data-chat]"), pick<HTMLElement>("
 pick<HTMLElement>("[data-standings]").addEventListener("click", (event) => {
   const button = (event.target as HTMLElement).closest<HTMLElement>("[data-claim], [data-ask]");
   if (!button || !link) return;
+  // The buttons sit in an empire's summary line; pressing one is not a toggle.
+  event.preventDefault();
   if (button.dataset.claim) link.client.claim(Number(button.dataset.claim));
   else link.client.ask(Number(button.dataset.ask));
 });
@@ -613,7 +613,9 @@ async function enterRoom(roomId: string): Promise<void> {
     arrivedWith = undefined;
   };
   const showPeople = (): void => {
-    if (link === opened) people.set(client.people, identity.key, client.you?.seat?.empire ?? 0);
+    if (link !== opened) return;
+    people.set(client.people, identity.key, client.you?.seat?.empire ?? 0);
+    controls?.setPeople(client.people.people);
   };
   client.onPeople = showPeople;
   client.onChat = (lines) => {
@@ -635,6 +637,7 @@ function leaveRoom(): void {
   link = undefined;
   afterCreate = undefined;
   people.set(null);
+  controls?.setPeople([]);
   chat.close();
   if (location.pathname.startsWith("/g/")) history.pushState(null, "", "/");
   online.home();

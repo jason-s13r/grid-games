@@ -9,7 +9,9 @@
 // it stops being a button and becomes a badge on the HUD.
 
 import type { State } from "@tessera/sim";
-import { MOVE, PHASE, WIN, STEPS_PER_SECOND, isProtected, isVacant, summarise } from "@tessera/sim";
+import { MEMBER, MOVE, PHASE, WIN, STEPS_PER_SECOND, isProtected, isVacant, summarise } from "@tessera/sim";
+import type { Person } from "@tessera/room";
+import { escape } from "./escape";
 import { empireTheme } from "./palette";
 import type { Driver } from "../game/Driver";
 
@@ -108,8 +110,6 @@ export class Controls {
       acts: HTMLElement;
       storeHead: HTMLElement;
       standings: HTMLElement;
-      roster: HTMLElement;
-      rosterPanel: HTMLElement;
       clock: HTMLElement;
       banner: HTMLElement;
       zoomhint: HTMLElement;
@@ -120,6 +120,19 @@ export class Controls {
       const type = target ? BUY[target.dataset.buy ?? ""] : undefined;
       if (type !== undefined) this.game.act(type);
     });
+
+    // Which empires' player lists are open, kept across redraws.
+    this.els.standings.addEventListener?.(
+      "toggle",
+      (event) => {
+        const group = event.target as HTMLDetailsElement;
+        const id = Number(group.dataset?.empire);
+        if (!id) return;
+        if (group.open) this.expanded.add(id);
+        else this.expanded.delete(id);
+      },
+      true,
+    );
   }
 
   /** What the store last showed, so a shortcut only buys what is on offer. */
@@ -168,7 +181,6 @@ export class Controls {
       this.put(this.els.acts, "acts", "");
       this.offered.clear();
       this.put(this.els.storeHead, "storeHead", "");
-      this.els.rosterPanel.hidden = true;
       this.renderStandings(state);
       return;
     }
@@ -259,28 +271,6 @@ export class Controls {
       ].join(""),
     );
 
-    // Only a shared empire has seats worth listing; a solo player is the seat.
-    // Only when it actually changes. Writing the same value still counts as an
-    // attribute mutation, and this runs every frame — anything watching the
-    // page for panels appearing and disappearing would hear it constantly.
-    const seats = empire.members.length >= 2;
-    if (this.els.rosterPanel.hidden === seats) this.els.rosterPanel.hidden = !seats;
-    if (empire.members.length > 1) {
-      this.put(
-        this.els.roster,
-        "roster",
-        empire.members
-          .map((m, i) => {
-            const live = state.step - m.lastBeat <= rules.livenessWindow;
-            return `<div class="roster-row${live ? "" : " afk"}">
-            <span>${i === this.game.member ? "You" : m.kind === 1 ? `Bot ${i}` : `Member ${i}`}</span>
-            <span class="roster-pop">${m.popTimer}</span>
-          </div>`;
-          })
-          .join(""),
-      );
-    }
-
     this.renderStandings(state);
 
     if (state.phase === PHASE.ENDED) {
@@ -299,6 +289,44 @@ export class Controls {
   private showClock(state: State): void {
     this.els.clock.textContent = clockLine(state, this.game.online);
     this.els.clock.title = `step ${state.step}`;
+  }
+
+  /** Who is in an online game, from the room: names for the seats. */
+  private people: Person[] = [];
+  /** Empires whose player list is open. Yours opens the first time. */
+  private readonly expanded = new Set<number>();
+  private expandedYours = false;
+
+  setPeople(people: Person[]): void {
+    this.people = people;
+  }
+
+  /** The players of one empire, one line each: name, a dot for whether they
+   *  are live, and for your own empire each seat's bank. */
+  private members(state: State, empireId: number): string {
+    const empire = state.empires[empireId - 1]!;
+    const rules = state.genesis.rules;
+    const ours = empireId === this.game.empire;
+    return empire.members
+      .map((m, i) => {
+        const person = this.people.find((p) => p.seat?.empire === empireId && p.seat.member === i);
+        const you = ours && i === this.game.member;
+        const name = person
+          ? escape(person.name || `player ${person.key.slice(0, 6)}`)
+          : m.kind === MEMBER.BOT
+            ? "Bot"
+            : you
+              ? "You"
+              : `Seat ${i + 1}`;
+        const bot = person?.bot || (m.kind === MEMBER.BOT && person) ? ' <span class="tag">bot</span>' : "";
+        const live = state.step - m.lastBeat <= rules.livenessWindow;
+        return `<div class="member${live ? "" : " afk"}">
+          <span class="dot${live ? " on" : ""}" title="${live ? "here" : "away"}"></span>
+          <span class="member-name">${name}${you && person ? " (you)" : ""}${bot}</span>
+          ${ours ? `<span class="member-bank" title="this seat's bank">${m.popTimer}</span>` : ""}
+        </div>`;
+      })
+      .join("");
   }
 
   private renderStandings(state: State): void {
@@ -322,6 +350,11 @@ export class Controls {
       this.game.empire === 0 &&
       !(window > 0 && state.step >= window);
 
+    if (!this.expandedYours && this.game.empire > 0) {
+      this.expanded.add(this.game.empire);
+      this.expandedYours = true;
+    }
+
     this.put(
       this.els.standings,
       "standings",
@@ -334,8 +367,7 @@ export class Controls {
         // makes. Listing it as territory with nobody in it is the honest
         // rendering — and it never shows as dead, because it was never alive.
         const vacant = isVacant(state.empires[e.id - 1]!);
-        return `<div class="standing${!vacant && !e.alive ? " dead" : ""}${vacant ? " vacant" : ""}">
-          <span class="swatch" data-banner="${empireTheme(e.id).id}"></span>
+        const row = `<span class="swatch" data-banner="${empireTheme(e.id).id}"></span>
           <span class="standing-name">${t.name}${e.id === this.game.empire ? " (you)" : ""}</span>
           <span class="standing-tiles">${
             vacant && claimable
@@ -346,8 +378,14 @@ export class Controls {
                   ? `<button class="btn btn-small" type="button" data-ask="${e.id}">Ask</button>`
                   : e.tilesOwned
           }</span>
-          <span class="standing-meta">${e.largestCascade.tiles ? `${e.largestCascade.tiles}&#9733;` : ""}</span>
-        </div>`;
+          <span class="standing-meta">${e.largestCascade.tiles ? `${e.largestCascade.tiles}&#9733;` : ""}</span>`;
+        const cls = `standing${!vacant && !e.alive ? " dead" : ""}${vacant ? " vacant" : ""}`;
+        // An empire with people in it opens to list them.
+        if (vacant || state.empires[e.id - 1]!.members.length === 0) return `<div class="${cls}">${row}</div>`;
+        return `<details class="standing-group" data-empire="${e.id}"${this.expanded.has(e.id) ? " open" : ""}>
+          <summary class="${cls}">${row}</summary>
+          <div class="members">${this.members(state, e.id)}</div>
+        </details>`;
         })
         .join(""),
     );

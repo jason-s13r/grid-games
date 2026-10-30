@@ -37,8 +37,6 @@ const mount = () => {
       acts: el("acts"),
       storeHead: el("storeHead"),
       standings: el("standings"),
-      roster: el("roster"),
-      rosterPanel: el("rosterPanel"),
       clock: el("clock"),
       banner: el("banner"),
       zoomhint: el("zoomhint"),
