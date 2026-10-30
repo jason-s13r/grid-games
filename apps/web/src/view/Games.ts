@@ -54,6 +54,8 @@ export class GamesPanel {
       if (game.dataset.gamesEnded) handlers.replay(game.dataset.gamesOpen!);
       else handlers.open(game.dataset.gamesOpen!);
     });
+    // Hidden until the first lists arrive, so a load does not flash empty boxes.
+    root.hidden = true;
     root.innerHTML = `
       <section class="card" data-list="mine" hidden></section>
       <section class="card" data-list="public"></section>
@@ -79,29 +81,33 @@ export class GamesPanel {
       .catch(() => [] as PlayerGame[]);
     const mine = all.then((games) => games.filter((g) => g.phase !== "ended"));
 
-    void mine.then((games) => {
+    const shown = mine.then((games) => {
       if (ticket !== this.ticket) return;
       section("mine").hidden = games.length === 0;
       fill("mine", `<h2>Your games</h2>${this.list(games, () => "resume")}`);
     });
 
-    void Promise.all([listGames("open"), listGames("running"), mine]).then(([open, running, yours]) => {
+    const publicShown = Promise.all([listGames("open"), listGames("running"), mine]).then(([open, running, yours]) => {
+      // A game you are in says Resume here too, and shows your empire.
+      const byId = new Map(yours.map((g) => [g.id, g]));
       const seen = new Set<string>();
-      // Yours are listed above, so not again here.
-      for (const g of yours) seen.add(g.id);
-      const merged = [...open, ...running].filter((g) => !seen.has(g.id) && seen.add(g.id));
+      const merged = [...open, ...running]
+        .filter((g) => !seen.has(g.id) && seen.add(g.id))
+        .map((g) => byId.get(g.id) ?? g);
       const now = Date.now();
       fill(
         "public",
         `<h2>Public games</h2>${
           merged.length
-            ? this.list(merged, (g) => (g.phase === "lobby" || (g.joinUntil ?? 0) > now ? "join" : "watch"))
+            ? this.list(merged, (g) =>
+                byId.has(g.id) ? "resume" : g.phase === "lobby" || (g.joinUntil ?? 0) > now ? "join" : "watch",
+              )
             : `<p class="hint">No public games right now. Make one with New game, and list it publicly under More.</p>`
         }`,
       );
     }, failed("public", "Public games"));
 
-    void Promise.all([listGames("ended"), all]).then(([ended, yours]) => {
+    const finishedShown = Promise.all([listGames("ended"), all]).then(([ended, yours]) => {
       // Yours first, with how you did; then the public ones you were not in.
       const seen = new Set<string>();
       const games = [...yours.filter((g) => g.phase === "ended"), ...ended]
@@ -113,7 +119,13 @@ export class GamesPanel {
       );
     }, failed("finished", "Finished"));
 
-    void this.loadLeaders(ticket);
+    const leadersShown = this.loadLeaders(ticket);
+
+    // Every box at once, so they do not arrive one by one and push each other
+    // down the page.
+    void Promise.allSettled([shown, publicShown, finishedShown, leadersShown]).then(() => {
+      if (ticket === this.ticket) this.root.hidden = false;
+    });
   }
 
   private async loadLeaders(ticket = this.ticket): Promise<void> {
@@ -185,21 +197,23 @@ export class GamesPanel {
       if (mine?.place) return mine.won ? "you won" : `you came ${ordinal(mine.place)}`;
       return game.winner ? `won by ${empireTheme(game.winner).name}` : "ended";
     }
-    const joining = game.joinUntil && game.joinUntil > now ? `, joining until ${when(game.joinUntil, now)}` : "";
+    const joining = game.joinUntil && game.joinUntil > now ? `, seats open for ${span(game.joinUntil - now)}` : "";
     return game.endsAt ? `ends ${when(game.endsAt, now)}${joining}` : `running${joining}`;
   }
 }
 
 function when(at: number, now: number): string {
   const ms = at - now;
-  const abs = Math.abs(ms);
-  const span =
-    abs < 3_600_000
-      ? `${Math.max(1, Math.round(abs / 60_000))} min`
-      : abs < 172_800_000
-        ? `${Math.round(abs / 3_600_000)} h`
-        : `${Math.round(abs / 86_400_000)} days`;
-  return ms >= 0 ? `in ${span}` : `${span} ago`;
+  return ms >= 0 ? `in ${span(ms)}` : `${span(-ms)} ago`;
+}
+
+/** A length of time, roughly. */
+function span(ms: number): string {
+  return ms < 3_600_000
+    ? `${Math.max(1, Math.round(ms / 60_000))} min`
+    : ms < 172_800_000
+      ? `${Math.round(ms / 3_600_000)} h`
+      : `${Math.round(ms / 86_400_000)} days`;
 }
 
 function ordinal(n: number): string {

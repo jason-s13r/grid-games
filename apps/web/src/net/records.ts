@@ -48,7 +48,9 @@ export interface Leader {
 export type Listing = "open" | "running" | "ended";
 
 async function get<T>(path: string): Promise<T> {
-  const response = await fetch(path);
+  // Revalidated each time: the start page should show a game made public, or
+  // joined, a moment ago.
+  const response = await fetch(path, { cache: "no-cache" });
   if (!response.ok) throw new Error(`the server said ${response.status}`);
   return (await response.json()) as T;
 }
