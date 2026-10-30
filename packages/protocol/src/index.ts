@@ -1,5 +1,5 @@
 export { utf8, fromUtf8, concat, toBase64Url, fromBase64Url, toHex, bytesEqual, Writer } from "./bytes.js";
-export { Identity, verify, sha256, randomBytes, fingerprint, SIGNATURE_BYTES } from "./identity.js";
+export { Identity, verify, sha256, randomBytes, fingerprint, forgetPayload, SIGNATURE_BYTES } from "./identity.js";
 export type { MemberKey } from "./identity.js";
 export { canonicalJson, gameIdOf, sealGenesis, inspectGenesis } from "./genesis.js";
 export type { GenesisProblem } from "./genesis.js";

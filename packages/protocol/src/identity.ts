@@ -9,7 +9,7 @@
 // the kind of thing that looks like a desync. Signatures are never hashed into
 // simulation state — only moves are, and a move is the same on every peer.
 
-import { fromBase64Url, toBase64Url, toHex } from "./bytes.js";
+import { fromBase64Url, toBase64Url, toHex, utf8 } from "./bytes.js";
 
 const KEY_ALGORITHM = { name: "ECDSA", namedCurve: "P-256" } as const;
 const SIGN_ALGORITHM = { name: "ECDSA", hash: "SHA-256" } as const;
@@ -33,6 +33,14 @@ const AGREE_ALGORITHM = { name: "ECDH", namedCurve: "P-256" } as const;
 export type MemberKey = string;
 
 export const SIGNATURE_BYTES = 64;
+
+/** The start of every backup code, and its format's version. */
+const BACKUP_TAG = "T1";
+
+/** What a member signs to have its name taken out of the records. The time
+ *  keeps an old request from being replayed later. */
+export const forgetPayload = (key: MemberKey, at: number): Uint8Array =>
+  utf8(`tessera/forget/1|${key}|${at}`);
 const PUBLIC_KEY_BYTES = 65;
 
 /** Imported verifying keys, cached by their string form. Bounded by the roster,
@@ -96,6 +104,34 @@ export class Identity {
   private static async fromPair(pair: CryptoKeyPair): Promise<Identity> {
     const raw = new Uint8Array(await subtle().exportKey("raw", pair.publicKey));
     return new Identity(toBase64Url(raw), pair.privateKey);
+  }
+
+  /** This keypair as a backup code: the private scalar and the public point,
+   *  96 bytes in base64url behind a version tag. Whoever holds it plays as
+   *  this member, so it is shown to its owner and nobody else. */
+  async toBackup(): Promise<string> {
+    const jwk = await subtle().exportKey("jwk", this.privateKey);
+    const parts = [jwk.d, jwk.x, jwk.y].map((part) => fromBase64Url(part ?? ""));
+    if (parts.some((part) => !part || part.length !== 32)) throw new Error("unexpected key shape");
+    const bytes = new Uint8Array(96);
+    parts.forEach((part, i) => bytes.set(part!, i * 32));
+    return BACKUP_TAG + toBase64Url(bytes);
+  }
+
+  /** Read a backup code back, or a link with one in it (`#restore=…`). Null if
+   *  it is not one, or if its two halves do not belong together, which a
+   *  signature made with the one and checked with the other finds out. */
+  static async fromBackup(text: string): Promise<Identity | null> {
+    const code = (/restore=([A-Za-z0-9_-]+)/.exec(text)?.[1] ?? text).trim();
+    if (!code.startsWith(BACKUP_TAG)) return null;
+    const bytes = fromBase64Url(code.slice(BACKUP_TAG.length));
+    if (!bytes || bytes.length !== 96) return null;
+    const part = (i: number) => toBase64Url(bytes.slice(i * 32, i * 32 + 32));
+    const jwk = { kty: "EC", crv: "P-256", d: part(0), x: part(1), y: part(2), ext: true, key_ops: ["sign"] };
+    const identity = await Identity.restore(JSON.stringify(jwk));
+    if (!identity) return null;
+    const probe = utf8("tessera/backup-check");
+    return (await verify(identity.key, await identity.sign(probe), probe)) ? identity : null;
   }
 
   /** JWK as a string, ready for localStorage. */
