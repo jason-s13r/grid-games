@@ -8,6 +8,7 @@ import { PASSABLE, COIN_RADIUS, SEAT_CEILING, STAT, STAT_SLOTS } from "./constan
 import { ORTHO, vonNeumannBall, idx, xOf, yOf, inBounds } from "./geometry.js";
 import { bump, raise } from "./stats.js";
 import { isVacant, markShield } from "./state.js";
+import { digMine, isMine, tileCeiling } from "./v5.js";
 import type { State } from "./state.js";
 
 export type DirtySet = Set<number>;
@@ -179,11 +180,17 @@ export function place(
 
   const prev = state.owner[i]!;
   const before = state.pop[i]!;
+  // From v5 an empire the simulation plays has a ceiling on how strong one
+  // tile may be; what would go above it is not placed. Infinity for everyone
+  // else, and for every v4 game.
+  const ceiling = tileCeiling(state, empireId);
   let captured = false;
 
   if (prev === empireId || (prev === 0 && before === 0)) {
-    state.pop[i] = before + amount;
-    addPop(state, empireId, amount);
+    const added = Math.min(amount, Math.max(0, ceiling - before));
+    if (added <= 0) return false;
+    state.pop[i] = before + added;
+    addPop(state, empireId, added);
     if (prev !== empireId) {
       setOwner(state, i, empireId);
       captured = true;
@@ -191,10 +198,11 @@ export function place(
   } else {
     const after = before - amount;
     if (after < 0) {
+      const left = Math.min(-after, ceiling);
       addPop(state, prev, -before);
-      state.pop[i] = -after;
+      state.pop[i] = left;
       setOwner(state, i, empireId);
-      addPop(state, empireId, -after);
+      addPop(state, empireId, left);
       captured = true;
     } else {
       state.pop[i] = after;
@@ -371,20 +379,8 @@ export function validate(state: State, move: Move): boolean {
   // substitute in, but no quorum can vote itself a bigger team than every other
   // empire is allowed.
   if (move.type === MOVE.ROSTER_AMEND) {
-    // Gated on the record, never on the build. A v4 build playing a v3 game
-    // has to reach the same verdict a v3 build would, and a v3 game has no
-    // such field — so for a v3 record this line does not exist.
-    //
-    // The version test is not belt and braces on top of `?? 0`. Without it the
-    // branch is only *incidentally* inert on v3 records: inert because no v3
-    // record happens to carry the field, which is a property of the records
-    // that exist rather than of the records that are possible. A hand-composed
-    // v3 genesis carrying joinWindow would be accepted by both builds, which
-    // would then disagree about one amendment and diverge from that step on.
-    //
-    // This is the first gated branch in the codebase, and it is the shape
-    // every later one copies: state.genesis.protocol, never PROTOCOL_VERSION.
-    const window = state.genesis.protocol >= 4 ? (rules.joinWindow ?? 0) : 0;
+    // Every record this build plays (v4 and v5) has the join window.
+    const window = rules.joinWindow ?? 0;
     // move.x is what the application below already reads to choose BOT vs
     // HUMAN; validation reads the same field. Bots stay allowed past the
     // window — night cover, or a substitute on day six.
@@ -468,11 +464,10 @@ export function applyMove(state: State, move: Move, dirty: DirtySet): void {
 
   bump(empire, member, STAT.MOVES);
 
-  // Anything a seat does says it is there. From v4 a move counts as presence
-  // like a heartbeat does, so a heartbeat is only needed for a seat that is
-  // connected and idle. Before v4 only the heartbeat counted, and a v3 game
-  // keeps that rule.
-  if (member && state.genesis.protocol >= 4) member.lastBeat = state.step;
+  // Anything a seat does says it is there: a move counts as presence like a
+  // heartbeat does, so a heartbeat is only needed for a seat that is connected
+  // and idle.
+  if (member) member.lastBeat = state.step;
 
   switch (move.type) {
     case MOVE.HEARTBEAT:
@@ -667,6 +662,13 @@ function land(
   direct = false,
 ): boolean {
   const item = state.item[i]! as Item;
+  if (isMine(item)) {
+    // A mine is ground like any other, and a claim (not a march, not a
+    // cascade) with a big enough bank behind it digs one that has nothing left.
+    const took = place(state, i, empire.id, amount, dirty, direct);
+    if (direct && digMine(state, i, empire, trigger)) dirty.add(i);
+    return took;
+  }
   if (item !== ITEM.NONE && item !== ITEM.DIAMOND) {
     const took = place(state, i, empire.id, amount, dirty, direct);
     cascade(state, i, item, trigger, empire, member, dirty);
@@ -740,7 +742,9 @@ function cascade(
       if (!passable(state, ti)) continue;
 
       const found = state.item[ti]! as Item;
-      if (found === ITEM.DIAMOND) {
+      if (isMine(found)) {
+        // Passed over: a cascade takes the ground and leaves the mine.
+      } else if (found === ITEM.DIAMOND) {
         collectDiamond(state, ti, empire, member);
       } else if (found !== ITEM.NONE) {
         takeCoin(state, ti, found, empire, member);

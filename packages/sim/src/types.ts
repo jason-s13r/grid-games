@@ -26,7 +26,13 @@ export const ITEM = {
   BRONZE: 1,
   SILVER: 2,
   GOLD: 3,
+  /** A diamond lying on the map: v4 only. From v5 diamonds come from mines. */
   DIAMOND: 4,
+  /** A diamond mine with nothing left to give: one that has not been dug yet,
+   *  or one that is worked out. From v5, beside mountains. A mine with diamonds
+   *  left is `MINE + left`, so the one byte per tile the item layer already
+   *  has carries it; see mines.ts. */
+  MINE: 5,
 } as const;
 export type Item = (typeof ITEM)[keyof typeof ITEM];
 
@@ -98,9 +104,35 @@ export interface Rules {
   decayMin: number;
 
   /** Percent chance a spawn probe hops off an owned tile rather than landing
-   *  uniformly, so coins appear near the fighting. */
+   *  uniformly, so coins appear near the fighting. From v5 a probe also hops
+   *  off a coin, and one that finds neither tries again rather than landing
+   *  where it is, so coins gather near empires and near one another. */
   coinNearBias: number;
   coinNearRadius: number;
+
+  /** From v5: how strong a tile of a simulation-run empire may be. The ceiling
+   *  ratchets with the clock, `botTileStep` more for every `botTilePeriod`
+   *  since the start, up to `botTileMax`. Population a bot would put above it
+   *  is not placed. A person can then still cut into a bot's ground in the
+   *  first hours, and a long game still lets its bots dig in. Absent: the v5
+   *  defaults in constants.ts. */
+  botTileStep?: number;
+  botTilePeriod?: number;
+  botTileMax?: number;
+
+  /** From v5: growth fills a connected tile up to this and no further, and
+   *  only while somebody in the empire is present (a move or heartbeat within
+   *  `livenessWindow`, or an empire the simulation plays). */
+  growthCeiling?: number;
+
+  /** From v5, diamond mines. A claim of at least `mineDigCost` population (the
+   *  bank spent, before any multiplier) on a mine with nothing left digs it,
+   *  and it gives its owner a diamond every `mineEvery` upkeep passes while the
+   *  capital still reaches it, `mineYield` in all, then is worked out until it
+   *  is dug again. */
+  mineDigCost?: number;
+  mineYield?: number;
+  mineEvery?: number;
 
   /** Superseded by `graceTiles` / `graceSteps` and kept because every record
    *  written before vacancies carries them. Read through the grace fields, which
@@ -199,6 +231,9 @@ export interface MapConfig {
   walls: number;
   blobMin: number;
   blobMax: number;
+  /** From v5: diamond mines placed beside mountains. Absent: one per 1,024
+   *  tiles. */
+  mines?: number;
 }
 
 export interface MemberSpec {

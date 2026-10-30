@@ -8,6 +8,7 @@ import { PASSABLE } from "./constants.js";
 import { ORTHO, idx, xOf, yOf, inBounds, dist2 } from "./geometry.js";
 import { EVENT } from "./events.js";
 import type { State } from "./state.js";
+import { isV5, placeMines } from "./v5.js";
 
 export function generate(state: State): State {
   const cfg = state.genesis.map;
@@ -19,6 +20,8 @@ export function generate(state: State): State {
   for (let i = 0; i < cfg.walls; i++) wall(state);
 
   placeCapitals(state, mainland(state));
+  // After everything a v4 map draws, so a v4 map is unchanged.
+  if (isV5(state)) placeMines(state);
   scheduleSpawn(state, 0);
   scheduleUpkeep(state, 0);
   return state;

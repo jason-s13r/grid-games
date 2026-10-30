@@ -15,7 +15,7 @@ export const PROTOCOL_VERSION: number = Number(SIM_VERSION.split(".")[0]);
  *  PROTOCOL_VERSION is always its first entry — written out rather than derived,
  *  so a major release that forgets to list itself here fails a test instead of
  *  silently dropping the version before it. */
-export const SUPPORTED_PROTOCOLS: readonly number[] = [4, 3];
+export const SUPPORTED_PROTOCOLS: readonly number[] = [5, 4];
 
 /** The day each superseded version stops being played, ISO. Written by hand at
  *  the bump — the release date plus the longest duration preset — and checked
@@ -27,12 +27,8 @@ export const PROTOCOL_SUNSET: Readonly<Record<number, string>> = {
   // its successor's release plus MAX_DURATION plus slack, and raising the cap
   // later can never invalidate a date already published.
   //
-  // For 3 it cannot be derived, and the reason is durations themselves: v3
-  // predates them, so every v3 game is open-ended and no arithmetic bounds it.
-  // 90 days is a policy choice — long enough that a marathon started the week
-  // before this release is not cut short, short enough to be a real deadline.
-  // Those games are exactly what the shelf-life notice is for.
-  3: "2026-12-11",
+  // v5's release (31 October 2026) plus the 31-day cap plus two weeks.
+  4: "2026-12-15",
 };
 
 /** Whether this build will play a game stamped with `version`.
@@ -130,6 +126,20 @@ export const DEFAULT_RULES: Rules = {
 
   coinNearBias: 72,
   coinNearRadius: 4,
+
+  // v5. 5,000 a tile for the first three hours, 10,000 for the next three, and
+  // so on to 50,000 thirty hours in.
+  botTileStep: 5000,
+  botTilePeriod: hours(3),
+  botTileMax: 50_000,
+  // One full bank: growth makes every connected tile worth one click to take,
+  // which is a defence, and stops there, which keeps it from being the army.
+  growthCeiling: 999,
+  // A diamond every five minutes, three to a dig (a bridge's worth), and a dig
+  // costs most of a full bank.
+  mineDigCost: 800,
+  mineYield: 3,
+  mineEvery: 15,
 
   noobTiles: 40,
   noobSteps: minutes(3),

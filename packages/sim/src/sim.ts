@@ -28,6 +28,7 @@ import type { DirtySet } from "./rules.js";
 import { checkVictory } from "./victory.js";
 import { policy, turnOf } from "./policy.js";
 import { summarise } from "./stats.js";
+import { isCoin, isV5 } from "./v5.js";
 import type { EmpireSummary } from "./stats.js";
 
 export interface GenesisInit {
@@ -45,9 +46,32 @@ export function makeGenesis(init: GenesisInit): Genesis {
     gameId: init.gameId,
     seed: init.seed >>> 0,
     startedAt: init.startedAt ?? 0,
-    map: { ...DEFAULT_MAP, ...init.map },
+    map: { ...mapFor(init.map?.width ?? DEFAULT_MAP.width, init.map?.height ?? DEFAULT_MAP.height), ...init.map },
     rules: { ...DEFAULT_RULES, ...init.rules },
     empires: init.empires,
+  };
+}
+
+/** The default map's features, scaled to a map of this size.
+ *
+ *  The defaults were set for 96 by 64. A larger map with the same fourteen
+ *  mountains is open plain with a few hills in it, and from v5 the mountains
+ *  are where the diamonds are. So mountains, lakes and walls scale with the
+ *  area, and rivers, which run edge to edge, with the side. At the default
+ *  size this is the default map exactly. */
+export function mapFor(width: number, height: number): MapConfig {
+  const area = (width * height) / (DEFAULT_MAP.width * DEFAULT_MAP.height);
+  const side = Math.sqrt(area);
+  const scale = (n: number, by: number) => Math.max(n > 0 ? 1 : 0, Math.round(n * by));
+  return {
+    ...DEFAULT_MAP,
+    width,
+    height,
+    mountains: scale(DEFAULT_MAP.mountains, area),
+    lakes: scale(DEFAULT_MAP.lakes, area),
+    walls: scale(DEFAULT_MAP.walls, area),
+    rivers: scale(DEFAULT_MAP.rivers, side),
+    riverGaps: scale(DEFAULT_MAP.riverGaps, side),
   };
 }
 
@@ -194,6 +218,8 @@ export class Sim {
     const n = state.owner.length;
     const r = rules.coinNearRadius;
 
+    if (isV5(state)) return this.spawnNear(dirty);
+
     // Bounded probe rather than a full scan, so spawning stays O(1) on any map
     // size.
     for (let attempt = 0; attempt < 24; attempt++) {
@@ -214,6 +240,52 @@ export class Sim {
       if (!PASSABLE[state.terrain[i]!]) continue;
 
       state.item[i] = state.rng.weighted(rules.coinWeights) as Item;
+      state.itemCount++;
+      dirty.add(i);
+      return;
+    }
+  }
+
+  /** Spawning from v5. One draw decides whether this coin lands near
+   *  something or anywhere: `coinNearBias` percent of coins land near an owned
+   *  tile or another coin, and the rest anywhere. A coin meant to land near
+   *  something keeps probing until a probe finds an owned tile or a coin to hop
+   *  off, rather than landing wherever the first probe fell, which is what
+   *  made v4's share of coins near the fighting small while empires were.
+   *
+   *  So coins gather near empires and near one another, a cluster grows, and
+   *  ground that encloses one is worth farming. Diamonds no longer spawn: they
+   *  come from mines.
+   *
+   *  Three draws per probe whatever happens, so the stream is a function of
+   *  state alone; at most 64 probes, so it stays O(1) on any map. */
+  private spawnNear(dirty: DirtySet): void {
+    const state = this.state;
+    const rules = state.genesis.rules;
+    const { width, height } = state;
+    const n = state.owner.length;
+    const r = rules.coinNearRadius;
+    const near = state.rng.int(100) < rules.coinNearBias;
+    const weights = rules.coinWeights.filter(([item]) => item !== ITEM.DIAMOND);
+
+    for (let probe = 0; probe < 64; probe++) {
+      const seed = state.rng.int(n);
+      const dx = state.rng.range(-r, r);
+      const dy = state.rng.range(-r, r);
+
+      let i = seed;
+      if (near) {
+        if (state.owner[seed] === 0 && !isCoin(state.item[seed]!)) continue;
+        const x = Math.max(0, Math.min(width - 1, xOf(seed, width) + dx));
+        const y = Math.max(0, Math.min(height - 1, yOf(seed, width) + dy));
+        i = idx(x, y, width);
+      }
+
+      if (state.owner[i] !== 0) continue;
+      if (state.item[i] !== ITEM.NONE) continue;
+      if (!PASSABLE[state.terrain[i]!]) continue;
+
+      state.item[i] = state.rng.weighted(weights) as Item;
       state.itemCount++;
       dirty.add(i);
       return;

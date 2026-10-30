@@ -28,6 +28,7 @@ import { reachable } from "./upkeep.js";
 import { PASSABLE } from "./constants.js";
 import { ORTHO, idx, xOf, yOf, inBounds, dist2 } from "./geometry.js";
 import type { Rng } from "./rng.js";
+import { isMine, mineDigCost, tileCeiling } from "./v5.js";
 import type { State } from "./state.js";
 
 export const MODES = ["expand", "attack", "defend", "fortify", "heal", "sleep"] as const;
@@ -109,6 +110,8 @@ interface Scan {
   owned: number[];
   frontier: number[];
   coins: number[];
+  /** Mines with nothing left, on this empire's ground or beside it: v5. */
+  mines: number[];
   /** Owned tiles with an enemy tile orthogonally beside them — the only tiles
    *  where reinforcement does anything. */
   threatened: number[];
@@ -121,12 +124,14 @@ function scan(state: State, empire: Empire): Scan {
   const owned: number[] = [];
   const frontier: number[] = [];
   const coins: number[] = [];
+  const mines: number[] = [];
   const threatened: number[] = [];
   const seen = new Set<number>();
 
   for (let i = 0; i < owner.length; i++) {
     if (owner[i] !== empire.id) continue;
     owned.push(i);
+    if (item[i] === ITEM.MINE) mines.push(i);
 
     const x = xOf(i, width);
     const y = yOf(i, width);
@@ -142,12 +147,14 @@ function scan(state: State, empire: Empire): Scan {
       if (seen.has(ni)) continue;
       seen.add(ni);
       frontier.push(ni);
-      if (item[ni] !== ITEM.NONE) coins.push(ni);
+      // A mine is not a coin; one with nothing left is worth digging.
+      if (item[ni] === ITEM.MINE) mines.push(ni);
+      else if (item[ni] !== ITEM.NONE && !isMine(item[ni]!)) coins.push(ni);
     }
     if (contested) threatened.push(i);
   }
 
-  return { owned, frontier, coins, threatened };
+  return { owned, frontier, coins, mines, threatened };
 }
 
 /** A specific empire's capital, if it is somebody else's and still standing. */
@@ -188,7 +195,7 @@ export function policy(
   const member = empire.members[memberIndex];
   if (!member || member.popTimer <= 0) return null;
 
-  const { owned, frontier, coins, threatened } = scan(state, empire);
+  const { owned, frontier, coins, mines, threatened } = scan(state, empire);
   if (owned.length === 0) return null;
 
   // A forced mode draws nothing here — a caller that pins the mode has already
@@ -205,7 +212,19 @@ export function policy(
   // How eagerly is the spidering knob: a bot that always takes the coin beside
   // it walks outward towards wherever the population is, and one that rarely
   // does stays where it started.
-  if (!forced && coins.length > 0 && rng.int(100) < (profile?.coins ?? DEFAULT_COINS)) {
+  //
+  // A mine waiting to be dug comes before a coin when the bank is big enough
+  // to dig it: diamonds come from nowhere else from v5. Mines exist only in v5
+  // games, so this draws nothing in a v4 one.
+  //
+  // A bot that could dig one but has not banked enough yet sometimes waits for
+  // it, the way a person would, rather than spending the bank on something
+  // smaller.
+  const digging = !forced && mines.length > 0 && member.popMax >= mineDigCost(state);
+  if (digging && member.popTimer < mineDigCost(state) && rng.int(100) < 40) return null;
+  if (digging && member.popTimer >= mineDigCost(state) && rng.int(100) < 60) {
+    target = mines[rng.int(mines.length)]!;
+  } else if (!forced && coins.length > 0 && rng.int(100) < (profile?.coins ?? DEFAULT_COINS)) {
     target = coins[rng.int(coins.length)]!;
   } else if (mode === "expand" && frontier.length > 0) {
     // Around the border rather than at the cheapest tile on it. Always taking
@@ -238,6 +257,10 @@ export function policy(
     target = towardsThePocket(state, empire, frontier, rng);
   } else {
     target = nearCapital(state, empire, rng) ?? owned[rng.int(owned.length)]!;
+    // From v5 a bot's tile has a ceiling. One already at it takes nothing
+    // more, so the bot thickens its thinnest tile instead of throwing the bank
+    // away.
+    if (state.pop[target]! >= tileCeiling(state, empire.id)) target = weakest(state, owned, rng);
   }
 
   if (target < 0) {

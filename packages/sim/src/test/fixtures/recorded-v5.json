@@ -1,7 +1,7 @@
 {
-  "note": "A recorded v3 game, replayed by both the Node and browser suites. One fixture per supported version, listed in src/test/fixtures/index.ts. Regenerate with: pnpm --filter @tessera/sim replay --record <path>",
+  "note": "A recorded v5 game, replayed by both the Node and browser suites. One fixture per supported version, listed in src/test/fixtures/index.ts. Regenerate with: pnpm --filter @tessera/sim replay --record <path>",
   "genesis": {
-    "protocol": 3,
+    "protocol": 5,
     "seed": 12648430,
     "startedAt": 0,
     "map": {
@@ -61,7 +61,14 @@
       "elimination": 0,
       "endStep": 0,
       "botActionInterval": 24,
-      "maxSeats": 4
+      "maxSeats": 4,
+      "botTileStep": 5000,
+      "botTilePeriod": 129600,
+      "botTileMax": 50000,
+      "growthCeiling": 999,
+      "mineDigCost": 800,
+      "mineYield": 3,
+      "mineEvery": 15
     },
     "empires": [
       {
@@ -243,7 +250,7 @@
     ]
   },
   "steps": 2500,
-  "hash": "c0974773",
+  "hash": "2f5ec827",
   "moveLog": [
     {
       "step": 6,

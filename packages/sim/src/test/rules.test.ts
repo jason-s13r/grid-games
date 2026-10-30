@@ -513,21 +513,6 @@ describe("team empires", () => {
       expect(open.validate(amend(9999, MEMBER.HUMAN))).toBe(true);
     });
 
-    // The plan's load-bearing test, and the one 0001 wanted and could not
-    // write: one process, one build, two versions, and an observable
-    // difference in behaviour. A v4 build playing a v3 game must reach the
-    // verdict a v3 build would — which is what "running it as v3" means in
-    // code, and the only place it is visible.
-    it("does not exist in a v3 game, even in a record that claims it", () => {
-      const rules = { joinWindow: 40, maxSeats: 4 };
-      const v3 = arena([humans(1), humans(1)], 1, rules, { protocol: 3 });
-      const v4 = arena([humans(1), humans(1)], 1, rules, { protocol: 4 });
-
-      expect(v3.state.genesis.rules.joinWindow).toBe(40);
-      expect(v3.validate(amend(80, MEMBER.HUMAN))).toBe(true);
-      expect(v4.validate(amend(80, MEMBER.HUMAN))).toBe(false);
-    });
-
     it("still caps seats past the window, for bots too", () => {
       const full = arena([humans(4), humans(1)], 1, { joinWindow: 40, maxSeats: 4 });
       expect(full.validate(amend(10, MEMBER.BOT))).toBe(false);
@@ -583,8 +568,8 @@ describe("win conditions", () => {
     });
   });
 
-  // A move is a seat saying it is there, so from v4 it counts as presence the
-  // way a heartbeat does. A v3 game keeps counting heartbeats alone.
+  // A move is a seat saying it is there, so it counts as presence the way a
+  // heartbeat does.
   describe("a move is presence", () => {
     const moved = (protocol?: number): number => {
       const sim = arena([humans(1), humans(1)], 1, {}, protocol ? { protocol } : {});
@@ -596,12 +581,8 @@ describe("win conditions", () => {
       return sim.state.empires[0]!.members[0]!.lastBeat;
     };
 
-    it("from v4", () => {
+    it("counts a move", () => {
       expect(moved()).toBe(600);
-    });
-
-    it("not in a v3 game", () => {
-      expect(moved(3)).not.toBe(600);
     });
   });
 
