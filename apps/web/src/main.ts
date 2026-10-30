@@ -6,6 +6,11 @@
 
 import { seedFrom, durationRules, hours, minutes, PROTOCOL_VERSION } from "@tessera/sim";
 import { displayName, fingerprint } from "@tessera/protocol";
+import "@fontsource/fredoka/500.css";
+import "@fontsource/fredoka/600.css";
+import "@fontsource/nunito/400.css";
+import "@fontsource/nunito/600.css";
+import "@fontsource/nunito/700.css";
 import pkg from "../package.json";
 import { LocalGame } from "./game/Local";
 import { boardClick } from "./game/input";
@@ -21,6 +26,7 @@ import { Minimap } from "./view/Minimap";
 import { Tabs } from "./view/Tabs";
 import { Controls } from "./view/Controls";
 import { Shell } from "./view/Shell";
+import { Dock } from "./view/Dock";
 import { Flags, injectThemeCss, setFlags } from "./view/palette";
 import { OnlineGame } from "./game/Online";
 import { OnlinePanel } from "./view/Online";
@@ -164,18 +170,26 @@ const shell = new Shell({
   app: appEl,
   menu: pick<HTMLElement>("[data-menu]"),
   resume: pick<HTMLElement>('[data-action="resume"]'),
-  itemsToggle: pick<HTMLElement>("[data-items-toggle]"),
-  itemsDrawer: pick<HTMLElement>("[data-items-drawer]"),
+  menuToggle: pick<HTMLElement>("[data-menu-toggle]"),
+  menuDrawer: pick<HTMLElement>("[data-menu-drawer]"),
 });
+
+// The pan and zoom controls: beside the board when there is room, over it when
+// there is not.
+new Dock(
+  pick<HTMLElement>("[data-mapctl]"),
+  pick<HTMLElement>("[data-mapctl-side]"),
+  pick<HTMLElement>("[data-mapctl-board]"),
+);
 
 // One panel at a time on a narrow screen, and the rest of the height is the
 // board's. Builds itself from whatever panels are on the page, so nothing here
 // has to be kept in step with the markup.
 new Tabs(appEl, pick<HTMLElement>("[data-tabs]"));
 
-// Escape shuts the shop; there is nothing else layered over the board.
+// Escape shuts the game menu, the one thing layered over the board.
 window.addEventListener("keydown", (event) => {
-  if (event.key === "Escape") shell.showItems(false);
+  if (event.key === "Escape") shell.showGameMenu(false);
 });
 
 /** A screen that was covered may have been resized while it was, and the board
@@ -420,6 +434,10 @@ speedEl.addEventListener("click", () => {
   game.setSpeed(next);
   speedEl.textContent = `×${next}`;
 });
+
+// The menu screen, with the game still running behind it: settings, other
+// games, and "Back to the game".
+pick<HTMLButtonElement>('[data-action="menu"]').addEventListener("click", () => shell.show("menu"));
 
 pick<HTMLButtonElement>('[data-action="leave"]').addEventListener("click", () => {
   if (link) leaveRoom();

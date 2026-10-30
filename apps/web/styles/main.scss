@@ -3,12 +3,49 @@
 // matter of swapping two variables rather than authoring a gradient each.
 
 :root {
+  // The board: cream paper, which the empire colours were tuned on.
   --paper: #fffbe8;
   --grid-line: #e2ded0;
+
+  // Light surfaces (the menu's cards, forms).
   --ink: #23201a;
   --muted: #6f6858;
   --panel: #f7f3e4;
   --edge: #d9d3c0;
+
+  // The house colours, shared with the Qot. games page for Tessera.
+  --forest: #1e352f;
+  --forest-2: #2c4a40;
+  --forest-3: #3b5d51;
+  --mint: #8fdcb2;
+  --gold: #d9a85b;
+  --gold-hover: #e6b96e;
+  --line: #1f2033;
+  --mist: #f2f3f8;
+
+  --font-display: Fredoka, ui-rounded, system-ui, sans-serif;
+  --font-body: Nunito, ui-rounded, system-ui, sans-serif;
+}
+
+// Light surfaces around the board: panels a touch off-white, the board's
+// surround a soft green-grey, like the dotted page on qot.nz.
+:root {
+  --side: #f7f9f5;
+  --surround: #e3ebe5;
+  --card: #ffffff;
+  --forest-ink: #24493d;
+}
+
+// The one dark surface: the status bar (and the menu it drops), like the
+// header card on qot.nz. Components inside read --ink, --muted, --panel and
+// --edge, so redefining them here is what turns them light-on-dark.
+.topbar,
+.menu-drawer {
+  --ink: #eaf2ec;
+  --muted: #9db8aa;
+  --panel: var(--forest);
+  --edge: rgba(234, 242, 236, 0.13);
+  color: var(--ink);
 }
 
 * { box-sizing: border-box; }
@@ -21,17 +58,22 @@
 html, body { height: 100%; margin: 0; }
 
 body {
-  font: 13px/1.45 ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  font: 14px/1.45 var(--font-body);
   color: var(--ink);
-  background: #ece7d6;
+  background: var(--forest);
 }
 
-// Title bar across the top, console across the bottom, and between them the
-// board with standings and chat beside it. The side column costs the board
-// almost nothing: a 4:3 board was letterboxing that width away regardless.
+h1, h2, h3, .brand, .screen-brand {
+  font-family: var(--font-display);
+}
+
+// The status bar across the top, and under it the board with a column either
+// side: standings and people on the left; the minimap, the store and chat on
+// the right. The columns cost the board almost nothing: a 4:3 board was
+// letterboxing that width away regardless.
 .app {
   display: grid;
-  grid-template-columns: 236px minmax(0, 1fr) 272px;
+  grid-template-columns: 250px minmax(0, 1fr) 290px;
   // The middle row is the scrubber's, and it is `auto` rather than a fixed
   // height: the strip is `hidden` in every game that is not a replay, generates
   // no box, and the row collapses to nothing.
@@ -43,14 +85,6 @@ body {
   height: 100dvh;
 }
 
-// Solo: nobody to talk to, so the chat column is not reserved at all.
-.app[data-chat="off"] {
-  grid-template-columns: 236px minmax(0, 1fr);
-  grid-template-areas:
-    "top   top"
-    "scrub scrub"
-    "left  stage";
-}
 
 // The timeline of a game that has already happened.
 .scrubber {
@@ -120,15 +154,16 @@ body {
   align-items: center;
   gap: 16px;
   padding: 8px 14px;
-  background: var(--panel);
-  border-bottom: 1px solid var(--edge);
+  background: var(--forest);
+  border-bottom: 2px solid var(--line);
 }
 
 .brand {
-  font-size: 15px;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
+  font-size: 22px;
+  font-weight: 600;
+  color: var(--mint);
   margin: 0;
+  line-height: 1;
 }
 
 .clock {
@@ -196,8 +231,10 @@ body {
   place-items: center;
   min-width: 0;
   min-height: 0;
-  padding: 10px;
-  background: #e6e0cf;
+  padding: 12px;
+  background-color: var(--surround);
+  background-image: radial-gradient(rgba(36, 73, 61, 0.14) 1px, transparent 1.4px);
+  background-size: 18px 18px;
 }
 
 // A fixed 4:3 board, as large as fits and no larger. Whichever axis runs out
@@ -207,9 +244,9 @@ body {
   width: min(100cqw, 100cqh * 4 / 3);
   aspect-ratio: 4 / 3;
   overflow: hidden;
-  border: 1px solid var(--edge);
-  border-radius: 3px;
-  box-shadow: 0 2px 14px rgba(0, 0, 0, 0.12);
+  border: 2px solid var(--line);
+  border-radius: 10px;
+  box-shadow: 4px 4px 0 var(--line);
 }
 
 .viewport {
@@ -358,15 +395,24 @@ body {
 
 // --- map controls ------------------------------------------------------------
 
+// Under the minimap on a wide screen: the pad and a zoom row side by side.
 .mapctl {
-  position: absolute;
-  right: 12px;
-  bottom: 12px;
   display: flex;
-  flex-direction: column;
   align-items: center;
-  gap: 8px;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 10px;
   user-select: none;
+}
+
+// Over the board's corner on a narrow screen (view/Dock.ts moves it there).
+[data-mapctl-board] .mapctl {
+  position: absolute;
+  right: 8px;
+  bottom: 8px;
+  margin: 0;
+  flex-direction: column;
+  gap: 8px;
 }
 
 .dpad {
@@ -384,16 +430,21 @@ body {
 }
 
 .zoomctl {
-  display: grid;
-  grid-template-columns: 30px;
-  justify-items: center;
-  gap: 2px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
 }
+[data-mapctl-board] .zoomctl { flex-direction: column-reverse; }
 
 .zoomlevel {
-  font-size: 10px;
+  min-width: 22px;
+  text-align: center;
+  font-size: 11px;
   font-variant-numeric: tabular-nums;
   color: var(--muted);
+}
+[data-mapctl-board] .zoomlevel {
+  color: #6f6858;
   background: rgba(255, 251, 232, 0.9);
   border-radius: 3px;
   padding: 0 4px;
@@ -407,8 +458,6 @@ body {
   place-items: center;
   font-size: 12px;
   line-height: 1;
-  background: rgba(253, 251, 242, 0.94);
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.14);
 }
 
 .version {
@@ -438,7 +487,8 @@ body {
   height: auto;
   display: block;
   background: #1d1b16;
-  border: 1px solid var(--edge);
+  border: 2px solid var(--line);
+  border-radius: 6px;
   cursor: crosshair;
   image-rendering: pixelated;
 }
@@ -467,11 +517,11 @@ body {
 .meter {
   position: relative;
   flex: none;
-  width: 190px;
-  height: 18px;
-  background: #e6e0cd;
-  border: 1px solid var(--edge);
-  border-radius: 3px;
+  width: 200px;
+  height: 20px;
+  background: var(--forest-2);
+  border: 2px solid var(--line);
+  border-radius: 999px;
   overflow: hidden;
 }
 .meter-fill { height: 100%; transition: width 120ms linear; }
@@ -480,9 +530,11 @@ body {
   inset: 0;
   display: grid;
   place-items: center;
-  font-size: 10px;
+  font-size: 11px;
+  font-weight: 700;
   font-variant-numeric: tabular-nums;
-  text-shadow: 0 0 3px #fff;
+  color: #fff;
+  text-shadow: 0 0 3px #000, 0 0 2px #000;
 }
 
 // --- action palette ----------------------------------------------------------
@@ -490,54 +542,56 @@ body {
 // One tile per thing you can buy. Everything that used to need placing places
 // itself now, so a tile is a purchase and nothing else.
 
+// A list down the right-hand column: glyph, name and what it does, cost.
 .acts {
   display: grid;
-  grid-auto-flow: column;
-  grid-auto-columns: 86px;
   gap: 6px;
 }
 
 .act {
   position: relative;
   display: grid;
-  grid-template-rows: auto auto 1fr;
-  gap: 1px;
-  padding: 5px 6px 6px;
-  min-height: 66px;
+  grid-template-columns: 22px minmax(0, 1fr) auto;
+  grid-template-areas: "glyph name meta" "glyph what what";
+  align-items: baseline;
+  column-gap: 8px;
+  padding: 7px 10px;
   text-align: left;
   font: inherit;
-  font-size: 11px;
-  line-height: 1.25;
-  border: 1px solid var(--edge);
-  border-radius: 4px;
-  background: #fdfbf2;
+  font-size: 12px;
+  line-height: 1.3;
+  color: var(--ink);
+  border: 2px solid var(--line);
+  border-radius: 8px;
+  background: var(--card);
+  box-shadow: 2px 2px 0 var(--line);
   cursor: pointer;
 
-  &:hover:not(:disabled) { background: #fff; border-color: #b9b198; }
-  &:disabled { opacity: 0.42; cursor: default; }
+  &:hover:not(:disabled) { background: #f1f8f3; }
+  &:active:not(:disabled) { transform: translate(2px, 2px); box-shadow: none; }
+  &:disabled { cursor: default; .act-glyph, .act-name, .act-what { opacity: 0.5; } }
 }
 
-.act-glyph { font-size: 15px; line-height: 1; color: #57503f; }
-.act-name { font-weight: 600; }
+.act-glyph { grid-area: glyph; font-size: 16px; line-height: 1; color: var(--forest-ink); }
+.act-name { grid-area: name; font-weight: 700; }
+.act-what { grid-area: what; font-size: 11px; color: var(--muted); }
 
 // How many are in hand. Sits on the tile rather than under it, so the tile
 // stays the same height whether or not you are carrying any.
 .act-count {
-  position: absolute;
-  top: 4px;
-  right: 5px;
+  margin-left: 6px;
   font-size: 10px;
   font-variant-numeric: tabular-nums;
-  padding: 1px 4px;
-  border-radius: 3px;
-  background: #e6e0cd;
-  color: #4b4536;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: #e3ebe5;
+  color: var(--ink);
 }
 
 .act-meta {
-  align-self: end;
-  font-size: 10px;
-  color: var(--muted);
+  grid-area: meta;
+  font-weight: 700;
+  color: #9a6a1c;
   font-variant-numeric: tabular-nums;
 }
 
@@ -553,7 +607,7 @@ body {
   min-height: 0;
   overflow-y: auto;
   overscroll-behavior: contain;
-  background: var(--panel);
+  background: var(--side);
 }
 
 .side-left { grid-area: left; border-right: 1px solid var(--edge); }
@@ -568,12 +622,12 @@ body {
   display: flex;
   align-items: center;
   gap: 7px;
-  padding: 9px 12px;
+  padding: 10px 14px;
   cursor: pointer;
-  font-size: 10px;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-  color: var(--muted);
+  font-family: var(--font-display);
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--forest-ink);
   user-select: none;
 
   // The default marker cannot be styled and sits where it likes, so it goes
@@ -591,12 +645,12 @@ body {
     transition: transform 120ms ease;
   }
 
-  &:hover { color: var(--ink); }
+  &:hover { color: #3b7a62; }
 }
 
 .acc[open] > summary::before { transform: rotate(90deg); }
 
-.acc-body { padding: 0 12px 12px; }
+.acc-body { padding: 0 14px 14px; }
 
 .acc-body .hint {
   margin-top: 4px;
@@ -636,25 +690,34 @@ body {
   .chat-form { margin-top: 6px; }
 }
 
-// The shop button in the top bar, and the panel it drops over the board.
-.items-dock {
+// The ≡ menu: a short list of one-off actions dropped from the status bar.
+.menu-dock {
   position: relative;
   flex: none;
 }
 
-.items-drawer {
+.menu-toggle {
+  font-size: 18px;
+  line-height: 1;
+  padding: 4px 11px 6px;
+}
+
+.menu-drawer {
   position: absolute;
   top: calc(100% + 8px);
-  // Anchored to the button's right edge so it opens back over the board. Left
-  // anchoring ran it off the screen, because the button sits near the end of
-  // the bar and the panel is wider than what is left.
   right: 0;
   z-index: 6;
+  display: grid;
+  gap: 6px;
+  min-width: 200px;
   padding: 10px;
-  background: var(--panel);
-  border: 1px solid var(--edge);
-  border-radius: 5px;
-  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.16);
+  background: var(--forest-2);
+  border: 2px solid var(--line);
+  border-radius: 10px;
+  box-shadow: 4px 4px 0 var(--line);
+
+  .btn { text-align: left; }
+  .version { padding: 2px 4px 0; }
 }
 
 // --- setup screen ------------------------------------------------------------
@@ -783,13 +846,15 @@ body {
   }
 }
 
+// The one main action in a view, in gold wherever it sits.
 .btn.primary {
   margin-top: 8px;
   width: 100%;
-  background: #23201a;
-  border-color: #23201a;
-  color: #fffbe8;
-  &:hover:not(:disabled) { background: #37322a; border-color: #37322a; }
+  background: var(--gold);
+  color: #2a1d07;
+  font-family: var(--font-display);
+  font-size: 15px;
+  &:hover:not(:disabled) { background: var(--gold-hover); }
 }
 
 // --- the games card ----------------------------------------------------------
@@ -950,17 +1015,32 @@ a.btn {
   a { color: inherit; }
 }
 
+// Rounded, outlined and sitting on a small hard shadow, like the buttons on
+// qot.nz; it presses down into the shadow.
 .btn {
   font: inherit;
-  padding: 5px 9px;
-  border: 1px solid var(--edge);
-  background: #fdfbf2;
-  border-radius: 4px;
+  font-weight: 600;
+  padding: 5px 11px;
+  color: #23201a;
+  border: 2px solid var(--line);
+  background: #fffdf6;
+  border-radius: 8px;
+  box-shadow: 2px 2px 0 var(--line);
   cursor: pointer;
-  &:hover:not(:disabled) { background: #fff; border-color: #b9b198; }
+  &:hover:not(:disabled) { background: #fff; }
+  &:active:not(:disabled) { transform: translate(2px, 2px); box-shadow: none; }
   &:disabled { opacity: 0.45; cursor: default; }
+  &:focus-visible { outline: 2px solid var(--mint); outline-offset: 2px; }
   &.sm { font-size: 11px; padding: 4px 6px; }
-  &.armed { background: #ffe9a8; border-color: #c9a531; }
+  &.armed { background: #ffe9a8; }
+}
+
+// On the dark surfaces a button is the panel's colour, a shade lighter.
+.topbar .btn,
+.menu-drawer .btn {
+  color: var(--ink);
+  background: var(--forest-3);
+  &:hover:not(:disabled) { background: #46695c; }
 }
 
 .cost { color: var(--muted); }
@@ -1408,11 +1488,11 @@ a.btn {
     &:last-child { border-right: none; }
 
     &.on {
-      color: var(--ink);
-      background: var(--bg);
+      color: var(--forest-ink);
+      background: var(--card);
       // The marker goes on top: the panel this opens is below, so an underline
       // would sit between the two things it is meant to connect.
-      box-shadow: inset 0 2px 0 var(--ink);
+      box-shadow: inset 0 3px 0 var(--forest-ink);
     }
   }
 
@@ -1432,8 +1512,7 @@ a.btn {
 @media (max-width: 900px) {
   // One column: board, then the panels stacked under it. The stage keeps a
   // definite height so the board can claim whatever the shut panels leave.
-  .app,
-  .app[data-chat="off"] {
+  .app {
     grid-template-columns: 1fr;
     grid-template-areas: "top" "stage" "tabs" "left" "right";
     grid-template-rows: auto 1fr auto auto auto;
@@ -1453,8 +1532,8 @@ a.btn {
 
   .hud { flex-wrap: wrap; gap: 6px 12px; order: 3; flex-basis: 100%; }
 
-  .brand { font-size: 13px; }
-  .version { display: none; }
+  .brand { font-size: 18px; }
+  .clock { margin-left: auto; font-size: 12px; }
 
   .stage { padding: 0; }
 
@@ -1482,23 +1561,13 @@ a.btn {
     grid-template-columns: repeat(3, 34px);
     grid-template-rows: repeat(3, 34px);
   }
-  .mapctl {
-    right: 8px;
-    bottom: 8px;
-    // Translucent until touched: the pad is larger here and sits over the
-    // board, so it should not compete with the map for attention.
+  [data-mapctl-board] .mapctl {
+    // Translucent until touched: it sits over the board, so it should not
+    // compete with the map for attention.
     opacity: 0.82;
     &:active, &:focus-within { opacity: 1; }
   }
-  .btn.ctl { width: 34px; height: 34px; font-size: 13px; }
-
-  // A pop-up anchored to a button has nowhere to go on a 390px screen, so it
-  // spans the bar it hangs from instead of trailing off the edge of it.
-  .items-dock { position: static; }
-  .items-drawer { left: 10px; right: 10px; }
-
-  .acts { grid-auto-flow: row; grid-template-columns: repeat(4, minmax(0, 1fr)); }
-  .act { min-height: 62px; padding: 6px; }
+  .btn.ctl { width: 34px; height: 34px; font-size: 13px; box-shadow: none; }
 
   // Both sidebars become one stack of collapsed strips under the board. Shut,
   // each costs about 34px; the board takes everything they are not using.
@@ -1524,8 +1593,7 @@ a.btn {
 
 // Phone. Four tiles across is too tight to read, so wrap to two rows of two.
 @media (max-width: 560px) {
-  .acts { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .meter { width: 140px; height: 16px; }
+  .meter { width: 140px; height: 18px; }
   .hud { gap: 5px 10px; }
 }
 

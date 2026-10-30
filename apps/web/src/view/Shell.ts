@@ -1,4 +1,4 @@
-// Which screen you are on, and whether the shop is open.
+// Which screen you are on, and whether the game menu is open.
 //
 // Setting up a game and playing one are different jobs with different shapes,
 // so they are different screens rather than two halves of one crowded page.
@@ -14,8 +14,9 @@ export interface ShellElements {
   menu: HTMLElement;
   /** Shown on the menu only once there is a game to go back to. */
   resume: HTMLElement;
-  itemsToggle: HTMLElement;
-  itemsDrawer: HTMLElement;
+  /** The ≡ button in the status bar, and the menu it opens. */
+  menuToggle: HTMLElement;
+  menuDrawer: HTMLElement;
 }
 
 export class Shell {
@@ -26,29 +27,25 @@ export class Shell {
   onScreen: ((screen: Screen) => void) | null = null;
 
   constructor(private els: ShellElements) {
-    els.itemsToggle.addEventListener("click", () => this.showItems(this.els.itemsDrawer.hidden));
+    els.menuToggle.addEventListener("click", () => this.showGameMenu(this.els.menuDrawer.hidden));
 
-    // Buying does not shut the shop — two bridges is a normal thing to want —
-    // but a click anywhere else does, because at that point you are back to
-    // playing and a panel over the board is in the way.
+    // A click anywhere else shuts the menu, and so does choosing something in
+    // it: every entry is a one-off action.
     document.addEventListener("pointerdown", (event) => {
-      if (this.els.itemsDrawer.hidden) return;
-      const within = (event.target as HTMLElement).closest(".items-dock");
-      if (!within) this.showItems(false);
+      if (this.els.menuDrawer.hidden) return;
+      if (!(event.target as HTMLElement).closest(".menu-dock")) this.showGameMenu(false);
+    });
+    els.menuDrawer.addEventListener("click", (event) => {
+      if ((event.target as HTMLElement).closest("button")) this.showGameMenu(false);
     });
 
-    this.showItems(false);
+    this.showGameMenu(false);
     this.show("menu");
   }
 
-  get itemsOpen(): boolean {
-    return !this.els.itemsDrawer.hidden;
-  }
-
-  showItems(open: boolean): void {
-    this.els.itemsDrawer.hidden = !open;
-    this.els.itemsToggle.setAttribute("aria-expanded", String(open));
-    this.els.itemsToggle.classList.toggle("armed", open);
+  showGameMenu(open: boolean): void {
+    this.els.menuDrawer.hidden = !open;
+    this.els.menuToggle.setAttribute("aria-expanded", String(open));
   }
 
   get current(): Screen {
@@ -59,10 +56,9 @@ export class Shell {
     this.screen = screen;
     this.els.app.dataset.screen = screen;
     this.els.menu.hidden = screen !== "menu";
-    if (screen === "menu") this.showItems(false);
+    if (screen === "menu") this.showGameMenu(false);
     this.onScreen?.(screen);
   }
-
   /** There is a game worth returning to. Called on the first mount, not in the
    *  constructor, because at construction time there is nothing behind here. */
   gameReady(): void {

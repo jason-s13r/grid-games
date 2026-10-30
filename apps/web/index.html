@@ -12,62 +12,45 @@
          everything, "game" shows the board. The game keeps running either way —
          the world turns on wall-clock time whether or not you are looking. -->
     <div class="app" data-screen="menu">
-      <!-- Who you are and what you hold reads at a glance, above the board,
-           the way a score line does — not tucked into a corner of the panel
-           you use for something else. -->
+      <!-- The status bar: who you are and what you hold, at a glance. Everything
+           else you might want during a game is one click away in the ≡ menu. -->
       <header class="topbar">
         <h1 class="brand">Tessera</h1>
         <div class="hud" data-you></div>
+        <div class="clock" data-clock></div>
 
-        <!-- Beside the diamond count, because that is the number you are
-             checking when you decide to open it. -->
-        <div class="items-dock">
-          <button class="btn" data-items-toggle aria-expanded="false">Items</button>
-          <div class="items-drawer" data-items-drawer hidden>
-            <div class="acts" data-acts></div>
+        <div class="menu-dock">
+          <button class="btn menu-toggle" data-menu-toggle aria-expanded="false" aria-label="Game menu">&#8801;</button>
+          <div class="menu-drawer" data-menu-drawer hidden>
+            <button data-action="speed" class="btn" title="Replay speed: game time per second" hidden>×600</button>
+            <button data-action="pause" class="btn">Pause</button>
+            <button data-action="menu" class="btn">Menu and settings</button>
+            <button data-action="leave" class="btn">Leave the game</button>
+            <span class="version" data-version></span>
           </div>
         </div>
-
-        <div class="topbar-end">
-          <div class="clock" data-clock></div>
-          <span class="version" data-version></span>
-          <button data-action="speed" class="btn" title="Replay speed: game time per second" hidden>×600</button>
-          <button data-action="pause" class="btn">Pause</button>
-          <button data-action="leave" class="btn">Leave</button>
-        </div>
       </header>
-
 
       <!-- Collapsible so a phone can shut what it is not reading. Native
            <details> rather than a bespoke toggle: it is keyboard-operable and
            remembers its own state without a line of script. -->
       <aside class="side side-left">
-        <details class="acc" data-acc="map">
-          <summary>Map</summary>
-          <div class="acc-body">
-            <canvas class="minimap" data-minimap width="240" height="160"></canvas>
-            <p class="hint" data-zoomhint></p>
-          </div>
-        </details>
-
-        <details class="acc" data-acc="standings">
+        <details class="acc" data-acc="standings" open>
           <summary>Standings</summary>
           <div class="acc-body" data-standings></div>
         </details>
 
         <!-- Who is in an online game, requests to join your empire, and the
              invite link. See view/People.ts. -->
-        <details class="acc" data-acc="people" data-people-panel hidden>
+        <details class="acc" data-acc="people" data-people-panel hidden open>
           <summary>People</summary>
           <div class="acc-body" data-people></div>
         </details>
 
-        <details class="acc" data-acc="roster" data-roster-panel hidden>
+        <details class="acc" data-acc="roster" data-roster-panel hidden open>
           <summary>Your seats</summary>
           <div class="acc-body" data-roster></div>
         </details>
-
-
       </aside>
 
       <main class="stage">
@@ -77,21 +60,8 @@
           <div class="viewport" data-viewport>
             <canvas class="lod" data-lod></canvas>
             <div class="tiles" data-tiles></div>
-
-            <div class="mapctl">
-              <div class="dpad">
-                <button class="btn ctl" data-pan="up"    aria-label="Pan up">&#9650;</button>
-                <button class="btn ctl" data-pan="left"  aria-label="Pan left">&#9664;</button>
-                <button class="btn ctl" data-pan="home"  aria-label="Centre on your capital" title="Centre on your capital">&#9678;</button>
-                <button class="btn ctl" data-pan="right" aria-label="Pan right">&#9654;</button>
-                <button class="btn ctl" data-pan="down"  aria-label="Pan down">&#9660;</button>
-              </div>
-              <div class="zoomctl">
-                <button class="btn ctl" data-zoom="in"  aria-label="Zoom in">+</button>
-                <span class="zoomlevel" data-zoomlevel></span>
-                <button class="btn ctl" data-zoom="out" aria-label="Zoom out">&minus;</button>
-              </div>
-            </div>
+            <!-- The pan and zoom controls sit here on a narrow screen only. -->
+            <div class="mapctl-home" data-mapctl-board></div>
           </div>
 
           <div class="banner" data-banner hidden></div>
@@ -102,9 +72,42 @@
            asks for it. See view/Tabs.ts. -->
       <nav class="tabs" data-tabs aria-label="Panels"></nav>
 
-      <!-- Online games only. See view/Chat.ts. -->
-      <aside class="side side-right" data-chat-section hidden>
-        <details class="acc acc-chat" data-acc="chat" open>
+      <!-- The minimap with its controls, the store, and chat in an online game. -->
+      <aside class="side side-right">
+        <details class="acc" data-acc="map" open>
+          <summary>Map</summary>
+          <div class="acc-body">
+            <canvas class="minimap" data-minimap width="240" height="160"></canvas>
+            <div class="mapctl-home" data-mapctl-side>
+              <div class="mapctl" data-mapctl>
+                <div class="dpad">
+                  <button class="btn ctl" data-pan="up"    aria-label="Pan up">&#9650;</button>
+                  <button class="btn ctl" data-pan="left"  aria-label="Pan left">&#9664;</button>
+                  <button class="btn ctl" data-pan="home"  aria-label="Centre on your capital" title="Centre on your capital">&#9678;</button>
+                  <button class="btn ctl" data-pan="right" aria-label="Pan right">&#9654;</button>
+                  <button class="btn ctl" data-pan="down"  aria-label="Pan down">&#9660;</button>
+                </div>
+                <div class="zoomctl">
+                  <button class="btn ctl" data-zoom="out" aria-label="Zoom out">&minus;</button>
+                  <span class="zoomlevel" data-zoomlevel></span>
+                  <button class="btn ctl" data-zoom="in"  aria-label="Zoom in">+</button>
+                </div>
+              </div>
+            </div>
+            <p class="hint" data-zoomhint></p>
+          </div>
+        </details>
+
+        <!-- The store. On a phone it is one of the tabs under the board. -->
+        <details class="acc acc-store" data-acc="store" open>
+          <summary>Store</summary>
+          <div class="acc-body">
+            <div class="acts" data-acts></div>
+          </div>
+        </details>
+
+        <!-- Online games only. See view/Chat.ts. -->
+        <details class="acc acc-chat" data-acc="chat" data-chat-section hidden open>
           <summary>Chat</summary>
           <div class="acc-body" data-chat></div>
         </details>

@@ -55,7 +55,9 @@ export function clockLine(state: State, online = true): string {
   const joining =
     window > 0 && state.step < window ? ` · seats open for ${clock(window - state.step)}` : "";
 
-  return `${label} · step ${state.step}${joining}`;
+  // The step number is for debugging, not for playing: it rides in the
+  // clock's tooltip rather than on the bar.
+  return `${label}${joining}`;
 }
 
 const WIN_TEXT: Record<number, string> = {
@@ -78,11 +80,11 @@ interface Act {
 }
 
 const tile = (act: Act): string =>
-  `<button class="act" data-buy="${act.buy}" title="${act.what}"${act.affordable ? "" : " disabled"}>
+  `<button class="act" data-buy="${act.buy}"${act.affordable ? "" : " disabled"}>
      <span class="act-glyph">${act.glyph}</span>
-     <span class="act-name">${act.name}</span>
+     <span class="act-name">${act.name}${act.held ? `<span class="act-count">&times;${act.held}</span>` : ""}</span>
      <span class="act-meta">${act.cost}&#9670;</span>
-     ${act.held ? `<span class="act-count">&times;${act.held}</span>` : ""}
+     <span class="act-what">${act.what}</span>
    </button>`;
 
 export class Controls {
@@ -140,7 +142,7 @@ export class Controls {
     // a board like everyone else; what it does not have is a seat to describe.
     const empire = state.empires[this.game.empire - 1];
     if (!empire) {
-      this.els.clock.textContent = clockLine(state, this.game.online);
+      this.showClock(state);
       this.put(this.els.hud, "hud", `<strong class="hud-name">Watching</strong>`);
       this.put(this.els.acts, "acts", "");
       this.els.rosterPanel.hidden = true;
@@ -151,7 +153,7 @@ export class Controls {
     const rules = state.genesis.rules;
     const theme = empireTheme(empire.id);
 
-    this.els.clock.textContent = clockLine(state, this.game.online);
+    this.showClock(state);
 
     const pct = Math.round((member.popTimer / rules.popMax) * 100);
 
@@ -264,6 +266,11 @@ export class Controls {
     } else {
       this.els.banner.hidden = true;
     }
+  }
+
+  private showClock(state: State): void {
+    this.els.clock.textContent = clockLine(state, this.game.online);
+    this.els.clock.title = `step ${state.step}`;
   }
 
   private renderStandings(state: State): void {
