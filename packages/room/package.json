@@ -1,6 +1,6 @@
 {
   "name": "@tessera/room",
-  "version": "0.0.0",
+  "version": "1.0.0",
   "private": true,
   "description": "The game room: orders moves into steps, keeps the log, and catches clients up. Runs in a Durable Object, a host tab, or a test.",
   "license": "MIT",

@@ -1,5 +1,300 @@
 # Changelog
 
+## web@1.0.0 (2026-10-30)
+
+### Breaking Changes
+
+- the sim's later rules, on a cut-back base for the Cloudflare rebuild
+  Online play is being rebuilt around Cloudflare: a Durable Object per game
+  orders moves, keeps the log and keeps the game running, while every
+  client still runs the simulation and validates every move. This commit
+  carries forward what the peer-to-peer branches added to the simulation
+  and drops everything built around the mesh. The branches themselves are
+  squashed under the tag archive/p2p.
+
+  Kept from the branches:
+  - sim: supported protocol set (now 4), durations as step counts, the
+    join window, vacant empires and their grace, banners, the world
+    journal, hand-tuned bot profiles, and recorded v3 and v4 fixtures
+  - protocol: inspectGenesis across supported versions and its window
+    checks, and display names
+  - web: per-empire bot difficulty, the length picker, one setup form
+
+  Removed from main:
+  - packages/net (lockstep, mesh, lobby, archive) and packages/headless
+  - apps/observer and apps/bot (apps/prototype stays, frozen)
+  - the Pages workflow; dispat.yaml and the release workflow are trimmed
+    to the packages that remain
+
+  packages/protocol keeps identity, the genesis record, the roster, names,
+  and signed moves, messages and the hello proof. apps/web plays solo
+  against bot empires; online play comes back on top of the game room.
+
+### Features
+
+- Resume on any active game you are in; lists appear once loaded
+  The public list shows a game you are in with Resume and your empire's
+  colour, rather than leaving it out. The start page's lists stay hidden
+  until they have loaded, and then appear together, so a load does not
+  flash empty boxes. Lists are revalidated on each load, so a game made
+  public or joined a moment ago is there.
+
+- show the leaderboard above the finished games
+
+- game settings in a dialog over the board; the creator can list a game publicly
+  Settings opens from the ≡ menu as a dialog, so the game stays on screen.
+  It holds your name, the game's link and, for the creator, whether the
+  game is listed publicly. The map, length, empires and joining window are
+  shown read-only, since they are fixed when the game starts.
+
+  The room takes a new "public" message from the creator, saves it and
+  sends the settings to everyone; the records upsert now updates public
+  and phase, so the listing follows.
+
+- How to play, Privacy, Qot. games and Support at the foot of the start page
+  The same links as the other Qot. games:
+
+  - How to play (/about): the rules in plain words (claiming and the bank,
+    the map, coins and diamonds, the store and its keys, capitals, playing
+    online) and where the game comes from.
+  - Privacy (/privacy): what the browser keeps (a key and a name), what the
+    server keeps for online games and for how long, who can see what,
+    Cloudflare and Ko-fi, and how to have it removed.
+  - Qot. games: Tessera's page at qot.nz/games/tessera.
+  - Support the game ☕: the tip link as a QR code, with a link to open it
+    here. It comes from the Worker: TIP_URL from the dashboard, the maker's
+    Ko-fi page when unset, none when "off"; /api/config now says which.
+
+  The two pages are plain HTML beside the game (Parcel entries), styled to
+  match the start page.
+
+- your finished games in Finished, private ones included
+  Finished lists your own games that have ended, private or public, as
+  well as public games you were not in, newest first, so any game you
+  played can be watched back. Your games already listed the private ones
+  still running.
+
+- the start page's lists side by side, and more leaderboards
+  The start page shows every list at once, as its own section:
+
+  - Your games: the ones you are in that have not finished, to resume (or
+    open the lobby).
+  - Public games: open and running together. Join a lobby or a game still
+    taking players; watch one that is not. Yours are not repeated here.
+  - Finished: public games that have ended, to view the replay.
+  - Leaderboard: the top ten for games won, area, population and largest
+    coin cascade, over all games or each player's best single game.
+
+  The lists reload whenever the start page shows.
+
+  A result now records the empire's peak population and each seat's
+  largest coin cascade (migration 0002); results from before read as 0.
+  GET /api/leaderboard?scope=total|game returns every list at once.
+
+- people under their empires in the standings, chat under the board
+  The standings are the one list of who is playing. An empire with people
+  in it opens to list them, indented underneath: names, a dot for whether
+  each is here, bots marked, and for your own empire each seat's bank.
+  Yours starts open; which are open is kept across redraws. Requests to
+  join your empire, your own pending ask, the invite link and who is
+  watching follow the list. The separate People and Your seats sections
+  go.
+
+  Chat moves to a panel under the board, as wide as it, so lines read as
+  lines; with it the left column goes, on every screen. On a phone or a
+  tablet the tabs are Map, Standings, Store and, online, Chat.
+
+- a start page and one create page for solo and online games
+  The start page is a dark green card with the ways in: Play now (a solo
+  game against three steady bots at the default length), New game, and a
+  box to paste a game link or code. Under it are the lobby you are in, if
+  any, then your games, open games and the leaderboard, then settings.
+  "Back to the game" appears only once there is a game you chose to play,
+  and goes while you are in another game's lobby.
+
+  The create page replaces the separate solo and online forms. A switch
+  picks solo or with other people; for online games a preset (Friends,
+  Marathon, Quick) fills everything at once. Then each choice is one tap:
+  map, length, teams (empires and seats each), bots (how many, at what
+  level). Under More: when it starts, whether it is listed publicly, and
+  each bot on its own, with the existing per-bot tuning. The one bot list
+  is shared by both modes.
+
+  view/Setup.ts goes; the online card only shows when there is something
+  to show (connecting, a lobby, a problem).
+
+- tablets get one column of tabbed panels beside the board
+  On a screen 3:2 or squarer that is too wide to count as a phone (a
+  tablet, or a narrow desktop window), two side columns left the board
+  under half the width in an online game. There the panels are tabs in a
+  single column on the right, as on a phone held sideways, and the board
+  takes the rest: 680 of 1024 pixels rather than 484. The tabs wrap onto a
+  second row there instead of scrolling. 16:10 and wider screens keep both
+  columns.
+
+- the store as a command card, with placements and tile info
+  - Each store item shows its keyboard shortcut (B, L, M, G), and the keys
+    buy from the board unless you are typing.
+  - An item you cannot afford says how many more diamonds it needs.
+  - While you hold a bridge or ladder, every tile where one can go right
+    now is highlighted on the board. Clicking one places it, as before:
+    there is still no mode to arm (game/input.ts reads the terrain).
+  - The tile under the mouse is outlined, with a line saying what it is
+    (owner, terrain, population, a coin or diamond, shielded) and what a
+    click there would do, or why it would not.
+
+  The highlights and the outline are drawn on a canvas of their own
+  (view/Marks.ts), so they work at every zoom and the tile renderer is
+  untouched.
+
+- games default to 15 minutes
+  A game created without a length, solo or online, is 15 minutes, and both
+  forms start on that. DEFAULT_DURATION_MINUTES overrides it (14400 is ten
+  days); it is set in the Cloudflare dashboard rather than in
+  wrangler.jsonc, with keep_vars so a deploy does not reset it. The page
+  reads it from GET /api/config, and a length the list does not have is
+  added to it.
+
+  DEFAULT_DURATION_DAYS, which wrangler.jsonc set to 10, is gone.
+
+- diamonds and owned items at the top of the store
+  The store's first line is the diamonds you have to spend, then what you
+  already own: bridges and ladders in hand, and March and Growth once
+  bought. Both leave the status bar, and the item rows lose their own
+  held count.
+
+- standings in the right column, above the store
+  The right column is the minimap, the standings and the store; the left
+  is an online game's people, seats and chat. A solo game has nothing for
+  the left column, so on a wide screen it goes and the board takes the
+  width.
+
+- the board is 4:3 on phones too
+  On a narrow screen the board is as wide as the screen at 4:3, and the
+  open tab's panel takes all the height below it; the two side columns
+  share that one panel area. On a phone held sideways the tab row and the
+  panel go beside the board instead, the board takes the height, and the
+  status bar is one line.
+
+- board controls at the board's edges, and chat in the left column
+  The pan buttons sit at the middle of the edge each one moves towards,
+  and centre-on-capital and zoom sit in a row at the top right of the
+  board, on every screen. The layer they sit in takes no clicks itself, so
+  the tiles under its empty space stay clickable. The controls no longer
+  move between the board and the side column, so view/Dock.ts goes.
+
+  Chat moves to the left column under standings and people and takes the
+  rest of its height (a <details> needs ::details-content told to stretch),
+  instead of a small box at the foot of the right column. The right column
+  is the minimap and the store.
+
+- the board with docked panels, a ≡ menu, and the Qot. games look
+  The game screen is the 4:3 board with a column either side: standings,
+  people and seats on the left; the minimap with the pan and zoom
+  controls, the store and chat on the right. The controls no longer cover
+  the board on a wide screen; on a narrow one view/Dock.ts moves them back
+  over the board's corner, where a thumb needs them. On a phone the store
+  is one of the tabs under the board.
+
+  The status bar keeps the empire, the bank, tiles, population, diamonds
+  and time left (the step number moves to the clock's tooltip). Pause,
+  replay speed, the menu screen, Leave and the version go in a ≡ menu.
+  The store lists each item with its cost and what it does.
+
+  The look follows the Qot. games page: a forest-green status bar, light
+  panels, a dotted green-grey surround for the board, outlined buttons on
+  a hard offset shadow, and Fredoka and Nunito, self-hosted through
+  @fontsource as in the other Qot. games. The board keeps its cream paper.
+
+- game records in D1, archives in R2, replays
+  The room reports what outlives a game through hooks, and knows nothing
+  about where it goes: a listing row when its lobby or phase changes, a
+  player when someone joins or is seated, and the result when it ends. A
+  room now also wakes at its game's end and twice a day while it runs, so
+  a game that ends with nobody connected is still recorded.
+
+  The Worker writes those to D1 (migrations/0001_listings.sql): games,
+  seats, results and players. It answers GET /api/games?list=open|running|
+  ended for public games, /api/players/:key for one key's record and recent
+  games, and /api/leaderboard. A game can be listed publicly from the
+  create form.
+
+  A finished game is archived to R2 as one gzipped JSON object: the genesis
+  record, every stamped move with its signature, who sat where, and the
+  result, in the shape `pnpm replay --log` reads. KEEP_DAYS (30) after that,
+  the room's object deletes its own storage, and the archive is the game:
+  GET /api/games/:id/archive serves it, and /api/games/:id says so.
+
+  The menu has a Games card: open, running and finished public games, your
+  own games with your record, and the leaderboard. A finished game opens as
+  a replay, played from its archive at a speed from real time to six hours a
+  second, and a link to a game whose room is gone opens its replay.
+
+  Both bindings are optional: without them games still run, and nothing is
+  listed, archived or deleted. The first deploy creates the database and
+  the bucket; `pnpm deploy` applies the schema after deploying.
+
+- bot seats
+  A client can say it is a bot in its hello. The room seats it as a BOT
+  member, through the same doors as a latecomer: an invite or a player's
+  approval, never by taking an open empire on its own. Like any bot seat it
+  may come in after the join window closes. The People panel marks it.
+
+- serve and link the original prototype again
+  The menu links to it once more, and the Worker serves its build at
+  /prototype/: `pnpm build` and `pnpm dev` copy apps/prototype/dist into
+  the web build's assets. prototype is a package again, so it comes off
+  dispat's list of scopes that are not packages.
+
+- chat in an online game
+  The right-hand column comes back for online games with a chat panel:
+  the history on arriving, each line as it is said, and a box with All or
+  Team. Team is offered once you hold a seat. Every line is escaped, a
+  team line is marked, and the log follows the conversation unless you
+  have scrolled back to read.
+
+- an online game advances on its own clock
+  OnlineGame simulates up to now every frame through the room client,
+  rather than in the room's quarter-second batches, so the board moves at
+  twelve steps a second. A hidden tab gets no frames, so a one-second
+  timer keeps the game advancing and the hash reports (and with them the
+  seat's presence) going. A seat given mid-game is shown once the step
+  that creates it has been simulated.
+
+- join a game that has started
+  The standings offer Take it on an empire nobody holds and Ask on one
+  somebody does, to anybody watching while the join window is open. A
+  People panel lists who is in the game, shows your empire the requests
+  it can answer, and makes an invite link to your empire; opening that
+  link seats you once the game is on screen. The camera moves to your
+  capital when you are seated, and a name changed in settings is sent to
+  the game you are in.
+
+- play online
+  The menu gains an Online card. Its form creates a game on the Worker
+  (map, length defaulting to 10 days, empires, players per empire, bots,
+  and a start by hand, straight away or at a set time) and opens the
+  game's link, /g/<room>. Pasting a link or code joins one.
+
+  While the game is in its lobby the card shows the share link and the
+  empires, with Join and Leave on each; the creator gets the start button,
+  and a game created to start straight away starts itself once the
+  creator is seated. When the game is running the board takes over,
+  driven by OnlineGame: moves go to the room, batches come back, and a
+  resync repaints the whole map. A link opened by somebody without a seat
+  spectates.
+
+  The socket reconnects on its own with a growing delay, and a reload
+  catches up from the room. Flags are bound per game, so an online game's
+  banners draw the way its record says.
+
+### Dependencies
+
+- sim: 2.0.0 -> 4.0.0
+- protocol: 0.5.0 -> 1.0.0
+- room: 0.0.0 -> 1.0.0
+
+
 ## web@0.10.0 (2026-09-04)
 
 ### Features

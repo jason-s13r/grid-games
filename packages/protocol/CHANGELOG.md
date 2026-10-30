@@ -1,5 +1,56 @@
 # Changelog
 
+## protocol@1.0.0 (2026-10-30)
+
+### Breaking Changes
+
+- sign a move without its step
+  The game room decides which step a move lands on, after the player has
+  signed it, so the step can no longer be part of the signed bytes. The
+  record is now tessera/move/2: seq, empire, member, type and coordinates.
+  seq only rises per seat, which is what stops one signed move being
+  replayed into a second slot.
+
+- the sim's later rules, on a cut-back base for the Cloudflare rebuild
+  Online play is being rebuilt around Cloudflare: a Durable Object per game
+  orders moves, keeps the log and keeps the game running, while every
+  client still runs the simulation and validates every move. This commit
+  carries forward what the peer-to-peer branches added to the simulation
+  and drops everything built around the mesh. The branches themselves are
+  squashed under the tag archive/p2p.
+
+  Kept from the branches:
+  - sim: supported protocol set (now 4), durations as step counts, the
+    join window, vacant empires and their grace, banners, the world
+    journal, hand-tuned bot profiles, and recorded v3 and v4 fixtures
+  - protocol: inspectGenesis across supported versions and its window
+    checks, and display names
+  - web: per-empire bot difficulty, the length picker, one setup form
+
+  Removed from main:
+  - packages/net (lockstep, mesh, lobby, archive) and packages/headless
+  - apps/observer and apps/bot (apps/prototype stays, frozen)
+  - the Pages workflow; dispat.yaml and the release workflow are trimmed
+    to the packages that remain
+
+  packages/protocol keeps identity, the genesis record, the roster, names,
+  and signed moves, messages and the hello proof. apps/web plays solo
+  against bot empires; online play comes back on top of the game room.
+
+### Features
+
+- invites a member signs
+  An invite says "whoever holds this may join my empire": empire, a
+  random id, an expiry, and the inviting member's key, signed by that key.
+  Anybody who knows the roster can check it, a game room today or a peer
+  in a game with no room later. Whether the signer may invite into that
+  empire is the roster's question, asked by whoever redeems it.
+
+### Dependencies
+
+- sim: 2.0.0 -> 4.0.0
+
+
 ## protocol@0.5.0 (2026-09-04)
 
 ### Features
