@@ -874,7 +874,7 @@ h1, h2, h3, .brand, .screen-brand {
 
 // The settings and the footer belong to the start page, not to the form.
 .screen[data-page="create"] {
-  .settings, .screen-foot, .screen-note { display: none; }
+  .settings, .screen-foot { display: none; }
 }
 
 // The links every Qot. game has at the foot of its start page.
@@ -1311,7 +1311,6 @@ h1, h2, h3, .brand, .screen-brand {
   flex-wrap: wrap;
   gap: 12px;
 }
-.screen-note { text-align: center; }
 
 // The prototype link is a button, and .btn was written for one.
 a.btn {
@@ -1319,13 +1318,6 @@ a.btn {
   align-items: center;
   text-decoration: none;
   color: inherit;
-}
-
-.screen-note {
-  margin: 16px 0 0;
-  font-size: 12px;
-  color: var(--muted);
-  a { color: inherit; }
 }
 
 // Rounded and outlined.
