@@ -700,11 +700,11 @@ export class Room {
   }
 
   private result(): GameResult {
-    const bySeat = new Map<string, { key: string; name: string; bot: boolean }>();
+    const bySeat = new Map<string, { key: string; bot: boolean }>();
     for (const player of this.players) {
       const seat = this.roster!.seatOf(player.key);
       if (seat) {
-        bySeat.set(`${seat.empire}:${seat.member}`, { key: player.key, name: player.name, bot: this.isBot(player.key) });
+        bySeat.set(`${seat.empire}:${seat.member}`, { key: player.key, bot: this.isBot(player.key) });
       }
     }
     return resultOf(this.sim!, this.config.roomId, (e, m) => bySeat.get(`${e}:${m}`));
@@ -716,7 +716,9 @@ export class Room {
     if (!this.finished || !this.sim || !this.genesis || !this.roster) return undefined;
     const players = this.players.flatMap((p) => {
       const seat = this.roster!.seatOf(p.key);
-      return seat ? [{ key: p.key, name: p.name, empire: seat.empire, member: seat.member, bot: this.isBot(p.key) }] : [];
+      // No names: a name belongs to the records, where its owner can take it
+      // out again, and a replay looks names up there by key.
+      return seat ? [{ key: p.key, empire: seat.empire, member: seat.member, bot: this.isBot(p.key) }] : [];
     });
     return {
       format: "tessera/archive/1",
@@ -891,6 +893,34 @@ export class Room {
 
   private settings(): GameSettings {
     return { creator: this.config.creator, public: this.config.public ?? false };
+  }
+
+  /** Take a member's name out of this game: the player list, the chat it has
+   *  kept and so the archive it will write. Asked for by the member, through
+   *  the Worker, which has checked the request is signed by its key. The
+   *  member is shown by its key's fingerprint from then on. True if there was
+   *  anything to forget. */
+  forget(key: string): boolean {
+    let changed = false;
+    for (const player of this.players) {
+      if (player.key === key && player.name) {
+        player.name = "";
+        changed = true;
+      }
+    }
+    let said = false;
+    for (const line of this.chat) {
+      if (line.key === key && line.name) {
+        line.name = "";
+        said = true;
+      }
+    }
+    if (said) this.store.put("chat", this.chat);
+    if (!changed) return said;
+    this.store.put("players", this.players);
+    if (this._phase === "lobby") this.broadcastLobby();
+    else this.broadcastPeople();
+    return true;
   }
 
   private rename(key: string, raw: string): void {

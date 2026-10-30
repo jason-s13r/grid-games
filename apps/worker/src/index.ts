@@ -5,6 +5,8 @@
 //   GET  /api/games/:id        whether a game exists, and its phase
 //   GET  /api/games/:id/archive  a finished game, whole, for a replay
 //   GET  /api/players/:key     one player's record and recent games
+//   POST /api/players/:key/forget  { at, sig }: take that key's name out of everything
+//   GET  /api/pair/:code/ws    two devices meeting to move a player across
 //   GET  /api/leaderboard?scope=total|game  the top ten for each stat: games
 //                              won, area, population, coin cascade
 //   GET  /api/config           settings the page needs: the default length
@@ -17,11 +19,13 @@
 
 import { configFrom, newRoomId } from "./create.js";
 import type { Env } from "./env.js";
-import { LEADER_STATS, leaderboard, listGames, playerStats } from "./records.js";
+import { LEADER_STATS, forgetPlayer, leaderboard, listGames, playerStats } from "./records.js";
 import type { LeaderScope, Listing } from "./records.js";
 import { hasArchive, serveArchive } from "./archive.js";
+import { forgetPayload, verify } from "@tessera/protocol";
 
 export { GameRoom } from "./game-room.js";
+export { Pairing } from "./pairing.js";
 
 const ROOM_ID = "([A-Za-z0-9_-]{1,64})";
 
@@ -47,6 +51,19 @@ export default {
       // Not cached: it is one person's own list, and it should show a game
       // they have just joined.
       return json(await playerStats(env.DB, player[1]!));
+    }
+
+    // Moving a player to another device: see pairing.ts.
+    const pairing = path.match(/^\/api\/pair\/([A-Z]{4})\/ws$/);
+    if (pairing) {
+      if (request.headers.get("Upgrade") !== "websocket") return json({ error: "expected a WebSocket" }, 426);
+      return env.PAIRS.get(env.PAIRS.idFromName(pairing[1]!)).fetch(request);
+    }
+
+    const forget = path.match(/^\/api\/players\/([A-Za-z0-9_-]{16,128})\/forget$/);
+    if (forget) {
+      if (request.method !== "POST") return json({ error: "method not allowed" }, 405);
+      return forgetMember(request, env, forget[1]!);
     }
 
     if (path === "/api/config") {
@@ -95,6 +112,32 @@ export default {
     return env.ASSETS.fetch(request);
   },
 } satisfies ExportedHandler<Env>;
+
+/** How far a "forget me" request's time may be from the Worker's clock. */
+const FORGET_SKEW_MS = 10 * 60_000;
+
+/** Take a member's name out of the records and out of the rooms of the games
+ *  it was in (running ones tell their players straight away). Archives hold
+ *  keys, not names. Signed by the member's key, so nobody can do it to
+ *  somebody else. */
+async function forgetMember(request: Request, env: Env, key: string): Promise<Response> {
+  let body: { at?: unknown; sig?: unknown };
+  try {
+    body = await request.json();
+  } catch {
+    return json({ error: "expected a JSON body" }, 400);
+  }
+  const { at, sig } = body;
+  if (typeof at !== "number" || typeof sig !== "string") return json({ error: "expected { at, sig }" }, 400);
+  if (Math.abs(Date.now() - at) > FORGET_SKEW_MS) return json({ error: "that request is out of date" }, 400);
+  if (!(await verify(key, sig, forgetPayload(key, at)))) return json({ error: "that is not signed by this key" }, 403);
+  if (!env.DB) return json({ games: 0 });
+
+  const games = await forgetPlayer(env.DB, key);
+  // A room deleted after its archive was kept wakes empty and says so.
+  await Promise.all(games.map((game) => room(env, game.id).forgetName(key).catch(() => false)));
+  return json({ games: games.length });
+}
 
 async function createGame(request: Request, env: Env): Promise<Response> {
   let body: unknown;

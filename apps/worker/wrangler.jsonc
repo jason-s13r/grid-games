@@ -18,9 +18,16 @@
   },
 
   "durable_objects": {
-    "bindings": [{ "name": "GAMES", "class_name": "GameRoom" }]
+    "bindings": [
+      { "name": "GAMES", "class_name": "GameRoom" },
+      // Two devices meeting to move a player across. Keeps nothing.
+      { "name": "PAIRS", "class_name": "Pairing" }
+    ]
   },
-  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["GameRoom"] }],
+  "migrations": [
+    { "tag": "v1", "new_sqlite_classes": ["GameRoom"] },
+    { "tag": "v2", "new_sqlite_classes": ["Pairing"] }
+  ],
 
   // Listings, players and results. No database_id: `wrangler deploy` creates
   // the database on first deploy and binds it. The schema is in migrations/,

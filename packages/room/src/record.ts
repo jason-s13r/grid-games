@@ -48,7 +48,8 @@ export interface PlayerRecord {
 
 export interface SeatResult {
   key: string;
-  name: string;
+  /** In the earliest archives only. Names live in the records, by key. */
+  name?: string;
   bot: boolean;
   member: number;
   moves: number;
@@ -112,7 +113,7 @@ export function places(sim: Sim): Map<number, number> {
 export function resultOf(
   sim: Sim,
   roomId: string,
-  seatOf: (empire: number, member: number) => { key: string; name: string; bot: boolean } | undefined,
+  seatOf: (empire: number, member: number) => { key: string; bot: boolean } | undefined,
 ): GameResult {
   const state = sim.state;
   const placed = places(sim);
@@ -162,8 +163,9 @@ export interface GameArchive {
   format: "tessera/archive/1";
   roomId: string;
   genesis: Genesis;
-  /** Who held which seat, by name, for whoever watches it back. */
-  players: Array<{ key: string; name: string; empire: number; member: number; bot: boolean }>;
+  /** Who held which seat, by key. Names are looked up in the records when the
+   *  game is watched back; the earliest archives carried them here too. */
+  players: Array<{ key: string; name?: string; empire: number; member: number; bot: boolean }>;
   moveLog: Stamped[];
   /** The step it ended at, and the state hash there. */
   steps: number;

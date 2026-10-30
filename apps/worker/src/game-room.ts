@@ -66,6 +66,15 @@ export class GameRoom extends DurableObject<Env> {
     return true;
   }
 
+  /** Take a member's name out of this game. See Room.forget. */
+  async forgetName(key: string): Promise<boolean> {
+    const room = this.load();
+    if (!room) return false;
+    const forgot = room.forget(key);
+    await this.flush();
+    return forgot;
+  }
+
   async info(): Promise<RoomInfo | null> {
     const room = this.load();
     if (!room) return null;

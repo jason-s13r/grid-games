@@ -629,8 +629,8 @@ describe("records", () => {
     expect(result.winner).toBeGreaterThan(0);
     expect(result.empires[0]!.place).toBe(1);
     expect(result.empires[0]!.id).toBe(result.winner);
-    const seats = result.empires.flatMap((e) => e.seats.map((s) => s.name)).sort();
-    expect(seats).toEqual(["alice", "bob"]);
+    const seats = result.empires.flatMap((e) => e.seats.map((s) => s.key)).sort();
+    expect(seats).toEqual([alice.key, bob.key].sort());
     expect(h.games.at(-1)!.phase).toBe("ended");
     expect(h.room.wakeAt()).toBeUndefined();
 
@@ -639,7 +639,9 @@ describe("records", () => {
     const replay = new Sim(archive.genesis);
     advanceTo(replay, archive.steps, archive.moveLog.map((s) => s.move));
     expect(hex(replay.hash())).toBe(archive.hash);
-    expect(archive.players.map((p) => p.name).sort()).toEqual(["alice", "bob"]);
+    // By key: names stay in the records, where their owners can remove them.
+    expect(archive.players.map((p) => p.key).sort()).toEqual([alice.key, bob.key].sort());
+    expect(JSON.stringify(archive)).not.toMatch(/"alice"|"bob"/);
 
     // A woken room does not report it again.
     h.restart();
@@ -691,5 +693,21 @@ describe("records", () => {
     const before = h.players.length;
     h.restart();
     expect(h.players).toHaveLength(before);
+  });
+});
+
+describe("forgetting a name", () => {
+  it("takes a member's name out of the players and the chat, and tells everyone", async () => {
+    const { h, a, b } = await started();
+    await h.run(1_000);
+    a.client.say("hello", "all");
+    await h.settle();
+    expect(h.room.forget(alice.key)).toBe(true);
+    await h.settle();
+    const people = b.client.people!.people;
+    expect(people.find((p) => p.key === alice.key)!.name).toBe("");
+    // It sticks, and a second time there is nothing to forget.
+    h.restart();
+    expect(h.room.forget(alice.key)).toBe(false);
   });
 });

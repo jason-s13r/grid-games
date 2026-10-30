@@ -221,3 +221,16 @@ export async function leaderboard(db: D1Database, stat: LeaderStat, scope: Leade
     .all<Leader>();
   return results;
 }
+
+/** Take a member's name out of the records: it is shown by its key's
+ *  fingerprint from then on, and its results stay, unnamed. Returns the games
+ *  it sat in, for their rooms and archives to forget it too. */
+export async function forgetPlayer(db: D1Database, key: string): Promise<Array<{ id: string; phase: string }>> {
+  const anonymous = `player ${key.slice(0, 6)}`;
+  const [, , games] = await db.batch([
+    db.prepare(`UPDATE players SET name = ?2 WHERE key = ?1`).bind(key, anonymous),
+    db.prepare(`UPDATE seats SET name = ?2 WHERE key = ?1`).bind(key, anonymous),
+    db.prepare(`SELECT g.id, g.phase FROM seats s JOIN games g ON g.id = s.game_id WHERE s.key = ?1`).bind(key),
+  ]);
+  return games!.results as Array<{ id: string; phase: string }>;
+}
