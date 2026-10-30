@@ -30,6 +30,7 @@ import type { SignedInvite } from "@tessera/protocol";
 import type {
   Catchup,
   ChatLine,
+  GameSettings,
   ClientMessage,
   LobbyView,
   People,
@@ -74,6 +75,8 @@ export class RoomClient {
   people: People = { people: [], requests: [] };
   /** Chat this client has heard, oldest first. */
   chat: ChatLine[] = [];
+  /** What can still change about the game, and who may change it. */
+  settings: GameSettings | undefined;
 
   /** The world was replaced wholesale (joined, resynced): repaint everything. */
   onReset: (() => void) | null = null;
@@ -83,6 +86,7 @@ export class RoomClient {
   onPeople: ((people: People) => void) | null = null;
   /** New chat lines, as they arrive. */
   onChat: ((lines: ChatLine[]) => void) | null = null;
+  onSettings: ((settings: GameSettings) => void) | null = null;
   /** This client was given a seat after the start. */
   onSeated: ((you: You) => void) | null = null;
 
@@ -202,6 +206,11 @@ export class RoomClient {
 
   // --- what the player does --------------------------------------------------
 
+  /** List the game publicly or not. Only the creator's request is honoured. */
+  setPublic(value: boolean): void {
+    this.send({ t: "public", public: value });
+  }
+
   setName(name: string): void {
     this.name = name;
     this.send(this.phase === "playing" ? { t: "name", name } : { t: "lobby", name });
@@ -310,6 +319,10 @@ export class RoomClient {
       case "people":
         this.people = message.people;
         this.onPeople?.(message.people);
+        return;
+      case "settings":
+        this.settings = message.settings;
+        this.onSettings?.(message.settings);
         return;
       case "chat": {
         // History arrives again on every reconnect; keep each line once.

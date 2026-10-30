@@ -52,6 +52,7 @@ import { resultOf, timeOf } from "./record.js";
 import type { GameArchive, GameResult, GameSummary, RoomEvents } from "./record.js";
 import type {
   Catchup,
+  GameSettings,
   ClientMessage,
   LobbyPlayer,
   ChatLine,
@@ -339,6 +340,8 @@ export class Room {
         return this.rename(peer.key, message.name);
       case "say":
         return this.say(peer.key, message.channel, message.text);
+      case "public":
+        return this.setPublic(peer, message.public);
     }
   }
 
@@ -855,6 +858,25 @@ export class Room {
     }
   }
 
+  /** List or unlist the game. The creator's call, at any point: it changes
+   *  who can find the game, not the game. */
+  private setPublic(peer: Peer, value: unknown): void {
+    if (typeof value !== "boolean") return;
+    if (peer.key !== this.config.creator) return this.error(peer, "only the game's creator can change that");
+    if ((this.config.public ?? false) === value) return;
+    this.config.public = value;
+    this.store.put("config", this.config);
+    const message: ServerMessage = { t: "settings", settings: this.settings() };
+    for (const other of this.peers.values()) {
+      if (other.key) this.sendTo(other.conn, message);
+    }
+    this.events.game?.(this.summary());
+  }
+
+  private settings(): GameSettings {
+    return { creator: this.config.creator, public: this.config.public ?? false };
+  }
+
   private rename(key: string, raw: string): void {
     const name = cleanName(raw);
     const player = this.players.find((p) => p.key === key);
@@ -908,6 +930,7 @@ export class Room {
   }
 
   private sendChatHistory(peer: Peer): void {
+    this.sendTo(peer.conn, { t: "settings", settings: this.settings() });
     const lines = this.chat.filter((line) => this.hears(peer.key!, line));
     if (lines.length) this.sendTo(peer.conn, { t: "chat", lines });
   }

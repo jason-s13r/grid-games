@@ -24,7 +24,8 @@
           <div class="menu-drawer" data-menu-drawer hidden>
             <button data-action="speed" class="btn" title="Replay speed: game time per second" hidden>×600</button>
             <button data-action="pause" class="btn">Pause</button>
-            <button data-action="menu" class="btn">Menu and settings</button>
+            <button data-action="settings" class="btn">Settings</button>
+            <button data-action="menu" class="btn">Start page</button>
             <button data-action="leave" class="btn">Leave the game</button>
             <span class="version" data-version></span>
           </div>
@@ -214,6 +215,14 @@
         </div>
       </section>
     </div>
+
+    <!-- The game's settings, over the board. See view/GameSettings.ts. -->
+    <dialog class="modal settings-dialog" data-settings-dialog>
+      <button class="modal-close" type="button" aria-label="Close" data-settings-close>&#10005;</button>
+      <h2>Settings</h2>
+      <div data-settings-body></div>
+      <button class="btn primary" type="button" data-settings-close>Back to the game</button>
+    </dialog>
 
     <!-- The tip link as a QR code, to pay on your own phone, or open it here. -->
     <dialog class="tip" data-tip>

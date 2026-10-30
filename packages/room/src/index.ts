@@ -11,6 +11,7 @@ export { decode, encode } from "./messages.js";
 export type {
   Catchup,
   ChatLine,
+  GameSettings,
   ClientMessage,
   LobbyPlayer,
   LobbyView,

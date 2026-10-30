@@ -113,7 +113,16 @@ export type ServerMessage =
   | { t: "people"; people: People }
   /** Lines of chat: the recent history on joining, then each as it is said. */
   | { t: "chat"; lines: ChatLine[] }
+  /** The game's settings that can still change, on joining and on change. */
+  | { t: "settings"; settings: GameSettings }
   | { t: "error"; message: string };
+
+/** What can change about a game once it exists, and who may change it. Map,
+ *  length, teams and bots are sealed into the genesis at the start. */
+export interface GameSettings {
+  creator: string;
+  public: boolean;
+}
 
 export type ClientMessage =
   | {
@@ -143,6 +152,8 @@ export type ClientMessage =
   /** Join through an invite a member signed. */
   | { t: "redeem"; invite: SignedInvite }
   | { t: "name"; name: string }
+  /** The creator lists or unlists the game. */
+  | { t: "public"; public: boolean }
   | { t: "say"; channel: "all" | "team"; text: string };
 
 /** How a room is set up when it is created. Fixed for the room's life. */

@@ -899,6 +899,52 @@ h1, h2, h3, .brand, .screen-brand {
 }
 .screen-foot a { color: var(--muted); font-size: 12px; }
 
+// The settings dialog: light, over the board, which keeps running behind it.
+.modal {
+  width: min(480px, calc(100vw - 24px));
+  max-height: calc(100dvh - 24px);
+  padding: 22px 24px 20px;
+  color: var(--ink);
+  background: var(--card);
+  border: 2px solid var(--line);
+  border-radius: 18px;
+  &::backdrop { background: rgba(20, 30, 26, 0.45); }
+  &[open] { display: grid; gap: 12px; }
+  h2 { margin: 0 32px 0 0; font-family: var(--font-display); font-size: 26px; font-weight: 600; color: var(--forest-ink); }
+  h3 { margin: 0 0 6px; font-family: var(--font-display); font-size: 16px; font-weight: 600; color: var(--forest-ink); }
+  section { display: grid; gap: 6px; padding-top: 12px; border-top: 1px solid #e3ebe5; }
+  .hint { margin: 0; }
+  .btn.primary { margin-top: 4px; }
+}
+.modal-close {
+  position: absolute;
+  top: 14px;
+  right: 16px;
+  font-size: 18px;
+  color: var(--muted);
+  background: none;
+  border: 0;
+  cursor: pointer;
+}
+.settings-field {
+  display: grid;
+  gap: 4px;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--muted);
+  .lobby-code { font-size: 15px; padding: 7px 10px; }
+}
+.settings-check { gap: 8px; font-size: 14px; input:disabled + * { opacity: 0.6; } }
+.settings-facts {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 2px 14px;
+  margin: 0;
+  font-size: 14px;
+  dt { color: var(--muted); }
+  dd { margin: 0; }
+}
+
 // The tip dialog: a QR code for your phone, or open the link here.
 .tip {
   width: min(420px, calc(100vw - 32px));

@@ -35,6 +35,7 @@ import { ChatPanel } from "./view/Chat";
 import { GamesPanel } from "./view/Games";
 import { Marks } from "./view/Marks";
 import { offerTip } from "./view/tip";
+import { GameSettingsDialog } from "./view/GameSettings";
 import { ReplayGame, SPEEDS } from "./game/Replay";
 import type { Archive } from "./game/Replay";
 import { fromBase64Url, toBase64Url, utf8, fromUtf8 } from "@tessera/protocol";
@@ -444,6 +445,47 @@ speedEl.addEventListener("click", () => {
 // games, and "Back to the game".
 pick<HTMLButtonElement>('[data-action="menu"]').addEventListener("click", () => shell.show("menu"));
 
+// Settings, over the board: the game keeps running behind the dialog.
+const settingsDialog = new GameSettingsDialog(
+  pick<HTMLDialogElement>("[data-settings-dialog]"),
+  pick<HTMLElement>("[data-settings-body]"),
+  {
+    rename: (name) => {
+      nameEl.value = setMyName(name);
+      void showName();
+      if (nameEl.value) link?.client.setName(nameEl.value);
+      void openSettings();
+    },
+    setPublic: (value) => link?.client.setPublic(value),
+  },
+);
+
+async function settingsContext() {
+  const identity = await myIdentity();
+  const client = link?.client;
+  return {
+    state: game.sim.state,
+    name: myName(),
+    shownAs: `Shown as ${displayName(myName(), await fingerprint(identity.key))}`,
+    ...(client && link
+      ? {
+          online: {
+            link: `${location.origin}/g/${link.roomId}`,
+            settings: client.settings,
+            mine: client.settings?.creator === identity.key,
+          },
+        }
+      : {}),
+  };
+}
+
+async function openSettings(): Promise<void> {
+  const context = await settingsContext();
+  if (settingsDialog.open) settingsDialog.update(context);
+  else settingsDialog.show(context);
+}
+pick<HTMLButtonElement>('[data-action="settings"]').addEventListener("click", () => void openSettings());
+
 pick<HTMLButtonElement>('[data-action="leave"]').addEventListener("click", () => {
   if (link) leaveRoom();
   shell.left();
@@ -628,6 +670,9 @@ async function enterRoom(roomId: string): Promise<void> {
     controls?.setPeople(client.people.people);
   };
   client.onPeople = showPeople;
+  client.onSettings = () => {
+    if (link === opened && settingsDialog.open) void settingsContext().then((c) => settingsDialog.update(c));
+  };
   client.onChat = (lines) => {
     if (link === opened) chat.add(lines, identity.key);
   };

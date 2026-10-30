@@ -647,3 +647,26 @@ describe("records", () => {
     expect(h.results).toHaveLength(1);
   });
 });
+
+describe("settings", () => {
+  it("lets the creator list a running game publicly, and nobody else", async () => {
+    const { h, a, b } = await started();
+    await h.run(1_000);
+    expect(a.client.settings).toEqual({ creator: alice.key, public: false });
+
+    b.client.setPublic(true);
+    await h.settle();
+    expect(b.errors).toContain("only the game's creator can change that");
+    expect(a.client.settings!.public).toBe(false);
+
+    a.client.setPublic(true);
+    await h.settle();
+    expect(a.client.settings!.public).toBe(true);
+    expect(b.client.settings!.public).toBe(true);
+    expect(h.games.at(-1)!.public).toBe(true);
+
+    // It sticks when the room is rebuilt from its store.
+    h.restart();
+    expect(h.room.summary().public).toBe(true);
+  });
+});

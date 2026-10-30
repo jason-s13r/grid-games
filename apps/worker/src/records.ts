@@ -14,7 +14,7 @@ export function writeGame(db: D1Database, game: GameSummary, now: number): Promi
          ended_at, width, height, empires, seats_per_empire, bots, players, sim_version, updated_at)
        VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18)
        ON CONFLICT (id) DO UPDATE SET
-         phase = excluded.phase, starts_at = excluded.starts_at, started_at = excluded.started_at,
+         public = excluded.public, phase = excluded.phase, starts_at = excluded.starts_at, started_at = excluded.started_at,
          join_until = excluded.join_until, ends_at = excluded.ends_at, ended_at = excluded.ended_at,
          players = excluded.players, sim_version = excluded.sim_version, updated_at = excluded.updated_at`,
     )
