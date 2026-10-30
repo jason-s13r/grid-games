@@ -194,6 +194,26 @@ describe("clicking the board", () => {
       expect(els.hud.innerHTML).not.toContain("Growth");
     });
 
+    it("says how many more diamonds a purchase needs", () => {
+      const els = elementsFor();
+      const controls = new Controls(game, els);
+
+      empire.diamonds = 4;
+      empire.marchUnlocked = 0;
+      controls.render(game.sim.state);
+      expect(els.acts.innerHTML).toContain("Needs 2 more");
+    });
+
+    it("buys by keyboard shortcut, and ignores keys that are not the store's", () => {
+      const els = elementsFor();
+      const controls = new Controls(game, els);
+
+      empire.diamonds = 99;
+      controls.render(game.sim.state);
+      expect(controls.buyKey("x")).toBe(false);
+      expect(controls.buyKey("b")).toBe(true);
+    });
+
     it("keeps bridges buyable however many are already held", () => {
       const els = elementsFor();
       const controls = new Controls(game, els);

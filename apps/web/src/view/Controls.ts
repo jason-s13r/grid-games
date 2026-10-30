@@ -74,16 +74,31 @@ interface Act {
   name: string;
   what: string;
   cost: number;
-  affordable: boolean;
+  /** Diamonds held, to say how many more it needs. */
+  diamonds: number;
 }
 
-const tile = (act: Act): string =>
-  `<button class="act" data-buy="${act.buy}"${act.affordable ? "" : " disabled"}>
+/** The keyboard shortcut for each purchase, shown on its row. */
+const KEYS: Record<string, string> = { bridge: "B", ladder: "L", march: "M", growth: "G" };
+
+const tile = (act: Act): string => {
+  const short = act.cost - act.diamonds;
+  return `<button class="act" data-buy="${act.buy}"${short > 0 ? " disabled" : ""}
+      aria-keyshortcuts="${KEYS[act.buy]}">
      <span class="act-glyph">${act.glyph}</span>
-     <span class="act-name">${act.name}</span>
+     <span class="act-name">${act.name} <kbd>${KEYS[act.buy]}</kbd></span>
      <span class="act-meta">${act.cost}&#9670;</span>
      <span class="act-what">${act.what}</span>
+     ${short > 0 ? `<span class="act-why">Needs ${short} more &#9670;</span>` : ""}
    </button>`;
+};
+
+const BUY: Record<string, (typeof MOVE)[keyof typeof MOVE]> = {
+  bridge: MOVE.BUY_BRIDGE,
+  ladder: MOVE.BUY_LADDER,
+  march: MOVE.BUY_MARCH,
+  growth: MOVE.BUY_GROWTH,
+};
 
 export class Controls {
   constructor(
@@ -102,14 +117,21 @@ export class Controls {
   ) {
     this.els.acts.addEventListener("click", (event) => {
       const target = (event.target as HTMLElement).closest<HTMLElement>("[data-buy]");
-      if (!target) return;
-      switch (target.dataset.buy) {
-        case "bridge": this.game.act(MOVE.BUY_BRIDGE); return;
-        case "ladder": this.game.act(MOVE.BUY_LADDER); return;
-        case "march": this.game.act(MOVE.BUY_MARCH); return;
-        case "growth": this.game.act(MOVE.BUY_GROWTH); return;
-      }
+      const type = target ? BUY[target.dataset.buy ?? ""] : undefined;
+      if (type !== undefined) this.game.act(type);
     });
+  }
+
+  /** What the store last showed, so a shortcut only buys what is on offer. */
+  private offered = new Set<string>();
+
+  /** Buy by keyboard shortcut. True if the key is one of the store's, whether
+   *  or not the purchase went through (validation decides that). */
+  buyKey(key: string): boolean {
+    const name = Object.keys(KEYS).find((k) => KEYS[k] === key.toUpperCase());
+    if (!name || !this.offered.has(name)) return false;
+    this.game.act(BUY[name]!);
+    return true;
   }
 
   /** The last markup written to each subtree, so an unchanged one is left
@@ -144,6 +166,7 @@ export class Controls {
       this.showClock(state);
       this.put(this.els.hud, "hud", `<strong class="hud-name">Watching</strong>`);
       this.put(this.els.acts, "acts", "");
+      this.offered.clear();
       this.put(this.els.storeHead, "storeHead", "");
       this.els.rosterPanel.hidden = true;
       this.renderStandings(state);
@@ -189,7 +212,10 @@ export class Controls {
     );
 
     // A bought modifier is not a button. It has no second state to toggle and
-    // nothing left to spend, so it leaves the shop and shows on the HUD.
+    // nothing left to spend, so it leaves the shop for the Owned line above.
+    this.offered = new Set(["bridge", "ladder"]);
+    if (!empire.marchUnlocked) this.offered.add("march");
+    if (!empire.growthUnlocked) this.offered.add("growth");
     this.put(
       this.els.acts,
       "acts",
@@ -198,17 +224,17 @@ export class Controls {
         buy: "bridge",
         glyph: "&#9636;",
         name: "Bridge",
-        what: "Crosses a river. Click any river tile beside your border.",
+        what: "Crosses a river. The tiles where it can go light up.",
         cost: rules.bridgeCost,
-        affordable: empire.diamonds >= rules.bridgeCost,
+        diamonds: empire.diamonds,
       }),
       tile({
         buy: "ladder",
         glyph: "&#9637;",
         name: "Ladder",
-        what: "Crosses a wall. Click any wall tile beside your border.",
+        what: "Crosses a wall. The tiles where it can go light up.",
         cost: rules.ladderCost,
-        affordable: empire.diamonds >= rules.ladderCost,
+        diamonds: empire.diamonds,
       }),
       empire.marchUnlocked
         ? ""
@@ -218,7 +244,7 @@ export class Controls {
             name: "March",
             what: "Permanent. Claims reach two tiles out instead of one.",
             cost: rules.marchCost,
-            affordable: empire.diamonds >= rules.marchCost,
+            diamonds: empire.diamonds,
           }),
       empire.growthUnlocked
         ? ""
@@ -228,7 +254,7 @@ export class Controls {
             name: "Growth",
             what: "Permanent. Tiles connected to your capital gain population.",
             cost: rules.growthCost,
-            affordable: empire.diamonds >= rules.growthCost,
+            diamonds: empire.diamonds,
           }),
       ].join(""),
     );

@@ -32,6 +32,7 @@ import { OnlinePanel } from "./view/Online";
 import { PeoplePanel } from "./view/People";
 import { ChatPanel } from "./view/Chat";
 import { GamesPanel } from "./view/Games";
+import { Marks } from "./view/Marks";
 import { ReplayGame, SPEEDS } from "./game/Replay";
 import type { Archive } from "./game/Replay";
 import { fromBase64Url, toBase64Url, utf8, fromUtf8 } from "@tessera/protocol";
@@ -193,9 +194,14 @@ const shell = new Shell({
 // has to be kept in step with the markup.
 new Tabs(appEl, pick<HTMLElement>("[data-tabs]"));
 
-// Escape shuts the game menu, the one thing layered over the board.
+// Escape shuts the game menu, the one thing layered over the board. B, L, M
+// and G buy from the store while the board is showing, unless you are typing.
 window.addEventListener("keydown", (event) => {
-  if (event.key === "Escape") shell.showGameMenu(false);
+  if (event.key === "Escape") return shell.showGameMenu(false);
+  if (shell.current !== "game" || event.ctrlKey || event.metaKey || event.altKey) return;
+  const target = event.target as HTMLElement;
+  if (target.closest("input, textarea, select, [contenteditable]")) return;
+  if (controls.buyKey(event.key)) event.preventDefault();
 });
 
 /** A screen that was covered may have been resized while it was, and the board
@@ -318,8 +324,20 @@ viewportEl.addEventListener("pointerdown", (event) => {
   viewportEl.setPointerCapture(event.pointerId);
 });
 
+const marks = new Marks(pick<HTMLCanvasElement>("[data-marks]"), pick<HTMLElement>("[data-tile-info]"));
+
+/** The tile under the pointer, for the outline and the line describing it.
+ *  Touch has no hover, so only a mouse or pen sets it. */
+function pointAt(event: PointerEvent): void {
+  if (event.pointerType === "touch" || onControls(event)) return marks.pointAt(null);
+  const rect = viewportEl.getBoundingClientRect();
+  const [x, y] = camera.tileAt(event.clientX - rect.left, event.clientY - rect.top);
+  marks.pointAt(x < 0 || y < 0 || x >= MAP.width || y >= MAP.height ? null : [x, y]);
+}
+viewportEl.addEventListener("pointerleave", () => marks.pointAt(null));
+
 viewportEl.addEventListener("pointermove", (event) => {
-  if (!dragging) return;
+  if (!dragging) return pointAt(event);
   const dx = event.clientX - lastX;
   const dy = event.clientY - lastY;
   lastX = event.clientX;
@@ -661,6 +679,7 @@ let minimapDue = 0;
 function frame(now: number): void {
   const dirty = game.tick();
   renderer.render(game.sim.state, dirty.size > 0 || camera.changed ? dirty : null);
+  marks.render(game.sim.state, game, camera);
 
   // The minimap does not need 60fps.
   if (now >= minimapDue) {

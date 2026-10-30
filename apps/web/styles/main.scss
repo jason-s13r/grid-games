@@ -605,6 +605,49 @@ h1, h2, h3, .brand, .screen-brand {
 .act-glyph { grid-area: glyph; font-size: 16px; line-height: 1; color: var(--forest-ink); }
 .act-name { grid-area: name; font-weight: 700; }
 .act-what { grid-area: what; font-size: 11px; color: var(--muted); }
+.act {
+  grid-template-areas: "glyph name meta" "glyph what what" "glyph why why";
+}
+// Why it cannot be bought yet: stays at full strength while the rest fades.
+.act-why { grid-area: why; font-size: 11px; font-weight: 700; color: #9a3412; }
+.act kbd {
+  margin-left: 4px;
+  padding: 0 5px;
+  font: 700 10px/16px var(--font-body);
+  color: var(--muted);
+  border: 1px solid #c9d3cc;
+  border-radius: 4px;
+  vertical-align: 1px;
+}
+
+// The board's overlay: placements for a held bridge or ladder, and the tile
+// under the pointer. It takes no clicks; the tiles under it do.
+.marks {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  pointer-events: none;
+}
+
+// What the tile under the pointer is, and what clicking it would do.
+.tile-info {
+  position: absolute;
+  left: 50%;
+  bottom: 52px;
+  transform: translateX(-50%);
+  z-index: 3;
+  max-width: calc(100% - 120px);
+  padding: 4px 10px;
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: #fff;
+  background: rgba(30, 53, 47, 0.88);
+  border-radius: 999px;
+  pointer-events: none;
+}
 
 // How many are in hand. Sits on the tile rather than under it, so the tile
 // stays the same height whether or not you are carrying any.
