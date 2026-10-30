@@ -1317,6 +1317,47 @@ h1, h2, h3, .brand, .screen-brand {
   .field-stacked { margin-top: 6px; }
 }
 
+// --- your player ----------------------------------------------------------------
+
+.keys-actions {
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid #dfe6e0;
+  h3 { margin: 0 0 4px; font-size: 15px; color: var(--forest-ink); }
+  .hint { margin: 0 0 10px; }
+}
+.keys-row { display: flex; flex-wrap: wrap; gap: 8px; }
+.keys-dialog {
+  .keys-body { display: grid; gap: 12px; }
+  p { margin: 0; }
+}
+.keys-warn { padding: 8px 10px; font-size: 13px; background: #f9eeda; border-radius: 8px; }
+.keys-error { color: #a33a1c; font-weight: 600; }
+.keys-qr { width: min(220px, 70vw); justify-self: center; svg { display: block; width: 100%; height: auto; } }
+.keys-code { display: block; padding: 8px; font-size: 12px; word-break: break-all; background: #f2f3f0; border-radius: 6px; user-select: all; }
+.keys-input {
+  width: 100%;
+  padding: 10px 12px;
+  font: 14px/1.4 ui-monospace, monospace;
+  // 16px and up, or Safari zooms in on it.
+  font-size: 16px;
+  color: var(--ink);
+  background: #fffdf6;
+  border: 2px solid var(--line);
+  border-radius: 8px;
+  resize: vertical;
+}
+.keys-code-input { width: 8em; font-size: 26px; letter-spacing: 0.25em; text-align: center; text-transform: uppercase; justify-self: center; }
+.keys-big { font-family: var(--font-display); font-size: 40px; font-weight: 600; letter-spacing: 0.15em; text-align: center; color: var(--forest-ink); }
+.keys-choices {
+  display: grid;
+  gap: 8px;
+  .btn { display: grid; gap: 2px; padding: 10px 14px; text-align: left; }
+  span { font-size: 12px; font-weight: 400; color: var(--muted); }
+}
+.keys-check { display: flex; gap: 8px; align-items: flex-start; font-size: 13px; input { margin-top: 3px; } }
+.btn.danger { color: #fff; background: #b1402a; &:hover:not(:disabled) { background: #963522; } }
+
 .screen-foot {
   display: flex;
   align-items: center;

@@ -36,6 +36,7 @@ import { GamesPanel } from "./view/Games";
 import { Marks } from "./view/Marks";
 import { offerTip } from "./view/tip";
 import { GameSettingsDialog } from "./view/GameSettings";
+import { KeysDialog } from "./view/Keys";
 import { ReplayGame, SPEEDS } from "./game/Replay";
 import type { Archive } from "./game/Replay";
 import { fromBase64Url, toBase64Url, utf8, fromUtf8 } from "@tessera/protocol";
@@ -805,3 +806,31 @@ Object.assign(window as unknown as Record<string, unknown>, {
     MAX_ZOOM,
   },
 });
+
+// --- your player ---------------------------------------------------------------
+
+const keys = new KeysDialog(pick<HTMLDialogElement>("[data-keys]"), pick<HTMLElement>("[data-keys-body]"));
+const keysWho = pick<HTMLElement>("[data-keys-who]");
+const showWho = async () => {
+  keysWho.textContent = await KeysDialog.who();
+};
+void showWho();
+nameEl.addEventListener("change", () => void showWho());
+document.addEventListener("click", (event) => {
+  const button = (event.target as HTMLElement).closest<HTMLElement>("[data-keys-action]");
+  switch (button?.dataset.keysAction) {
+    case "backup": return void keys.backup();
+    case "move": return keys.move();
+    case "restore": return void keys.restore();
+    case "remove": return void keys.remove();
+  }
+});
+// A backup link: offer to use it, and take it out of the address bar, where
+// it would otherwise sit in the history and be shared with the page.
+{
+  const restore = /(?:^|[#&])restore=([A-Za-z0-9_-]+)/.exec(location.hash)?.[1];
+  if (restore) {
+    history.replaceState(null, "", location.pathname + location.search);
+    void keys.restore(restore);
+  }
+}

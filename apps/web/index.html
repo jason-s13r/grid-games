@@ -192,6 +192,21 @@
                 and the fingerprint is what tells two of them apart. Kept in this
                 browser, and said again in every game you join.
               </p>
+
+              <!-- The player itself: a key in this browser. Backing it up,
+                   moving it and deleting its name. See view/Keys.ts. -->
+              <div class="keys-actions">
+                <h3>Your player</h3>
+                <p class="hint">This device plays as <strong data-keys-who></strong>. The
+                player is a key kept in this browser; there is no account, so
+                back it up to keep it, or to play on another device.</p>
+                <div class="keys-row">
+                  <button class="btn" type="button" data-keys-action="backup">Back up</button>
+                  <button class="btn" type="button" data-keys-action="move">Move between devices</button>
+                  <button class="btn" type="button" data-keys-action="restore">Use a backup code</button>
+                  <button class="btn" type="button" data-keys-action="remove">Delete my data</button>
+                </div>
+              </div>
             </div>
           </details>
 
@@ -213,6 +228,12 @@
         </div>
       </section>
     </div>
+
+    <!-- Your player: back up, move, restore, delete. See view/Keys.ts. -->
+    <dialog class="modal keys-dialog" data-keys>
+      <button class="modal-close" type="button" aria-label="Close" data-keys-close>&#10005;</button>
+      <div class="keys-body" data-keys-body></div>
+    </dialog>
 
     <!-- The game's settings, over the board. See view/GameSettings.ts. -->
     <dialog class="modal settings-dialog" data-settings-dialog>

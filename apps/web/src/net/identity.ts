@@ -27,6 +27,22 @@ export async function myIdentity(): Promise<Identity> {
   return fresh;
 }
 
+/** Make `identity` the player on this device, in place of whoever it was. The
+ *  page reloads after, since the old key is held all through it. */
+export async function useIdentity(identity: Identity): Promise<void> {
+  localStorage.setItem(IDENTITY_STORE, await identity.export());
+}
+
+/** Drop this device's player: the next load makes a new one. */
+export function dropIdentity(): void {
+  try {
+    localStorage.removeItem(IDENTITY_STORE);
+    localStorage.removeItem(NAME_STORE);
+  } catch {
+    // Nothing kept, nothing to drop.
+  }
+}
+
 const NAME_STORE = "tessera.name";
 
 /** What this browser would like to be called.
