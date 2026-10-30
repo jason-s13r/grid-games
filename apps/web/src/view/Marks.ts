@@ -12,7 +12,7 @@
 //
 // Nothing here is in the simulation, and nothing is sent.
 
-import { ITEM, MOVE, TERRAIN, adjacentToOwned, idx } from "@tessera/sim";
+import { ITEM, MOVE, TERRAIN, adjacentToOwned, idx, isMine, mineDigCost, mineLeft } from "@tessera/sim";
 import type { Move, State } from "@tessera/sim";
 import type { Driver } from "../game/Driver";
 import type { Camera } from "./Camera";
@@ -116,7 +116,12 @@ export class Marks {
       owner > 0 ? `${empireTheme(owner).name}${owner === game.empire ? " (you)" : ""}` : "unclaimed",
       TERRAIN_NAME[terrain] ?? "",
       pop > 0 ? `population ${pop}` : "",
-      ITEM_NAME[item] ?? "",
+      ITEM_NAME[item] ??
+        (isMine(item)
+          ? mineLeft(item) > 0
+            ? `a diamond mine, ${mineLeft(item)} to come`
+            : `a diamond mine to dig (a claim of ${mineDigCost(state)} or more)`
+          : ""),
       state.shielded[i]! > 0 ? "shielded" : "",
     ].filter(Boolean).join(" · ");
 

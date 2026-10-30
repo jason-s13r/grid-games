@@ -95,7 +95,7 @@ export interface CreateGame {
   empires: number;
   seatsPerEmpire: number;
   bots: unknown[];
-  map: "small" | "medium" | "large";
+  map: "small" | "medium" | "large" | "huge" | "vast";
   hours: number;
   startAt?: number;
   public?: boolean;

@@ -9,7 +9,7 @@
 // it stops being a button and becomes a badge on the HUD.
 
 import type { State } from "@tessera/sim";
-import { MEMBER, MOVE, PHASE, WIN, STEPS_PER_SECOND, isProtected, isVacant, summarise } from "@tessera/sim";
+import { MEMBER, MOVE, PHASE, WIN, STEPS_PER_SECOND, growthCeiling, isProtected, isVacant, summarise } from "@tessera/sim";
 import type { Person } from "@tessera/room";
 import { escape } from "./escape";
 import { empireTheme } from "./palette";
@@ -285,7 +285,10 @@ export class Controls {
             buy: "growth",
             glyph: "&#8593;",
             name: "Growth",
-            what: "Permanent. Tiles connected to your capital gain population.",
+            what:
+              state.genesis.protocol >= 5
+                ? `Permanent. Tiles joined to your capital fill up to ${growthCeiling(state)} by themselves, while someone in your empire is playing.`
+                : "Permanent. Tiles connected to your capital gain population.",
             cost: rules.growthCost,
             diamonds: empire.diamonds,
           }),

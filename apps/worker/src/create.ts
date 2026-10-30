@@ -13,6 +13,11 @@ export const MAP_SIZES = {
   small: { width: 96, height: 72 },
   medium: { width: 160, height: 112 },
   large: { width: 256, height: 176 },
+  // From sim v5, whose maps scale their mountains, lakes and rivers with the
+  // size. The vast map's snapshot is about 1.3 MB, inside a Durable Object's
+  // 2 MB limit on one stored value.
+  huge: { width: 384, height: 256 },
+  vast: { width: 512, height: 352 },
 } as const;
 
 export interface CreateRequest {
@@ -74,8 +79,9 @@ export function configFrom(
   const seatsPerEmpire = request.seatsPerEmpire ?? 2;
   if (!isInt(seatsPerEmpire, 1, 4)) return "seatsPerEmpire must be between 1 and 4";
 
-  const map = MAP_SIZES[request.map ?? "medium"];
-  if (!map) return "map must be small, medium or large";
+  const name = request.map ?? "medium";
+  const map = Object.hasOwn(MAP_SIZES, name) ? MAP_SIZES[name] : undefined;
+  if (!map) return `map must be one of ${Object.keys(MAP_SIZES).join(", ")}`;
 
   const hours = request.hours ?? defaultHours;
   const duration = Math.round(hours * 60 * 60 * STEPS_PER_SECOND);

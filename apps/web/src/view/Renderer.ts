@@ -9,7 +9,7 @@
 // a pool, and only tiles the sim reports dirty are touched.
 
 import type { State } from "@tessera/sim";
-import { ITEM, TERRAIN, idx, isProtected } from "@tessera/sim";
+import { ITEM, TERRAIN, idx, isMine, isProtected, mineLeft } from "@tessera/sim";
 import { Camera } from "./Camera";
 import { MapImage } from "./MapImage";
 import { empireTheme } from "./palette";
@@ -185,6 +185,8 @@ export class Renderer {
     if (t) cls += ` ${t}`;
     const it = ITEM_CLASS[item];
     if (it) cls += ` ${it}`;
+    // A mine: dug (still giving) or waiting for a dig. See sim/src/v5.ts.
+    else if (isMine(item)) cls += mineLeft(item) > 0 ? " i-mine is-dug" : " i-mine";
 
     const empire = owner > 0 ? state.empires[owner - 1] : undefined;
     if (empire && empire.capital === i) {

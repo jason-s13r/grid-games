@@ -14,7 +14,7 @@ import type { Rivals } from "./Rivals";
 import { escape } from "./escape";
 
 export type Mode = "solo" | "friends";
-export type MapName = "small" | "medium" | "large";
+export type MapName = "small" | "medium" | "large" | "huge" | "vast";
 export type StartWhen = "lobby" | "now" | "scheduled";
 type Preset = "friends" | "marathon" | "quick";
 
@@ -41,6 +41,8 @@ export const MAPS: Record<MapName, { width: number; height: number; label: strin
   small: { width: 96, height: 72, label: "Small" },
   medium: { width: 160, height: 112, label: "Medium" },
   large: { width: 256, height: 176, label: "Large" },
+  huge: { width: 384, height: 256, label: "Huge" },
+  vast: { width: 512, height: 352, label: "Vast" },
 };
 
 const LENGTHS: ReadonlyArray<{ label: string; steps: number }> = [

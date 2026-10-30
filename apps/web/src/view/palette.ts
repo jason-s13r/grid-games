@@ -100,11 +100,18 @@ export const TERRAIN_COLORS: Record<number, string> = {
   [TERRAIN.WALL_LADDERED]: "#b09a6a",
 };
 
+/** A key for a mine that is giving, in the colour tables. Not an item value:
+ *  a dug mine's item value counts down what it has left. */
+export const MINE_DUG = 256;
+
 export const ITEM_COLORS: Record<number, string> = {
   [ITEM.BRONZE]: "#cd7f32",
   [ITEM.SILVER]: "#d8d8d8",
   [ITEM.GOLD]: "#ffd700",
   [ITEM.DIAMOND]: "#7fe8f0",
+  // Mines: dark rock waiting for a dig, and lit up while it gives.
+  [ITEM.MINE]: "#3d3a52",
+  [MINE_DUG]: "#5ad1e0",
 };
 
 export function rgb(hex: string): [number, number, number] {
