@@ -71,10 +71,10 @@ export class GamesPanel {
   private paint(body: string): void {
     const tabs = TABS.map(
       ([id, label]) =>
-        `<button type="button" class="btn btn-small${id === this.tab ? " primary" : ""}" data-games-tab="${id}"
+        `<button type="button" class="seg-btn${id === this.tab ? " on" : ""}" data-games-tab="${id}"
            aria-pressed="${id === this.tab}">${label}</button>`,
     ).join("");
-    this.root.innerHTML = `<div class="games-tabs">${tabs}</div><div class="games-body">${body}</div>`;
+    this.root.innerHTML = `<div class="seg games-tabs">${tabs}</div><div class="games-body">${body}</div>`;
   }
 
   private async body(tab: Tab): Promise<string> {

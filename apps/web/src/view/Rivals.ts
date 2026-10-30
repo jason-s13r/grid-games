@@ -181,6 +181,23 @@ export class Rivals {
     return this.entries.length;
   }
 
+  /** Every bot at one preset level: what the create page's quick choices set.
+   *  Tunings and per-row levels are replaced; the list below them shows the
+   *  result and can still change any one row. */
+  fill(count: number, level: Difficulty): void {
+    this.entries = Array.from({ length: count }, () => preset(level));
+    this.trim();
+    this.render();
+    this.onChange?.();
+  }
+
+  /** The one level every bot is at, or null when they differ or one is tuned. */
+  get level(): Difficulty | null {
+    const first = this.entries[0];
+    if (!first || this.entries.some((e) => e.custom || e.level !== first.level)) return null;
+    return first.level;
+  }
+
   /** Which empire number the first bot holds. A solo game leaves this at 2; a
    *  hosted one moves it past the human empires as people are seated, so the
    *  colour beside a bot is the colour it will actually play. */

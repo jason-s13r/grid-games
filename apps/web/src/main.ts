@@ -4,7 +4,8 @@
 // drive it: moves in, dirty tiles out, camera and DOM strictly outside the
 // simulation. Online play comes back through the Cloudflare room.
 
-import { seedFrom, durationRules, hours, minutes, PROTOCOL_VERSION } from "@tessera/sim";
+import { seedFrom, durationRules, minutes, PROTOCOL_VERSION } from "@tessera/sim";
+import type { BotChoice } from "@tessera/sim";
 import { displayName, fingerprint } from "@tessera/protocol";
 import "@fontsource/fredoka/500.css";
 import "@fontsource/fredoka/600.css";
@@ -16,9 +17,9 @@ import { LocalGame } from "./game/Local";
 import { boardClick } from "./game/input";
 import type { Driver } from "./game/Driver";
 import { myIdentity, myName, setMyName } from "./net/identity";
-import { Setup } from "./view/Setup";
-import type { SetupSummary } from "./view/Setup";
 import { Rivals } from "./view/Rivals";
+import { CreatePage, MAPS } from "./view/Create";
+import type { CreateState } from "./view/Create";
 import { Camera, MIN_ZOOM, MAX_ZOOM, DOM_MIN_ZOOM } from "./view/Camera";
 import { MapImage } from "./view/MapImage";
 import { Renderer } from "./view/Renderer";
@@ -68,88 +69,24 @@ function openPanelsForWidth(): void {
 }
 openPanelsForWidth();
 
-/** Map sizes offered on the setup screen. A mesh game uses whatever its genesis
- *  says, so these are a starting point rather than an assumption the view makes
- *  anywhere else.
- *
- *  Read for a solo game and a hosted one alike. They are the same world with
- *  different seats in it, so the form asks once and whichever start button you
- *  pressed takes the answer — which is also the only way the two can be
- *  guaranteed not to disagree. */
-const MAP_SIZES: Record<string, { width: number; height: number }> = {
-  small: { width: 96, height: 72 },
-  medium: { width: 160, height: 112 },
-  large: { width: 256, height: 176 },
-};
+/** The bot empires in the world, each with its own difficulty or its own tuned
+ *  profile. One picker, shown under More on the create page, read by a solo
+ *  game and an online one alike. */
+const rivals = new Rivals(pick<HTMLElement>("[data-rivals]"));
 
-/** The map the setup screen is asking for. Read at the moment a game starts
- *  rather than cached, so changing the dropdown and pressing start agree. */
-const mapSize = () =>
-  MAP_SIZES[pick<HTMLSelectElement>('[data-cfg="size"]').value] ?? MAP_SIZES.medium!;
-
-/** Lengths the setup screen suggests. A list beside the picker rather than a
- *  type in the sim: the old `type Duration = "3h" | "1d" | ...` is what a host
- *  had to extend to add 45 minutes, and what lands in the genesis is only ever
- *  three numbers anyway.
- *
- *  No open-ended entry, and that is the one thing the two kinds of game could
- *  not be given identically. Every hosted game from v4 on has an end date, because
- *  that is what makes a version's sunset derivable rather than a judgement
- *  call — a running game cannot be upgraded, so a game with no end is a game
- *  nobody can promise to still play. A solo game could have been left
- *  open-ended, but a list with an entry that quietly means "multiplayer only"
- *  is the sort of thing the combined form exists to get rid of. `endStep: 0`
- *  stays legal in the sim forever, for every v3 record and for anybody
- *  composing a genesis by hand. */
-const COMMON_DURATIONS: ReadonlyArray<{ label: string; steps: number }> = [
-  { label: "15 minutes", steps: minutes(15) },
-  { label: "30 minutes", steps: minutes(30) },
-  { label: "1 hour", steps: hours(1) },
-  { label: "3 hours", steps: hours(3) },
-  { label: "6 hours", steps: hours(6) },
-  { label: "1 day", steps: hours(24) },
-  { label: "3 days", steps: hours(72) },
-  { label: "5 days", steps: hours(120) },
-  { label: "10 days", steps: hours(240) },
-];
-
-/** Both forms start on the same length: 15 minutes, or what the Worker says
- *  (DEFAULT_DURATION_MINUTES). A length the list does not have is added. */
-const lengthEl = pick<HTMLSelectElement>('[data-cfg="length"]');
-const onlineLengthEl = pick<HTMLSelectElement>('[data-online="length"]');
-
-function offerLengths(selected: number): void {
-  const choices = COMMON_DURATIONS.some((d) => d.steps === selected)
-    ? COMMON_DURATIONS
-    : [...COMMON_DURATIONS, { label: `${selected / minutes(1)} minutes`, steps: selected }].sort((a, b) => a.steps - b.steps);
-  const markup = choices
-    .map((d) => `<option value="${d.steps}"${d.steps === selected ? " selected" : ""}>${d.label}</option>`)
-    .join("");
-  lengthEl.innerHTML = markup;
-  onlineLengthEl.innerHTML = markup;
-}
-offerLengths(minutes(15));
+/** How long a game is unless somebody says otherwise: 15 minutes, or what the
+ *  Worker says (DEFAULT_DURATION_MINUTES). Both Play now and the create page
+ *  start from it. */
+let defaultLength = minutes(15);
 void fetch("/api/config")
   .then((r) => (r.ok ? (r.json() as Promise<{ defaultMinutes?: number }>) : null))
   .then((config) => {
     const wanted = config?.defaultMinutes;
-    if (wanted && wanted > 0 && Math.round(minutes(wanted)) !== minutes(15)) offerLengths(Math.round(minutes(wanted)));
+    if (!wanted || wanted <= 0) return;
+    defaultLength = Math.round(minutes(wanted));
+    createPage.setDefaultLength(defaultLength);
   })
   .catch(() => {});
-
-/** The duration the setup screen is asking for. Read at the moment a game
- *  starts rather than cached, the same way the map size is, so changing the
- *  dropdown and pressing start agree. */
-const duration = () => durationRules(Number(lengthEl.value));
-
-/** The bot empires in the world, each with its own difficulty or its own tuned
- *  profile. It renders itself, so nothing here has to know how many there are —
- *  and there is one of it, read by a solo game and a hosted one alike. */
-const rivals = new Rivals(pick<HTMLElement>('[data-cfg="rivals"]'));
-/** The online form's bots: its own picker, so the two forms do not share one. */
-const onlineRivals = new Rivals(pick<HTMLElement>('[data-online="rivals"]'));
-
-const soloSetup = () => ({ bots: rivals.list, duration: duration(), ...mapSize() });
 
 // --- settings ----------------------------------------------------------------
 
@@ -171,7 +108,7 @@ nameEl.addEventListener("change", () => {
   if (nameEl.value) link?.client.setName(nameEl.value);
 });
 
-let MAP = { ...MAP_SIZES.medium! };
+let MAP = { width: MAPS.medium.width, height: MAPS.medium.height };
 
 let game: Driver;
 let camera: Camera;
@@ -208,45 +145,81 @@ window.addEventListener("keydown", (event) => {
  *  behind the menu is measured by a ResizeObserver that cannot see through it. */
 shell.onScreen = () => resize();
 
-function start(seed: number): void {
-  mount(new LocalGame({ seed, ...soloSetup() }));
-}
-
-/** A fresh solo game from whatever the form currently says. */
-function startSolo(): void {
+/** A fresh solo game. Play now uses the defaults (a medium map, three steady
+ *  bots, the default length); the create page passes its own choices. */
+function startSolo(options: { map: { width: number; height: number }; length: number; bots: BotChoice[] }): void {
   leaveRoom();
-  start(seedFrom(String(Date.now())));
+  mount(
+    new LocalGame({
+      seed: seedFrom(String(Date.now())),
+      bots: options.bots,
+      duration: durationRules(options.length),
+      width: options.map.width,
+      height: options.map.height,
+    }),
+  );
   shell.show("game");
 }
 
-/** What the game as configured comes to, and why it cannot be started yet. */
-function summarise(): SetupSummary {
-  const bots = rivals.count;
-  if (bots < 1) {
-    return {
-      note: "A solo game needs somebody to play against — add a bot empire.",
-      problem: true,
-      ready: false,
-    };
-  }
-  const who = `you and ${bots} bot ${bots === 1 ? "empire" : "empires"}`;
-  return { note: `${bots + 1} empires will be in the world: ${who}.`, problem: false, ready: true };
+const playNow = (): void =>
+  startSolo({ map: MAPS.medium, length: defaultLength, bots: ["steady", "steady", "steady"] });
+
+// --- the menu: the start page and the create page ---------------------------
+
+const menuEl = pick<HTMLElement>("[data-menu]");
+const startEl = pick<HTMLElement>("[data-start]");
+const createEl = pick<HTMLElement>("[data-create-page]");
+
+function showPage(page: "start" | "create"): void {
+  menuEl.dataset.page = page;
+  startEl.hidden = page !== "start";
+  createEl.hidden = page !== "create";
+  menuEl.scrollTop = 0;
 }
 
-const setup = new Setup(
-  {
-    root: pick<HTMLElement>("[data-setup]"),
-    head: pick<HTMLElement>("[data-setup-head]"),
-    form: pick<HTMLElement>("[data-setup-form]"),
-    foot: pick<HTMLElement>("[data-setup-foot]"),
+const createPage = new CreatePage(createEl, rivals, pick<HTMLElement>("[data-rivals]"), {
+  back: () => showPage("start"),
+  submit: (state) => {
+    if (state.mode === "solo") {
+      startSolo({ ...createPage.solo, bots: rivals.list });
+      showPage("start");
+    } else {
+      showPage("start");
+      void createRoom(state);
+    }
   },
-  { start: () => startSolo(), summary: () => summarise() },
-);
-rivals.onChange = () => setup.refresh();
+});
+pick<HTMLElement>("[data-rivals]").hidden = false;
+
+const joinEl = pick<HTMLInputElement>("[data-join-code]");
+function joinFromBox(): void {
+  const text = joinEl.value.trim();
+  if (!text) return joinEl.focus();
+  const id = roomIdFrom(text);
+  if (!id) return online.home(`"${text}" is not a game link or code.`);
+  arrivedWith = decodeInvite(new URL(text, location.origin).searchParams.get("invite"));
+  void enterRoom(id);
+}
+joinEl.addEventListener("keydown", (event) => {
+  if (event.key === "Enter") joinFromBox();
+});
+
+startEl.addEventListener("click", (event) => {
+  const button = (event.target as HTMLElement).closest<HTMLElement>("[data-start-action]");
+  if (!button) return;
+  event.preventDefault();
+  switch (button.dataset.startAction) {
+    case "play": return playNow();
+    case "new": createPage.open("friends"); return showPage("create");
+    case "solo": createPage.open("solo"); return showPage("create");
+    case "join": return joinFromBox();
+  }
+});
+showPage("start");
 
 /** Everything downstream of here is the same for a solo game and a mesh game —
  *  the driver interface is the whole of the difference. */
-function mount(driver: Driver): void {
+function mount(driver: Driver, options: { background?: boolean } = {}): void {
   game = driver;
   // Which house each empire flies in this game, bound before anything draws.
   setFlags(new Flags(driver.sim.state.genesis.empires));
@@ -281,7 +254,7 @@ function mount(driver: Driver): void {
 
   mapImage.paintAll(game.sim.state);
   centred = false;
-  shell.gameReady();
+  if (!options.background) shell.gameReady();
   resize();
 }
 
@@ -517,11 +490,13 @@ let afterCreate: { start: boolean } | undefined;
 const online = new OnlinePanel(
   {
     root: pick<HTMLElement>("[data-online-card]"),
-    form: pick<HTMLElement>("[data-online-form]"),
     body: pick<HTMLElement>("[data-online-body]"),
   },
   {
-    create: () => void createRoom(),
+    create: () => {
+      createPage.open("friends");
+      showPage("create");
+    },
     join: (input) => {
       const id = roomIdFrom(input);
       if (!id) return online.home(`"${input.trim()}" is not a game link or code.`);
@@ -543,20 +518,18 @@ const games = new GamesPanel(pick<HTMLElement>("[data-games]"), {
 });
 games.show("open");
 
-async function createRoom(): Promise<void> {
-  const form = online.read();
-  if (form.start === "scheduled" && !form.startAt) return online.home("Pick a start time.");
+async function createRoom(form: CreateState): Promise<void> {
   const identity = await myIdentity();
   try {
     const id = await createGame({
       creator: identity.key,
       empires: form.empires,
-      seatsPerEmpire: form.seatsPerEmpire,
-      bots: onlineRivals.list,
+      seatsPerEmpire: form.seats,
+      bots: rivals.list,
       map: form.map,
-      hours: form.hours,
+      hours: form.length / 12 / 3600,
       public: form.public,
-      ...(form.startAt ? { startAt: form.startAt } : {}),
+      ...(form.start === "scheduled" && form.startAt ? { startAt: form.startAt } : {}),
     });
     afterCreate = { start: form.start === "now" };
     await enterRoom(id);
@@ -594,7 +567,10 @@ async function enterRoom(roomId: string): Promise<void> {
   leaveRoom();
   if (location.pathname !== `/g/${roomId}`) history.pushState(null, "", `/g/${roomId}`);
   online.connecting(roomId);
-  shell.show("menu");
+  // The menu, without "Back to the game": the game behind it is the one being
+  // left. It comes back when this room's game is on the board.
+  shell.left();
+  showPage("start");
 
   const identity = await myIdentity();
   const opened = new RoomLink({
@@ -699,7 +675,18 @@ function frame(now: number): void {
   requestAnimationFrame(frame);
 }
 
-start(seedFrom("tessera"));
+// Something for the board to draw before any game is chosen. Not a game you
+// can go back to, so the menu does not offer one.
+mount(
+  new LocalGame({
+    seed: seedFrom("tessera"),
+    bots: ["steady", "steady", "steady"],
+    duration: durationRules(defaultLength),
+    width: MAPS.medium.width,
+    height: MAPS.medium.height,
+  }),
+  { background: true },
+);
 requestAnimationFrame(frame);
 
 // A game link opens that game.

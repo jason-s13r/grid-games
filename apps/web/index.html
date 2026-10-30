@@ -121,107 +121,45 @@
            one. -->
       <section class="screen" data-menu>
         <div class="screen-inner">
-          <header class="screen-head">
-            <h1 class="screen-brand">Tessera</h1>
-            <p class="screen-tag">
-              Claim the map, one tile at a time.
-            </p>
-          </header>
+          <!-- The start page. The header card holds the three ways in; what
+               follows is the lobby you are in (if any), your games, open games
+               and the leaderboard. -->
+          <div class="start" data-start>
+            <header class="hero">
+              <h1 class="screen-brand">Tessera</h1>
+              <p class="hero-tag">Claim the map, one tile at a time. Play against
+              bots, or with other people in games that keep running for days.</p>
+              <div class="hero-actions">
+                <button class="btn primary hero-play" type="button" data-start-action="play">Play now</button>
+                <button class="btn" type="button" data-start-action="new">New game</button>
+                <button class="btn" data-action="resume" hidden>Back to the game</button>
+              </div>
+              <div class="hero-join">
+                <input class="lobby-code" data-join-code placeholder="Paste a game link or code to join" spellcheck="false" />
+                <button class="btn" type="button" data-start-action="join">Join</button>
+              </div>
+              <p class="hero-note" data-start-note>Play now starts a solo game against three bots.
+                <a href="#" data-start-action="solo">Change it</a></p>
+            </header>
 
-          <!-- The form that configures a game and the button that starts it.
-               See view/Setup.ts. -->
-          <section class="card setup" data-setup>
-            <div data-setup-head></div>
-
-            <!-- Map, length and opponents. -->
-            <div class="setup-form" data-setup-form hidden>
-              <div class="field">
-                <label for="cfg-size">Map</label>
-                <select id="cfg-size" data-cfg="size">
-                  <option value="small">small &mdash; 96&times;72</option>
-                  <option value="medium" selected>medium &mdash; 160&times;112</option>
-                  <option value="large">large &mdash; 256&times;176</option>
-                </select>
-              </div>
-              <!-- Options are filled from COMMON_DURATIONS in main.ts rather
-                   than written here, so adding 45 minutes is one line and not
-                   two. -->
-              <div class="field">
-                <label for="cfg-length">Length</label>
-                <select id="cfg-length" data-cfg="length"></select>
-              </div>
-              <p class="hint">
-                At the end, whoever holds the most ground wins. A longer game
-                also opens the door for late joiners longer and waits longer
-                before it calls a silent empire abandoned &mdash; one number sets
-                all three, because a three-hour patience in a ten-day game is a
-                losing condition for going to bed.
-              </p>
-              <div class="field field-stacked">
-                <label>Bot empires</label>
-                <div class="rivals" data-cfg="rivals"></div>
-              </div>
-            </div>
-
-            <div class="setup-foot" data-setup-foot></div>
-          </section>
-
-          <!-- Playing with other people: create a game, join one, and its
-               lobby while it fills. See view/Online.ts. -->
-          <section class="card setup" data-online-card>
-            <div class="setup-form" data-online-form>
-              <h2>Online</h2>
-              <p class="card-tag">Play with other people. The game keeps running
-              while everybody is away, so it can last for days.</p>
-              <div class="field">
-                <label for="online-map">Map</label>
-                <select id="online-map" data-online="map">
-                  <option value="small">small &mdash; 96&times;72</option>
-                  <option value="medium" selected>medium &mdash; 160&times;112</option>
-                  <option value="large">large &mdash; 256&times;176</option>
-                </select>
-              </div>
-              <div class="field">
-                <label for="online-length">Length</label>
-                <select id="online-length" data-online="length"></select>
-              </div>
-              <div class="field">
-                <label for="online-empires">Empires for people</label>
-                <input id="online-empires" type="number" min="1" max="8" value="2" data-online="empires" />
-              </div>
-              <div class="field">
-                <label for="online-seats">Players per empire</label>
-                <input id="online-seats" type="number" min="1" max="4" value="2" data-online="seats" />
-              </div>
-              <div class="field field-stacked">
-                <label>Bot empires</label>
-                <div class="rivals" data-online="rivals"></div>
-              </div>
-              <div class="field">
-                <label for="online-start">Start</label>
-                <select id="online-start" data-online="start">
-                  <option value="lobby" selected>when I press start</option>
-                  <option value="now">straight away</option>
-                  <option value="scheduled">at a set time</option>
-                </select>
-              </div>
-              <div class="field" data-online="start-at-field" hidden>
-                <label for="online-start-at">Starts at</label>
-                <input id="online-start-at" type="datetime-local" data-online="start-at" />
-              </div>
-              <label class="field field-check">
-                <input type="checkbox" data-online="public" />
-                List it publicly, so anybody can find and join it
-              </label>
-            </div>
-            <div data-online-body></div>
-          </section>
-
+            <!-- The game you are joining or in: connecting, its lobby, or a
+                 note that it is running. See view/Online.ts. -->
+            <section class="card setup" data-online-card>
+              <div data-online-body></div>
+            </section>
           <!-- Public games, your games, and the leaderboard. See view/Games.ts. -->
           <section class="card setup" data-games-card>
             <h2>Games</h2>
             <div data-games></div>
           </section>
+          </div>
+
+          <!-- The create page: one form for solo and online games. See
+               view/Create.ts. -->
+          <section class="card create" data-create-page hidden></section>
+          <!-- The bot list the create page shows under More. Kept outside it
+               so its open sliders survive the page redrawing. -->
+          <div class="rivals" data-rivals hidden></div>
 
           <details class="settings" data-settings>
             <summary>Settings</summary>
@@ -255,7 +193,6 @@
           </details>
 
           <footer class="screen-foot">
-            <button class="btn" data-action="resume" hidden>Back to the game</button>
             <a class="btn" href="/prototype/">Original prototype</a>
             <span class="version" data-version-menu></span>
           </footer>

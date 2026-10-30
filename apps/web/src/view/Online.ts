@@ -1,14 +1,11 @@
-// The online card: start a game, join one, and the lobby while it fills up.
+// The online card: connecting to a game, and its lobby while it fills up.
 //
 // It renders and reports clicks; main.ts owns the connection and decides what
-// a click does. The create form's bot list is its own Rivals instance, so the
-// solo form and this one do not share a picker.
+// a click does. Creating a game is the create page's (view/Create.ts).
 
 import type { LobbyView } from "@tessera/room";
 import { empireTheme } from "./palette";
 import { escape } from "./escape";
-
-export type StartMode = "lobby" | "now" | "scheduled";
 
 export interface OnlineHandlers {
   create: () => void;
@@ -20,8 +17,6 @@ export interface OnlineHandlers {
 
 export interface OnlineElements {
   root: HTMLElement;
-  /** The create form: shown at home, hidden in a room. */
-  form: HTMLElement;
   /** Join box, status line and lobby. */
   body: HTMLElement;
 }
@@ -72,13 +67,6 @@ export class OnlinePanel {
       if (input.value.trim()) handlers.join(input.value);
     });
 
-    // The scheduled-start time field only matters for one choice.
-    const mode = els.form.querySelector<HTMLSelectElement>('[data-online="start"]');
-    const at = els.form.querySelector<HTMLElement>('[data-online="start-at-field"]');
-    mode?.addEventListener("change", () => {
-      if (at) at.hidden = mode.value !== "scheduled";
-    });
-
     this.render();
   }
 
@@ -102,51 +90,19 @@ export class OnlinePanel {
     this.render();
   }
 
-  /** What the create form currently asks for. */
-  read(): {
-    map: "small" | "medium" | "large";
-    hours: number;
-    empires: number;
-    seatsPerEmpire: number;
-    start: StartMode;
-    startAt?: number;
-    public: boolean;
-  } {
-    const value = (name: string): string =>
-      this.els.form.querySelector<HTMLInputElement | HTMLSelectElement>(`[data-online="${name}"]`)?.value ?? "";
-    const start = value("start") as StartMode;
-    const at = Date.parse(value("start-at"));
-    return {
-      map: value("map") as "small" | "medium" | "large",
-      hours: Number(value("length")) / 12 / 3600,
-      empires: Math.max(1, Math.min(8, Number(value("empires")) || 2)),
-      seatsPerEmpire: Math.max(1, Math.min(4, Number(value("seats")) || 2)),
-      start,
-      public: this.els.form.querySelector<HTMLInputElement>('[data-online="public"]')?.checked ?? false,
-      ...(start === "scheduled" && Number.isFinite(at) ? { startAt: at } : {}),
-    };
-  }
-
   private render(): void {
     const { view } = this;
-    this.els.form.hidden = view.kind !== "home";
-    this.els.body.innerHTML = this.body();
+    this.els.body.innerHTML = this.body().trim();
+    this.els.root.hidden = !this.els.body.innerHTML;
   }
 
   private body(): string {
     const view = this.view;
     switch (view.kind) {
+      // Creating and joining are on the start page's header now; at home this
+      // card has something to say only when something went wrong.
       case "home":
-        return `
-          ${view.problem ? `<p class="hint lobby-problem">${escape(view.problem)}</p>` : ""}
-          <div class="setup-foot">
-            <button class="btn primary" type="button" data-online-action="create">Create game</button>
-          </div>
-          <p class="hint setup-or">…or join one somebody sent you:</p>
-          <div class="lobby-actions">
-            <input class="lobby-code" data-online-code placeholder="game link or code" spellcheck="false" />
-            <button class="btn" type="button" data-online-action="join">Join</button>
-          </div>`;
+        return view.problem ? `<p class="hint lobby-problem">${escape(view.problem)}</p>` : "";
       case "connecting":
         return `
           ${this.title(view.roomId)}
