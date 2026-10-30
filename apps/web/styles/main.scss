@@ -78,6 +78,9 @@ h1, h2, h3, .brand, .screen-brand {
   // height: the strip is `hidden` in every game that is not a replay, generates
   // no box, and the row collapses to nothing.
   grid-template-rows: auto auto 1fr;
+  // Light behind everything, so a phone with no tab open shows an empty
+  // panel rather than the dark page.
+  background: var(--side);
   grid-template-areas:
     "top   top   top"
     "scrub scrub scrub"
@@ -246,7 +249,6 @@ h1, h2, h3, .brand, .screen-brand {
   overflow: hidden;
   border: 2px solid var(--line);
   border-radius: 10px;
-  box-shadow: 0 4px 16px rgba(20, 40, 33, 0.18);
 }
 
 .viewport {
@@ -1583,12 +1585,21 @@ a.btn {
     grid-template-areas: "top top" "stage tabs" "stage panel";
     grid-template-rows: auto auto minmax(0, 1fr);
   }
-  .topbar { flex-wrap: nowrap; }
+  .topbar { flex-wrap: nowrap; gap: 10px; }
+  .clock { white-space: nowrap; font-size: 11px; }
+  // Population, and the protected badge (the capital's ring shows that on the
+  // board), are what can wait for a wider screen.
+  .fact-pop, .hud .tag { display: none; }
+  .meter { width: 130px; }
+  .clock { flex: none; }
   .hud { order: 0; flex-basis: auto; flex-wrap: nowrap; overflow: hidden; }
   // The board's width comes from the height here, so the stage sizes to it
   // rather than containing it.
   .board { width: calc((100dvh - 52px) * 4 / 3); }
   .stage { container-type: normal; align-self: start; }
+  // The same dark line as under the status bar, between the board and the
+  // panels, running the full height.
+  .stage { align-self: stretch; border-right: 2px solid var(--line); }
 }
 
 // Phone. Four tiles across is too tight to read, so wrap to two rows of two.
