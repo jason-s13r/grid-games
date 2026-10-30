@@ -1,9 +1,11 @@
 // The start page's lists, all showing at once:
 //
-// - Your games: the ones you are in that have not finished, to resume.
+// - Your games: the ones you are in that have not finished, to resume,
+//   private ones included.
 // - Public games: open and running together. An open one you can join; a
 //   running one you can watch.
-// - Finished: public games that have ended, to watch back.
+// - Finished: games that have ended, to watch back: yours (private ones
+//   included) and public ones.
 // - The leaderboard: the top ten for each stat, over every game or the best
 //   single game.
 //
@@ -70,11 +72,12 @@ export class GamesPanel {
       fill(name, `<h2>${title}</h2><p class="hint">Could not load this: ${escape(error.message)}</p>`);
 
     // Yours first, so the public list can say "Resume" for a game you are in.
-    const mine = this.handlers
+    const all = this.handlers
       .me()
       .then(playerStats)
-      .then((stats) => stats.games.filter((g) => g.phase !== "ended"))
+      .then((stats) => stats.games)
       .catch(() => [] as PlayerGame[]);
+    const mine = all.then((games) => games.filter((g) => g.phase !== "ended"));
 
     void mine.then((games) => {
       if (ticket !== this.ticket) return;
@@ -98,14 +101,17 @@ export class GamesPanel {
       );
     }, failed("public", "Public games"));
 
-    void listGames("ended").then(
-      (games) =>
-        fill(
-          "finished",
-          `<h2>Finished</h2>${games.length ? this.list(games, () => "view") : `<p class="hint">No public games have finished yet.</p>`}`,
-        ),
-      failed("finished", "Finished"),
-    );
+    void Promise.all([listGames("ended"), all]).then(([ended, yours]) => {
+      // Yours first, with how you did; then the public ones you were not in.
+      const seen = new Set<string>();
+      const games = [...yours.filter((g) => g.phase === "ended"), ...ended]
+        .filter((g) => !seen.has(g.id) && seen.add(g.id))
+        .sort((a, b) => (b.endedAt ?? 0) - (a.endedAt ?? 0));
+      fill(
+        "finished",
+        `<h2>Finished</h2>${games.length ? this.list(games, () => "view") : `<p class="hint">No games have finished yet.</p>`}`,
+      );
+    }, failed("finished", "Finished"));
 
     void this.loadLeaders(ticket);
   }
