@@ -44,7 +44,9 @@ export default {
     const player = path.match(/^\/api\/players\/([A-Za-z0-9_-]{16,128})$/);
     if (player) {
       if (!env.DB) return json({ error: "no records here" }, 404);
-      return json(await playerStats(env.DB, player[1]!), 200, 15);
+      // Not cached: it is one person's own list, and it should show a game
+      // they have just joined.
+      return json(await playerStats(env.DB, player[1]!));
     }
 
     if (path === "/api/config") {

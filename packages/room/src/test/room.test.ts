@@ -670,3 +670,26 @@ describe("settings", () => {
     expect(h.room.summary().public).toBe(true);
   });
 });
+
+describe("records", () => {
+  it("reports the players of a game that began before the records did, once", async () => {
+    const { h } = await started();
+    await h.run(1_000);
+    // As if this room predates the records: nobody in it was reported.
+    h.store.put("recorded", false);
+    h.players.length = 0;
+    h.restart();
+    expect(h.players.map((p) => p.key).sort()).toEqual([alice.key, bob.key].sort());
+    expect(h.players.every((p) => p.empire !== null)).toBe(true);
+
+    h.restart();
+    expect(h.players).toHaveLength(2);
+  });
+
+  it("does not report a new room's players twice", async () => {
+    const { h } = await started();
+    const before = h.players.length;
+    h.restart();
+    expect(h.players).toHaveLength(before);
+  });
+});

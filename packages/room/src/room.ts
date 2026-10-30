@@ -161,6 +161,8 @@ export class Room {
     store.put("config", config);
     store.put("phase", "lobby");
     store.put("players", []);
+    // A new room reports its players as they arrive.
+    store.put("recorded", true);
     if (config.startAt !== undefined) store.put("startsAt", config.startAt);
   }
 
@@ -187,6 +189,20 @@ export class Room {
 
     const genesis = store.get<Genesis>("genesis");
     if (genesis) this.load(genesis);
+    this.backfillRecords();
+  }
+
+  /** Games that began before the records did have nobody in them on record,
+   *  so they are missing from their players' lists. Report everyone in the
+   *  game once, the first time such a room wakes. */
+  private backfillRecords(): void {
+    if (!this.events.player || this.store.get<boolean>("recorded")) return;
+    this.store.put("recorded", true);
+    if (this.finished) return;
+    this.events.game?.(this.summary());
+    for (const player of this.players) {
+      if (this._phase === "lobby" || this.roster?.seatOf(player.key)) this.recordPlayer(player.key);
+    }
   }
 
   get phase(): Phase {
