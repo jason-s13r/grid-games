@@ -84,6 +84,7 @@ export class GameSettingsDialog {
           <input class="lobby-code" data-settings="name" maxlength="24" placeholder="kestrel"
             spellcheck="false" autocomplete="off" value="${escape(c.name)}" /></label>
         <p class="hint">${escape(c.shownAs)}</p>
+        <button class="btn btn-small settings-account" type="button" data-account-open>Back up or move your player&hellip;</button>
       </section>
 
       ${

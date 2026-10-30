@@ -131,6 +131,8 @@
                and the leaderboard. -->
           <div class="start" data-start>
             <header class="hero">
+              <!-- You: your name, and your player's backup and devices. -->
+              <button class="hero-gear" type="button" data-account-open aria-label="You: name, backup and devices" title="You: name, backup and devices">&#9881;</button>
               <h1 class="screen-brand">Tessera</h1>
               <p class="hero-tag">Claim the map, one tile at a time. Play against
               bots, or with other people in games that keep running for days.</p>
@@ -164,51 +166,6 @@
                so its open sliders survive the page redrawing. -->
           <div class="rivals" data-rivals hidden></div>
 
-          <details class="settings" data-settings>
-            <summary>Settings</summary>
-            <div class="settings-body">
-              <!-- A label, never a credential. The key is the seat; this is the
-                   word in front of the eight hex characters of its digest, and
-                   the hex is what people are actually told apart by. Two players
-                   may choose the same name and nothing stops them: uniqueness
-                   needs an authority to arbitrate, and there is none. See
-                   protocol/names.ts. -->
-              <div class="field field-stacked">
-                <label for="cfg-name">Your name</label>
-                <input
-                  id="cfg-name"
-                  class="lobby-code"
-                  data-cfg="name"
-                  maxlength="24"
-                  placeholder="kestrel"
-                  spellcheck="false"
-                  autocomplete="off"
-                />
-                <p class="hint" data-cfg="name-shown"></p>
-              </div>
-              <p class="hint">
-                Shown as <code>name#fingerprint</code> wherever somebody is
-                deciding something about you, because anybody may pick any name
-                and the fingerprint is what tells two of them apart. Kept in this
-                browser, and said again in every game you join.
-              </p>
-
-              <!-- The player itself: a key in this browser. Backing it up,
-                   moving it and deleting its name. See view/Keys.ts. -->
-              <div class="keys-actions">
-                <h3>Your player</h3>
-                <p class="hint">This device plays as <strong data-keys-who></strong>. The
-                player is a key kept in this browser; there is no account, so
-                back it up to keep it, or to play on another device.</p>
-                <div class="keys-row">
-                  <button class="btn" type="button" data-keys-action="backup">Back up</button>
-                  <button class="btn" type="button" data-keys-action="move">Move between devices</button>
-                  <button class="btn" type="button" data-keys-action="restore">Use a backup code</button>
-                  <button class="btn" type="button" data-keys-action="remove">Delete my data</button>
-                </div>
-              </div>
-            </div>
-          </details>
 
           <!-- The same links as on the other Qot. games. Support shows only
                when the Worker has a tip link (TIP_URL). -->
@@ -232,7 +189,46 @@
     <!-- Your player: back up, move, restore, delete. See view/Keys.ts. -->
     <dialog class="modal keys-dialog" data-keys>
       <button class="modal-close" type="button" aria-label="Close" data-keys-close>&#10005;</button>
-      <div class="keys-body" data-keys-body></div>
+      <!-- The first view: your name, and what you can do with your player.
+           The others are drawn into the body below. -->
+      <div class="keys-body" data-account-home>
+        <h2>You</h2>
+        <!-- A label, never a credential. The key is the seat; this is the
+             word in front of the eight hex characters of its digest, and
+             the hex is what people are actually told apart by. Two players
+             may choose the same name and nothing stops them: uniqueness
+             needs an authority to arbitrate, and there is none. See
+             protocol/names.ts. -->
+        <div class="field field-stacked">
+          <label for="cfg-name">Your name</label>
+          <input
+            id="cfg-name"
+            class="lobby-code"
+            data-cfg="name"
+            maxlength="24"
+            placeholder="kestrel"
+            spellcheck="false"
+            autocomplete="off"
+          />
+          <p class="hint" data-cfg="name-shown"></p>
+          <p class="hint">Anybody may pick any name, so other players see yours with
+          its fingerprint, which is what tells two of them apart.</p>
+        </div>
+
+        <section class="keys-actions">
+          <h3>Your player</h3>
+          <p class="hint">Your player is a key kept in this browser. There is no
+          account, so back it up to keep it, or to play on another device.</p>
+          <div class="keys-row">
+            <button class="btn" type="button" data-keys-action="backup">Back up</button>
+            <button class="btn" type="button" data-keys-action="move">Move between devices</button>
+            <button class="btn" type="button" data-keys-action="restore">Use a backup code</button>
+            <button class="btn" type="button" data-keys-action="remove">Delete my data</button>
+          </div>
+        </section>
+        <button class="btn primary" type="button" data-keys-close>Done</button>
+      </div>
+      <div class="keys-body" data-keys-body hidden></div>
     </dialog>
 
     <!-- The game's settings, over the board. See view/GameSettings.ts. -->

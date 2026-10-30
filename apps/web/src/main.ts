@@ -810,12 +810,12 @@ Object.assign(window as unknown as Record<string, unknown>, {
 // --- your player ---------------------------------------------------------------
 
 const keys = new KeysDialog(pick<HTMLDialogElement>("[data-keys]"), pick<HTMLElement>("[data-keys-body]"));
-const keysWho = pick<HTMLElement>("[data-keys-who]");
-const showWho = async () => {
-  keysWho.textContent = await KeysDialog.who();
-};
-void showWho();
-nameEl.addEventListener("change", () => void showWho());
+// The gear on the start page, and a button in a game's Settings.
+document.addEventListener("click", (event) => {
+  if (!(event.target as HTMLElement).closest("[data-account-open]")) return;
+  pick<HTMLDialogElement>("[data-settings-dialog]").close();
+  keys.home();
+});
 document.addEventListener("click", (event) => {
   const button = (event.target as HTMLElement).closest<HTMLElement>("[data-keys-action]");
   switch (button?.dataset.keysAction) {

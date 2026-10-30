@@ -18,18 +18,23 @@ const escape = (text: string): string =>
 export class KeysDialog {
   private transfer: Transfer | undefined;
 
+  private readonly homeView: HTMLElement;
+
   constructor(
     private readonly dialog: HTMLDialogElement,
     private readonly body: HTMLElement,
   ) {
+    this.homeView = dialog.querySelector<HTMLElement>("[data-account-home]")!;
     dialog.addEventListener("close", () => {
       this.transfer?.cancel();
       this.transfer = undefined;
     });
     dialog.addEventListener("click", (event) => {
       if (event.target === dialog) dialog.close();
-      const close = (event.target as HTMLElement).closest("[data-keys-close]");
-      if (close) dialog.close();
+      const target = event.target as HTMLElement;
+      if (target.closest("[data-keys-close]")) dialog.close();
+      // Cancel and Back in a step lead back to the first view.
+      if (target.closest("[data-keys-back]")) this.home();
     });
   }
 
@@ -39,8 +44,19 @@ export class KeysDialog {
     return displayName(myName(), await fingerprint(identity.key));
   }
 
+  /** The first view: your name, and the four things to do with your player. */
+  home(): void {
+    this.transfer?.cancel();
+    this.transfer = undefined;
+    this.homeView.hidden = false;
+    this.body.hidden = true;
+    if (!this.dialog.open) this.dialog.showModal();
+  }
+
   private show(title: string, html: string): void {
     this.body.innerHTML = `<h2>${title}</h2>${html}`;
+    this.homeView.hidden = true;
+    this.body.hidden = false;
     if (!this.dialog.open) this.dialog.showModal();
   }
 
@@ -68,7 +84,7 @@ export class KeysDialog {
          <button class="btn" type="button" data-keys-reveal>Show the code</button>
        </div>
        <code class="keys-code" data-keys-code hidden>${escape(code)}</code>
-       <button class="btn primary" type="button" data-keys-close>Done</button>`,
+       <button class="btn primary" type="button" data-keys-back>Done</button>`,
     );
     this.bind("[data-keys-copy]").onclick = async (event) => {
       await navigator.clipboard?.writeText(link).catch(() => undefined);
@@ -94,7 +110,7 @@ export class KeysDialog {
        <p class="keys-error" data-keys-error hidden></p>
        <div class="keys-row">
          <button class="btn primary" type="button" data-keys-go>Use this player</button>
-         <button class="btn" type="button" data-keys-close>Cancel</button>
+         <button class="btn" type="button" data-keys-back>Back</button>
        </div>`,
     );
     this.bind("[data-keys-go]").onclick = async () => {
@@ -134,7 +150,7 @@ export class KeysDialog {
          <button class="btn" type="button" data-keys-from-here>
            <strong>Send my player from here</strong><span>Type the code the other device shows.</span></button>
        </div>
-       <button class="btn" type="button" data-keys-close>Cancel</button>`,
+       <button class="btn" type="button" data-keys-back>Back</button>`,
     );
     this.bind("[data-keys-to-here]").onclick = () => this.receive();
     this.bind("[data-keys-from-here]").onclick = () => this.sendForm();
@@ -154,7 +170,7 @@ export class KeysDialog {
            devices</strong>, then <strong>Send my player from here</strong>, and type:</p>
            <p class="keys-big">${state.code}</p>
            <p class="hint">The code works for ten minutes.</p>
-           <button class="btn" type="button" data-keys-close>Cancel</button>`,
+           <button class="btn" type="button" data-keys-back>Back</button>`,
         );
       case "check":
         return this.show(
@@ -163,7 +179,7 @@ export class KeysDialog {
            <p class="keys-big">${state.pictures}</p>
            <p class="hint">If they match, press Send on the other device. If they do not,
            cancel: something is in between.</p>
-           <button class="btn" type="button" data-keys-close>Cancel</button>`,
+           <button class="btn" type="button" data-keys-back>Back</button>`,
         );
       case "received": {
         const identity = await Identity.fromBackup(state.backup);
@@ -184,7 +200,7 @@ export class KeysDialog {
        <p class="keys-error" data-keys-error hidden></p>
        <div class="keys-row">
          <button class="btn primary" type="button" data-keys-go>Connect</button>
-         <button class="btn" type="button" data-keys-close>Cancel</button>
+         <button class="btn" type="button" data-keys-back>Back</button>
        </div>`,
     );
     const input = this.bind<HTMLInputElement>("[data-keys-input]");
@@ -214,7 +230,7 @@ export class KeysDialog {
              Sign this device out afterwards (it starts again as a new player)</label>
            <div class="keys-row">
              <button class="btn primary" type="button" data-keys-go>They match: send</button>
-             <button class="btn" type="button" data-keys-close>They do not</button>
+             <button class="btn" type="button" data-keys-back>They do not</button>
            </div>`,
         );
         this.bind("[data-keys-go]").onclick = () => {
@@ -248,7 +264,7 @@ export class KeysDialog {
     this.transfer = undefined;
     this.show(
       "That did not work",
-      `<p>${escape(error)}</p><button class="btn primary" type="button" data-keys-close>Close</button>`,
+      `<p>${escape(error)}</p><button class="btn primary" type="button" data-keys-back>Back</button>`,
     );
   }
 
@@ -267,7 +283,7 @@ export class KeysDialog {
        <p class="keys-error" data-keys-error hidden></p>
        <div class="keys-row">
          <button class="btn danger" type="button" data-keys-go>Delete my data</button>
-         <button class="btn" type="button" data-keys-close>Cancel</button>
+         <button class="btn" type="button" data-keys-back>Back</button>
        </div>`,
     );
     this.bind("[data-keys-go]").onclick = async (event) => {

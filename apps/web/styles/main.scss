@@ -859,6 +859,7 @@ h1, h2, h3, .brand, .screen-brand {
 // A dark green card with the three ways in, like the Tessera card on qot.nz.
 
 .hero {
+  position: relative;
   display: grid;
   gap: 14px;
   padding: 26px 26px 22px;
@@ -887,7 +888,7 @@ h1, h2, h3, .brand, .screen-brand {
 
 // The settings and the footer belong to the start page, not to the form.
 .screen[data-page="create"] {
-  .settings, .screen-foot { display: none; }
+  .screen-foot { display: none; }
 }
 
 // The links every Qot. game has at the foot of its start page.
@@ -1272,52 +1273,27 @@ h1, h2, h3, .brand, .screen-brand {
   padding-left: 16px;
 }
 
-// The settings disclosure, between the card and the footer. It wears the
-// sidebar's triangle rather than the browser's marker, for the same reason that
-// one does, but it is not an `.acc`: those are panels beside a board and this is
-// a fold on a menu screen.
-.settings {
-  margin-top: 14px;
-}
-
-.settings > summary {
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
-  cursor: pointer;
-  font-family: var(--font-display);
-  font-size: 16px;
-  font-weight: 500;
-  color: var(--forest-ink);
-  user-select: none;
-
-  list-style: none;
-  &::-webkit-details-marker { display: none; }
-  &::before {
-    content: "";
-    flex: none;
-    width: 0;
-    height: 0;
-    border-left: 4px solid currentColor;
-    border-top: 3.5px solid transparent;
-    border-bottom: 3.5px solid transparent;
-    transition: transform 120ms ease;
-  }
-
-  &:hover { color: var(--ink); }
-}
-
-.settings[open] > summary::before { transform: rotate(90deg); }
-
-.settings-body {
-  padding: 4px 0 2px;
-
-  // The stacked field's own top margin is for a field under a field; this one
-  // is directly under the summary.
-  .field-stacked { margin-top: 6px; }
-}
-
 // --- your player ----------------------------------------------------------------
+
+// The way in, at the hero's top right: quiet until pointed at.
+.hero-gear {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  width: 38px;
+  height: 38px;
+  padding: 0;
+  font-size: 22px;
+  line-height: 1;
+  color: #9db8aa;
+  background: none;
+  border: 1.5px solid transparent;
+  border-radius: 10px;
+  cursor: pointer;
+  &:hover, &:focus-visible { color: #eaf2ec; border-color: rgba(234, 242, 236, 0.3); background: rgba(234, 242, 236, 0.06); }
+}
+.settings-account { justify-self: start; }
+.keys-dialog .field-stacked { margin-top: 0; }
 
 .keys-actions {
   margin-top: 14px;
