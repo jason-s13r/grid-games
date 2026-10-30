@@ -60,6 +60,14 @@
             </div>
           </div>
 
+          <!-- On a phone, a small copy of the minimap in the corner of the
+               board, so you can see where you are without opening the Map tab.
+               Tap it to jump; × tucks it away. -->
+          <div class="inset" data-inset>
+            <canvas class="inset-map" data-inset-map width="120" height="90"></canvas>
+            <button class="inset-toggle" type="button" data-inset-toggle aria-label="Hide the small map" title="Hide the small map">&times;</button>
+          </div>
+
           <div class="banner" data-banner hidden></div>
         </div>
       </main>

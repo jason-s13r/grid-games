@@ -109,14 +109,20 @@ export class Minimap {
       ctx.strokeRect(ox + cx * scale - 2, oy + cy * scale - 2, 5, 5);
     }
 
-    // Viewport rectangle.
-    const vw = (this.camera.width / this.camera.zoom) * scale;
-    const vh = (this.camera.height / this.camera.zoom) * scale;
-    ctx.strokeStyle = "rgba(255,255,255,0.95)";
-    ctx.lineWidth = 1.5;
-    ctx.strokeRect(ox + this.camera.x * scale, oy + this.camera.y * scale, vw, vh);
-    ctx.strokeStyle = "rgba(0,0,0,0.55)";
-    ctx.lineWidth = 0.5;
-    ctx.strokeRect(ox + this.camera.x * scale, oy + this.camera.y * scale, vw, vh);
+    // Viewport rectangle: dark on the pale paper, with a light edge inside it
+    // for the dark terrain, and never smaller than a few pixels, so a close
+    // zoom on a big map can still be found.
+    const dpr = this.canvas.width / Math.max(1, this.canvas.getBoundingClientRect().width);
+    const least = 6 * dpr;
+    const vw = Math.max(least, (this.camera.width / this.camera.zoom) * scale);
+    const vh = Math.max(least, (this.camera.height / this.camera.zoom) * scale);
+    const vx = ox + this.camera.x * scale + ((this.camera.width / this.camera.zoom) * scale - vw) / 2;
+    const vy = oy + this.camera.y * scale + ((this.camera.height / this.camera.zoom) * scale - vh) / 2;
+    ctx.strokeStyle = "#1f2033";
+    ctx.lineWidth = 2 * dpr;
+    ctx.strokeRect(vx, vy, vw, vh);
+    ctx.strokeStyle = "rgba(255,255,255,0.9)";
+    ctx.lineWidth = 1 * dpr;
+    ctx.strokeRect(vx + 1.5 * dpr, vy + 1.5 * dpr, vw - 3 * dpr, vh - 3 * dpr);
   }
 }

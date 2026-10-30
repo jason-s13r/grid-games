@@ -59,6 +59,8 @@ const viewportEl = pick<HTMLDivElement>("[data-viewport]");
 const tilesEl = pick<HTMLDivElement>("[data-tiles]");
 const lodEl = pick<HTMLCanvasElement>("[data-lod]");
 const minimapEl = pick<HTMLCanvasElement>("[data-minimap]");
+const insetEl = pick<HTMLElement>("[data-inset]");
+const insetMapEl = pick<HTMLCanvasElement>("[data-inset-map]");
 const appEl = pick<HTMLElement>(".app");
 
 /** Which panels start open. A desktop sidebar has room for all of them at
@@ -118,6 +120,7 @@ let camera: Camera;
 let mapImage: MapImage;
 let renderer: Renderer;
 let minimap: Minimap;
+let inset: Minimap;
 let controls: Controls;
 
 const shell = new Shell({
@@ -240,6 +243,7 @@ function mount(driver: Driver, options: { background?: boolean } = {}): void {
   mapImage = new MapImage(MAP.width, MAP.height);
   renderer = new Renderer(tilesEl, lodEl, camera, mapImage);
   minimap = new Minimap(minimapEl, camera, mapImage, MAP.width, MAP.height);
+  inset = new Minimap(insetMapEl, camera, mapImage, MAP.width, MAP.height);
   controls = new Controls(game, {
     hud: pick<HTMLElement>("[data-you]"),
     acts: pick<HTMLElement>("[data-acts]"),
@@ -379,9 +383,9 @@ viewportEl.addEventListener(
 
 const PAN_FRACTION = 0.35;
 
-function centreOnCapital(): void {
+function centreOnCapital(id = game.empire): void {
   // An observer has no capital to go home to; leave the camera where it is.
-  const empire = game.sim.state.empires[game.empire - 1];
+  const empire = game.sim.state.empires[id - 1];
   if (!empire) return;
   camera.centreOn(empire.capital % MAP.width, Math.floor(empire.capital / MAP.width));
 }
@@ -525,13 +529,41 @@ const chat = new ChatPanel(pick<HTMLElement>("[data-chat]"), pick<HTMLElement>("
   link?.client.say(text, channel),
 );
 
-/** The two doors into a running game, on the standings list: take an empire
- *  nobody holds, or ask one that somebody does. */
+// The small map on the board. Shut or open is remembered on this device; the
+// layout decides whether there is room for it at all.
+const INSET_KEY = "tessera.inset";
+function setInset(open: boolean): void {
+  insetEl.dataset.open = open ? "on" : "off";
+  const toggle = pick<HTMLButtonElement>("[data-inset-toggle]");
+  toggle.innerHTML = open ? "&times;" : "&#9634;";
+  toggle.title = toggle.ariaLabel = open ? "Hide the small map" : "Show the small map";
+  try {
+    localStorage.setItem(INSET_KEY, open ? "on" : "off");
+  } catch {
+    // Remembering it is a convenience.
+  }
+}
+setInset((() => {
+  try {
+    return localStorage.getItem(INSET_KEY) !== "off";
+  } catch {
+    return true;
+  }
+})());
+pick<HTMLElement>("[data-inset-toggle]").addEventListener("click", () =>
+  setInset(insetEl.dataset.open !== "on"),
+);
+
+/** The buttons on the standings list: show an empire's capital on the board,
+ *  and the two doors into a running game, taking an empire nobody holds or
+ *  asking one that somebody does. */
 pick<HTMLElement>("[data-standings]").addEventListener("click", (event) => {
-  const button = (event.target as HTMLElement).closest<HTMLElement>("[data-claim], [data-ask]");
-  if (!button || !link) return;
+  const button = (event.target as HTMLElement).closest<HTMLElement>("[data-find], [data-claim], [data-ask]");
+  if (!button) return;
   // The buttons sit in an empire's summary line; pressing one is not a toggle.
   event.preventDefault();
+  if (button.dataset.find) return centreOnCapital(Number(button.dataset.find));
+  if (!link) return;
   if (button.dataset.claim) link.client.claim(Number(button.dataset.claim));
   else link.client.ask(Number(button.dataset.ask));
 });
@@ -717,7 +749,9 @@ function frame(now: number): void {
 
   // The minimap does not need 60fps.
   if (now >= minimapDue) {
-    minimap.render(game.sim.state);
+    // Drawn only where it is on screen: each is hidden on some layouts.
+    if (minimapEl.offsetParent) minimap.render(game.sim.state);
+    if (insetMapEl.offsetParent) inset.render(game.sim.state);
     controls.render(game.sim.state);
     controls.setZoomHint(
       camera.zoom >= DOM_MIN_ZOOM

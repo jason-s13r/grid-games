@@ -27,6 +27,10 @@ export const clock = (steps: number): string => {
     : `${m}:${String(s).padStart(2, "0")}`;
 };
 
+/** A big number in a few characters, for a narrow status bar: 12.2M. */
+const short = (n: number): string =>
+  n.toLocaleString(undefined, { notation: "compact", maximumFractionDigits: 1 });
+
 /** What the clock says, which in a game with an end is not how long it has been
  *  running.
  *
@@ -121,6 +125,18 @@ export class Controls {
       if (type !== undefined) this.game.act(type);
     });
 
+    // The standings do change every step (each member's counter), and they
+    // hold buttons too, so they are left alone while a finger or the mouse is
+    // pressed on them. See `drawn`.
+    const press = (el: HTMLElement) => {
+      el.addEventListener?.("pointerdown", () => this.pressed.add(el));
+      const release = () => this.pressed.delete(el);
+      globalThis.addEventListener?.("pointerup", release);
+      globalThis.addEventListener?.("pointercancel", release);
+    };
+    press(this.els.standings);
+    press(this.els.acts);
+
     // Which empires' player lists are open, kept across redraws.
     this.els.standings.addEventListener?.(
       "toggle",
@@ -158,14 +174,19 @@ export class Controls {
    *  silently dropped. At 200 ms and a typical press, a meaningful fraction of
    *  every purchase in the game was being thrown away.
    *
-   *  Nobody noticed because the standings hold no buttons and the HUD holds
-   *  none either. The guard is per subtree so a HUD that changes every step
-   *  does not force the shop to redraw with it. */
+   *  The guard is per subtree so a HUD that changes every step does not force
+   *  the shop to redraw with it. The standings hold buttons now as well and
+   *  change every step, so a subtree is also left alone while it is pressed. */
   private readonly drawn = new Map<string, string>();
+
+  /** Subtrees with a press in progress on them. */
+  private readonly pressed = new Set<HTMLElement>();
 
   /** Write only if it changed. Returns whether it did. */
   private put(el: HTMLElement, key: string, markup: string): boolean {
     if (this.drawn.get(key) === markup) return false;
+    // Pressed: the next render after the release writes it.
+    if (this.pressed.has(el)) return false;
     this.drawn.set(key, markup);
     el.innerHTML = markup;
     return true;
@@ -204,7 +225,7 @@ export class Controls {
         <span class="meter-label">${member.popTimer} / ${rules.popMax}</span>
       </div>
       <span class="fact"><i>Tiles</i><b>${empire.tilesOwned}</b></span>
-      <span class="fact fact-pop"><i>Population</i><b>${empire.popTotal.toLocaleString()}</b></span>
+      <span class="fact fact-pop"><i>Population</i><b class="full">${empire.popTotal.toLocaleString()}</b><b class="short">${short(empire.popTotal)}</b></span>
     `,
     );
 
@@ -378,7 +399,8 @@ export class Controls {
                   ? `<button class="btn btn-small" type="button" data-ask="${e.id}">Ask</button>`
                   : e.tilesOwned
           }</span>
-          <span class="standing-meta">${e.largestCascade.tiles ? `${e.largestCascade.tiles}&#9733;` : ""}</span>`;
+          <span class="standing-meta">${e.largestCascade.tiles ? `${e.largestCascade.tiles}&#9733;` : ""}</span>
+          <button class="find" type="button" data-find="${e.id}" title="Show ${t.name}'s capital" aria-label="Show ${t.name}'s capital">&#9678;</button>`;
         const cls = `standing${!vacant && !e.alive ? " dead" : ""}${vacant ? " vacant" : ""}`;
         // An empire with people in it opens to list them.
         if (vacant || state.empires[e.id - 1]!.members.length === 0) return `<div class="${cls}">${row}</div>`;

@@ -63,6 +63,13 @@ body {
   background: var(--forest);
 }
 
+// During a game the page behind the app is the panels' colour, so a bounce at
+// the end of a scroll shows more panel rather than a dark band.
+html:has(.app[data-screen="game"]),
+html:has(.app[data-screen="game"]) body {
+  background: var(--side);
+}
+
 h1, h2, h3, .brand, .screen-brand {
   font-family: var(--font-display);
 }
@@ -1361,7 +1368,7 @@ a.btn {
 
 .standing {
   display: grid;
-  grid-template-columns: 12px 1fr auto auto;
+  grid-template-columns: 12px 1fr auto auto 26px;
   align-items: center;
   gap: 6px;
   padding: 3px 0;
@@ -1432,6 +1439,24 @@ a.btn {
 }
 .standing-tiles { font-variant-numeric: tabular-nums; font-weight: 600; }
 .standing-meta { font-size: 10px; color: var(--muted); min-width: 26px; text-align: right; }
+
+// Shows the empire's capital on the board. Quiet until pointed at, so a column
+// of them does not compete with the numbers.
+.find {
+  appearance: none;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  font-size: 15px;
+  line-height: 1;
+  color: var(--muted);
+  font-style: normal;
+  background: none;
+  border: 1.5px solid transparent;
+  border-radius: 7px;
+  cursor: pointer;
+  &:hover, &:focus-visible { color: var(--forest-ink); border-color: var(--line); background: #fff; }
+}
 
 // --- lobby -------------------------------------------------------------------
 
@@ -1868,6 +1893,58 @@ a.btn {
   .side:not(:has(.acc[open])) { display: none; }
 }
 
+// --- the small map on the board ----------------------------------------------
+//
+// Phones only: a wider screen has the minimap in its side column the whole
+// time. Bottom left, the one corner of the board with no buttons in it.
+
+.inset { display: none; }
+
+@media (max-width: 900px) {
+  .inset {
+    position: absolute;
+    left: 8px;
+    bottom: 8px;
+    z-index: 4;
+    display: block;
+    width: 30%;
+    max-width: 150px;
+  }
+  .inset-map {
+    display: block;
+    width: 100%;
+    height: auto;
+    background: var(--paper);
+    border: 2px solid var(--line);
+    border-radius: 6px;
+    opacity: 0.92;
+    touch-action: none;
+  }
+  .inset-toggle {
+    position: absolute;
+    top: -9px;
+    right: -9px;
+    width: 22px;
+    height: 22px;
+    padding: 0;
+    font-size: 14px;
+    line-height: 1;
+    color: var(--forest-ink);
+    background: #fff;
+    border: 1.5px solid var(--line);
+    border-radius: 50%;
+    cursor: pointer;
+  }
+  // Tucked away: only the button, in the corner, to bring it back.
+  .inset[data-open="off"] {
+    width: auto;
+    .inset-map { display: none; }
+    .inset-toggle { position: static; width: 30px; height: 30px; border-radius: 8px; border-width: 2px; }
+  }
+  // Not while the Map tab is open: the big one is on screen already.
+  .app:has(.acc[data-acc="map"][open]) .inset { display: none; }
+}
+
 // --- narrow screens ----------------------------------------------------------
 //
 // The board runs to the edges and the page becomes one scrolling column:
@@ -1877,11 +1954,14 @@ a.btn {
   // One column: the board at 4:3, the tab row, then whichever panel is open,
   // which takes all the height left. Both side columns share the panel area;
   // only the one holding the open tab is shown.
+  // Exactly the screen's height, with nothing past it: the status bar, the
+  // board and the tabs stay put, and only the open panel scrolls.
   .app {
     grid-template-columns: 1fr;
     grid-template-areas: "top" "stage" "tabs" "panel";
     grid-template-rows: auto auto auto minmax(0, 1fr);
     height: 100dvh;
+    overflow: hidden;
   }
   .side-right,
   .side-bottom { grid-area: panel; height: auto; border-top: none; }
@@ -1927,7 +2007,11 @@ a.btn {
   .side {
     border: none;
     border-top: 1px solid var(--edge);
-    overflow: visible;
+    min-height: 0;
+    overflow-y: auto;
+    // Room to scroll the last line clear of the browser's own bar, which on
+    // some phones floats over the bottom of the page.
+    padding-bottom: calc(env(safe-area-inset-bottom) + 24px);
   }
   .side-right .acc-chat { border-bottom: none; }
   .acc-chat .chat-log { min-height: 120px; }
@@ -1993,10 +2077,35 @@ a.btn {
   .stage { align-self: stretch; border-right: 2px solid var(--line); }
 }
 
-// Phone. Four tiles across is too tight to read, so wrap to two rows of two.
-@media (max-width: 560px) {
-  .meter { width: 140px; height: 18px; }
-  .hud { gap: 5px 10px; }
+// The short population is for the phone's status bar; everywhere else has room
+// for every digit.
+.fact-pop .short { display: none; }
+
+// A phone held upright: the status bar is two short rows, so the board starts
+// near the top of the screen. The first row is your empire, its meter and the
+// menu; the second, in small type, is tiles, population and the clock. The
+// wordmark and the protected badge go (the capital's ring shows that on the
+// board).
+@media (max-width: 900px) and (orientation: portrait) {
+  .topbar {
+    flex-wrap: wrap;
+    gap: 4px 8px;
+    padding: 6px 10px 5px;
+    // A zero-height item that takes a whole row, between the two rows.
+    &::after { content: ""; order: 5; flex-basis: 100%; height: 0; }
+  }
+  .brand, .hud .tag { display: none; }
+  // The HUD's pieces join the bar's own row, so they can sit on either line.
+  .hud { display: contents; }
+  .hud .swatch { order: 1; }
+  .hud-name { order: 2; font-size: 14px; }
+  .meter { order: 3; flex: 1; width: auto; min-width: 0; height: 18px; }
+  .menu-dock { order: 4; }
+  .menu-toggle { width: 34px; height: 30px; padding: 0; }
+  .hud .fact { order: 6; font-size: 12px; }
+  .fact-pop .full { display: none; }
+  .fact-pop .short { display: inline; }
+  .clock { order: 7; margin-left: auto; font-size: 11px; white-space: nowrap; }
 }
 
 // --- muting ------------------------------------------------------------------
