@@ -15,10 +15,11 @@
 // panel that appears mid-game — the seats list, once your empire has more than
 // one — brings its own tab with it and nothing has to be kept in step by hand.
 
-/** Below this the sidebars are stacked rather than beside the board, and this
- *  is the width that decides it. Matches the layout breakpoint in the styles;
- *  they are two statements of one number, so they move together. */
-const NARROW = "(max-width: 900px)";
+/** When the panels are tabs rather than two columns: a narrow screen, or one
+ *  3:2 or squarer (a tablet), where two columns would leave the board too
+ *  little width. Matches the layout rules in the styles; they are two
+ *  statements of one condition, so they move together. */
+const NARROW = "(max-width: 900px), (max-aspect-ratio: 3/2)";
 
 export class Tabs {
   private readonly media = window.matchMedia(NARROW);

@@ -1658,6 +1658,29 @@ a.btn {
   }
 }
 
+// A tablet, or any screen 3:2 or squarer that is too wide to count as a
+// phone: two columns would leave the board too little width, so there is one
+// on the right, holding the tabs and the open panel, as on a phone held
+// sideways.
+@media (min-width: 901px) and (max-aspect-ratio: 3/2) {
+  .app,
+  .app:not(:has(.side-left .acc:not([hidden]))) {
+    grid-template-columns: minmax(0, 1fr) 320px;
+    grid-template-areas: "top top" "scrub scrub" "stage tabs" "stage panel";
+    grid-template-rows: auto auto auto minmax(0, 1fr);
+  }
+  .side-left,
+  .side-right {
+    display: flex;
+    grid-area: panel;
+    border-left: 2px solid var(--line);
+  }
+  // Wrapped onto a second row rather than scrolled: there is height to spare
+  // in this column, and every tab stays in view.
+  .app[data-tabbed="on"] .tabs { border-left: 2px solid var(--line); flex-wrap: wrap; }
+  .side:not(:has(.acc[open])) { display: none; }
+}
+
 // A phone held sideways: no room under the board, so the tab row and the
 // open panel go beside it, and the status bar is one line.
 @media (max-width: 900px) and (orientation: landscape) {
