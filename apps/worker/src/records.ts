@@ -72,7 +72,8 @@ export function writeResult(db: D1Database, result: GameResult): Promise<unknown
         db
           .prepare(
             `INSERT OR REPLACE INTO results (game_id, key, empire, place, won, empires, tiles, peak_tiles, moves,
-               tiles_taken, bot, ended_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)`,
+               tiles_taken, bot, ended_at, peak_pop, cascade_tiles)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14)`,
           )
           .bind(
             result.roomId,
@@ -87,6 +88,8 @@ export function writeResult(db: D1Database, result: GameResult): Promise<unknown
             seat.tilesTaken,
             seat.bot ? 1 : 0,
             result.endedAt,
+            empire.peakPop,
+            seat.cascadeTiles,
           ),
       );
     }
@@ -178,27 +181,42 @@ export async function playerStats(db: D1Database, key: string): Promise<PlayerSt
   return { key, name, ...total, games: games!.results as PlayerGame[] };
 }
 
+export type LeaderStat = "won" | "area" | "population" | "cascade";
+export type LeaderScope = "game" | "total";
+export const LEADER_STATS: readonly LeaderStat[] = ["won", "area", "population", "cascade"];
+
 export interface Leader {
   key: string;
   name: string;
   played: number;
-  won: number;
-  /** Mean of 1 for first down to 0 for last, so a second of eight beats a
-   *  second of two. */
-  score: number;
+  /** The ranked number: a count of wins, or tiles, population or cascade
+   *  tiles, either the best single game or summed over every game. */
+  value: number;
 }
 
-/** People only: a bot's wins are its team's, and already counted there. */
-export async function leaderboard(db: D1Database): Promise<Leader[]> {
+/** The column each stat reads. Area is the most an empire held at once. */
+const COLUMN: Record<LeaderStat, string> = {
+  won: "r.won",
+  area: "r.peak_tiles",
+  population: "r.peak_pop",
+  cascade: "r.cascade_tiles",
+};
+
+/** People only: a bot's wins are its team's, and already counted there.
+ *  `game` ranks each player's best single game; `total` adds up every game.
+ *  Wins are always a total. */
+export async function leaderboard(db: D1Database, stat: LeaderStat, scope: LeaderScope): Promise<Leader[]> {
+  const column = COLUMN[stat];
+  const value = scope === "game" && stat !== "won" ? `MAX(${column})` : `SUM(${column})`;
   const { results } = await db
     .prepare(
-      `SELECT r.key, p.name, COUNT(*) AS played, SUM(r.won) AS won,
-         AVG(CASE WHEN r.empires > 1 THEN 1.0 * (r.empires - r.place) / (r.empires - 1) ELSE 1.0 END) AS score
+      `SELECT r.key, p.name, COUNT(*) AS played, ${value} AS value
        FROM results r JOIN players p ON p.key = r.key
        WHERE r.bot = 0
        GROUP BY r.key
-       ORDER BY won DESC, score DESC, played DESC
-       LIMIT 50`,
+       HAVING value > 0
+       ORDER BY value DESC, played ASC
+       LIMIT 10`,
     )
     .all<Leader>();
   return results;

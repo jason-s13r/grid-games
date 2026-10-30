@@ -2011,7 +2011,53 @@ a.btn {
 }
 
 // The games card: tabs, then a list of games or a table of players.
-.games-tabs { margin-bottom: 12px; }
+.game-lists { display: grid; gap: 14px; }
+
+.game-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 0;
+  border-top: 1px solid #e3ebe5;
+  &:first-child { border-top: none; }
+}
+.game-what {
+  flex: 1;
+  min-width: 0;
+  display: grid;
+  font-size: 13px;
+  strong { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; }
+  .hint { margin: 0; }
+}
+// Joining and resuming are the actions that take you somewhere.
+.btn.go { background: var(--gold); }
+
+.list-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 10px;
+  h2 { margin: 0; }
+}
+
+// The leaderboard: a short list per stat, side by side.
+.leaders {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 14px 18px;
+}
+.leader-list {
+  h3 { margin: 0 0 4px; font-size: 15px; font-weight: 600; color: var(--forest-ink); }
+  ol { margin: 0; padding-left: 20px; font-size: 13px; }
+  li::marker { color: var(--muted); font-size: 11px; }
+  li { padding: 1px 0; }
+  li > span, li > b { vertical-align: baseline; }
+  b { float: right; font-variant-numeric: tabular-nums; }
+  .hint { margin: 2px 0 0; }
+}
+.leader-name { .hint { font-size: 10px; } }
 .games-list {
   list-style: none;
   margin: 0;

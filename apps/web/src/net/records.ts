@@ -35,12 +35,14 @@ export interface PlayerStats {
   games: PlayerGame[];
 }
 
+export type LeaderStat = "won" | "area" | "population" | "cascade";
+export type LeaderScope = "game" | "total";
+
 export interface Leader {
   key: string;
   name: string;
   played: number;
-  won: number;
-  score: number;
+  value: number;
 }
 
 export type Listing = "open" | "running" | "ended";
@@ -57,5 +59,5 @@ export const listGames = (which: Listing): Promise<ListedGame[]> =>
 export const playerStats = (key: string): Promise<PlayerStats> =>
   get<PlayerStats>(`/api/players/${encodeURIComponent(key)}`);
 
-export const leaderboard = (): Promise<Leader[]> =>
-  get<{ leaders: Leader[] }>(`/api/leaderboard`).then((body) => body.leaders);
+export const leaderboard = (scope: LeaderScope): Promise<Partial<Record<LeaderStat, Leader[]>>> =>
+  get<{ lists: Partial<Record<LeaderStat, Leader[]>> }>(`/api/leaderboard?scope=${scope}`).then((body) => body.lists);

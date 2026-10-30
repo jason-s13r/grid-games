@@ -53,6 +53,8 @@ export interface SeatResult {
   member: number;
   moves: number;
   tilesTaken: number;
+  /** This seat's largest coin cascade, in tiles. */
+  cascadeTiles: number;
 }
 
 export interface EmpireResult {
@@ -62,6 +64,7 @@ export interface EmpireResult {
   alive: boolean;
   tiles: number;
   peakTiles: number;
+  peakPop: number;
   seats: SeatResult[];
 }
 
@@ -121,7 +124,13 @@ export function resultOf(
     for (const member of summary.members) {
       const who = seatOf(summary.id, member.index);
       if (!who) continue;
-      seats.push({ ...who, member: member.index, moves: member.moves, tilesTaken: member.tilesTaken });
+      seats.push({
+        ...who,
+        member: member.index,
+        moves: member.moves,
+        tilesTaken: member.tilesTaken,
+        cascadeTiles: member.largestCascade.tiles,
+      });
     }
     empires.push({
       id: summary.id,
@@ -129,6 +138,7 @@ export function resultOf(
       alive: summary.alive,
       tiles: summary.tilesOwned,
       peakTiles: summary.peakTiles,
+      peakPop: summary.peakPop,
       seats,
     });
   }

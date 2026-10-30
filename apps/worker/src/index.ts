@@ -5,7 +5,8 @@
 //   GET  /api/games/:id        whether a game exists, and its phase
 //   GET  /api/games/:id/archive  a finished game, whole, for a replay
 //   GET  /api/players/:key     one player's record and recent games
-//   GET  /api/leaderboard      the people who have won the most
+//   GET  /api/leaderboard?scope=total|game  the top ten for each stat: games
+//                              won, area, population, coin cascade
 //   GET  /api/config           settings the page needs: the default length
 //   GET  /game/:id/ws      the game's WebSocket, handed to its Durable Object
 //   everything else        the web client, from static assets
@@ -15,8 +16,8 @@
 
 import { configFrom, newRoomId } from "./create.js";
 import type { Env } from "./env.js";
-import { leaderboard, listGames, playerStats } from "./records.js";
-import type { Listing } from "./records.js";
+import { LEADER_STATS, leaderboard, listGames, playerStats } from "./records.js";
+import type { LeaderScope, Listing } from "./records.js";
 import { hasArchive, serveArchive } from "./archive.js";
 
 export { GameRoom } from "./game-room.js";
@@ -50,8 +51,14 @@ export default {
     }
 
     if (path === "/api/leaderboard") {
-      if (!env.DB) return json({ leaders: [] }, 200, 60);
-      return json({ leaders: await leaderboard(env.DB) }, 200, 60);
+      // Every list at once: the start page shows them side by side.
+      const scope: LeaderScope = url.searchParams.get("scope") === "game" ? "game" : "total";
+      if (!env.DB) return json({ scope, lists: {} }, 200, 60);
+      const db = env.DB;
+      const lists = Object.fromEntries(
+        await Promise.all(LEADER_STATS.map(async (stat) => [stat, await leaderboard(db, stat, scope)] as const)),
+      );
+      return json({ scope, lists }, 200, 60);
     }
 
     const info = path.match(new RegExp(`^/api/games/${ROOM_ID}$`));

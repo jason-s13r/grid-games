@@ -143,7 +143,10 @@ window.addEventListener("keydown", (event) => {
 
 /** A screen that was covered may have been resized while it was, and the board
  *  behind the menu is measured by a ResizeObserver that cannot see through it. */
-shell.onScreen = () => resize();
+shell.onScreen = (screen) => {
+  resize();
+  if (screen === "menu") refreshLists?.();
+};
 
 /** A fresh solo game. Play now uses the defaults (a medium map, three steady
  *  bots, the default length); the create page passes its own choices. */
@@ -170,7 +173,11 @@ const menuEl = pick<HTMLElement>("[data-menu]");
 const startEl = pick<HTMLElement>("[data-start]");
 const createEl = pick<HTMLElement>("[data-create-page]");
 
+/** Set once the lists exist: the start page reloads them each time it shows. */
+let refreshLists: (() => void) | undefined;
+
 function showPage(page: "start" | "create"): void {
+  if (page === "start" && menuEl.dataset.page === "create") refreshLists?.();
   menuEl.dataset.page = page;
   startEl.hidden = page !== "start";
   createEl.hidden = page !== "create";
@@ -516,7 +523,8 @@ const games = new GamesPanel(pick<HTMLElement>("[data-games]"), {
   replay: (id) => void openReplay(id),
   me: async () => (await myIdentity()).key,
 });
-games.show("open");
+games.refresh();
+refreshLists = () => games.refresh();
 
 async function createRoom(form: CreateState): Promise<void> {
   const identity = await myIdentity();
