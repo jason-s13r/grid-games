@@ -61,6 +61,10 @@ body {
   font: 14px/1.45 var(--font-body);
   color: var(--ink);
   background: var(--forest);
+  // No double-tap to zoom: pressing a pan or zoom button twice quickly is two
+  // presses, not a request to magnify the page. Taps also go through at once
+  // rather than after the browser waits to see whether a second one follows.
+  touch-action: manipulation;
 }
 
 // During a game the page behind the app is the panels' colour, so a bounce at
