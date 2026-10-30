@@ -88,6 +88,19 @@ h1, h2, h3, .brand, .screen-brand {
   height: 100dvh;
 }
 
+// A solo game has nothing for the left column (no people, no chat), so it
+// goes and the board takes the width.
+@media (min-width: 901px) {
+  .app:not(:has(.side-left .acc:not([hidden]))) {
+    grid-template-columns: minmax(0, 1fr) 290px;
+    grid-template-areas:
+      "top   top"
+      "scrub scrub"
+      "stage right";
+    .side-left { display: none; }
+  }
+}
+
 
 // The timeline of a game that has already happened.
 .scrubber {

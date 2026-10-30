@@ -31,15 +31,10 @@
         </div>
       </header>
 
-      <!-- Standings, people and chat. Collapsible so a phone can shut what it is not reading. Native
+      <!-- People, seats and chat: an online game's column. Collapsible so a phone can shut what it is not reading. Native
            <details> rather than a bespoke toggle: it is keyboard-operable and
            remembers its own state without a line of script. -->
       <aside class="side side-left">
-        <details class="acc" data-acc="standings" open>
-          <summary>Standings</summary>
-          <div class="acc-body" data-standings></div>
-        </details>
-
         <!-- Who is in an online game, requests to join your empire, and the
              invite link. See view/People.ts. -->
         <details class="acc" data-acc="people" data-people-panel hidden open>
@@ -90,7 +85,7 @@
            asks for it. See view/Tabs.ts. -->
       <nav class="tabs" data-tabs aria-label="Panels"></nav>
 
-      <!-- The minimap and the store. -->
+      <!-- The minimap, the standings and the store. -->
       <aside class="side side-right">
         <details class="acc" data-acc="map" open>
           <summary>Map</summary>
@@ -98,6 +93,11 @@
             <canvas class="minimap" data-minimap width="240" height="160"></canvas>
             <p class="hint" data-zoomhint></p>
           </div>
+        </details>
+
+        <details class="acc" data-acc="standings" open>
+          <summary>Standings</summary>
+          <div class="acc-body" data-standings></div>
         </details>
 
         <!-- The store. On a phone it is one of the tabs under the board. -->
