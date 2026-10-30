@@ -395,59 +395,53 @@ h1, h2, h3, .brand, .screen-brand {
 
 // --- map controls ------------------------------------------------------------
 
-// Under the minimap on a wide screen: the pad and a zoom row side by side.
+// The board's own controls, over the board. Each pan button sits at the middle
+// of the edge it moves towards; centre-on-capital and zoom sit in a row at the
+// top right. The layer itself takes no clicks, so the tiles under its empty
+// space stay clickable.
 .mapctl {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  margin-top: 10px;
-  user-select: none;
-}
-
-// Over the board's corner on a narrow screen (view/Dock.ts moves it there).
-[data-mapctl-board] .mapctl {
   position: absolute;
+  inset: 0;
+  // Above the tiles, which are their own layer once they are transformed.
+  z-index: 3;
+  pointer-events: none;
+  user-select: none;
+
+  .btn { pointer-events: auto; }
+}
+
+.pan {
+  position: absolute;
+  opacity: 0.85;
+  &:hover, &:focus-visible { opacity: 1; }
+}
+.pan-up    { top: 8px;    left: 50%; transform: translateX(-50%); }
+.pan-down  { bottom: 8px; left: 50%; transform: translateX(-50%); }
+.pan-left  { left: 8px;   top: 50%;  transform: translateY(-50%); }
+.pan-right { right: 8px;  top: 50%;  transform: translateY(-50%); }
+// Pressing still sinks into the shadow, from wherever the button sits.
+.pan-up:active:not(:disabled), .pan-down:active:not(:disabled) { transform: translate(calc(-50% + 2px), 2px); }
+.pan-left:active:not(:disabled), .pan-right:active:not(:disabled) { transform: translate(2px, calc(-50% + 2px)); }
+
+.viewctl {
+  position: absolute;
+  top: 8px;
   right: 8px;
-  bottom: 8px;
-  margin: 0;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.dpad {
-  display: grid;
-  grid-template-columns: repeat(3, 30px);
-  grid-template-rows: repeat(3, 30px);
-  grid-template-areas: ". up ." "left home right" ". down .";
-  gap: 2px;
-
-  [data-pan="up"] { grid-area: up; }
-  [data-pan="left"] { grid-area: left; }
-  [data-pan="home"] { grid-area: home; }
-  [data-pan="right"] { grid-area: right; }
-  [data-pan="down"] { grid-area: down; }
-}
-
-.zoomctl {
   display: flex;
   align-items: center;
   gap: 4px;
+  padding: 3px 6px 3px 3px;
+  border-radius: 10px;
+  background: rgba(255, 251, 232, 0.85);
 }
-[data-mapctl-board] .zoomctl { flex-direction: column-reverse; }
 
 .zoomlevel {
   min-width: 22px;
   text-align: center;
   font-size: 11px;
+  font-weight: 700;
   font-variant-numeric: tabular-nums;
-  color: var(--muted);
-}
-[data-mapctl-board] .zoomlevel {
   color: #6f6858;
-  background: rgba(255, 251, 232, 0.9);
-  border-radius: 3px;
-  padding: 0 4px;
 }
 
 .btn.ctl {
@@ -666,6 +660,15 @@ h1, h2, h3, .brand, .screen-brand {
   min-height: 0;
   display: flex;
   flex-direction: column;
+
+  // A <details> wraps its contents in a box of its own, which does not
+  // stretch unless it is told to.
+  &[open]::details-content {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+  }
   border-bottom: none;
 
   &[open] > .acc-body {
@@ -1550,24 +1553,10 @@ a.btn {
     box-shadow: none;
   }
 
-  // The pad was hidden here on the theory that touch drags the map and the
-  // buttons only cover tiles you want to click. Both halves turned out to be
-  // wrong in practice: a drag on a small board competes with a tap, so panning
-  // by thumb is fiddly exactly where precision matters most, and the tiles the
-  // controls sit on are reachable now that the camera can be pushed past the
-  // map's edge. It comes back a size smaller, since a phone has less room and
-  // a thumb needs less help finding a target than a mouse does.
-  .dpad {
-    grid-template-columns: repeat(3, 34px);
-    grid-template-rows: repeat(3, 34px);
-  }
-  [data-mapctl-board] .mapctl {
-    // Translucent until touched: it sits over the board, so it should not
-    // compete with the map for attention.
-    opacity: 0.82;
-    &:active, &:focus-within { opacity: 1; }
-  }
-  .btn.ctl { width: 34px; height: 34px; font-size: 13px; box-shadow: none; }
+  // The board's controls stay over it on a phone, a size bigger for a thumb:
+  // a drag on a small board competes with a tap, so panning by button is the
+  // precise way.
+  .btn.ctl { width: 36px; height: 36px; font-size: 13px; }
 
   // Both sidebars become one stack of collapsed strips under the board. Shut,
   // each costs about 34px; the board takes everything they are not using.

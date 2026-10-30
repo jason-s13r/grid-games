@@ -26,7 +26,6 @@ import { Minimap } from "./view/Minimap";
 import { Tabs } from "./view/Tabs";
 import { Controls } from "./view/Controls";
 import { Shell } from "./view/Shell";
-import { Dock } from "./view/Dock";
 import { Flags, injectThemeCss, setFlags } from "./view/palette";
 import { OnlineGame } from "./game/Online";
 import { OnlinePanel } from "./view/Online";
@@ -174,13 +173,6 @@ const shell = new Shell({
   menuDrawer: pick<HTMLElement>("[data-menu-drawer]"),
 });
 
-// The pan and zoom controls: beside the board when there is room, over it when
-// there is not.
-new Dock(
-  pick<HTMLElement>("[data-mapctl]"),
-  pick<HTMLElement>("[data-mapctl-side]"),
-  pick<HTMLElement>("[data-mapctl-board]"),
-);
 
 // One panel at a time on a narrow screen, and the rest of the height is the
 // board's. Builds itself from whatever panels are on the page, so nothing here

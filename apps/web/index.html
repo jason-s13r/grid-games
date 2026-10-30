@@ -31,7 +31,7 @@
         </div>
       </header>
 
-      <!-- Collapsible so a phone can shut what it is not reading. Native
+      <!-- Standings, people and chat. Collapsible so a phone can shut what it is not reading. Native
            <details> rather than a bespoke toggle: it is keyboard-operable and
            remembers its own state without a line of script. -->
       <aside class="side side-left">
@@ -51,6 +51,12 @@
           <summary>Your seats</summary>
           <div class="acc-body" data-roster></div>
         </details>
+
+        <!-- Online games only, and it takes the rest of the column. See view/Chat.ts. -->
+        <details class="acc acc-chat" data-acc="chat" data-chat-section hidden open>
+          <summary>Chat</summary>
+          <div class="acc-body" data-chat></div>
+        </details>
       </aside>
 
       <main class="stage">
@@ -60,8 +66,20 @@
           <div class="viewport" data-viewport>
             <canvas class="lod" data-lod></canvas>
             <div class="tiles" data-tiles></div>
-            <!-- The pan and zoom controls sit here on a narrow screen only. -->
-            <div class="mapctl-home" data-mapctl-board></div>
+            <!-- Pan buttons at the middle of each edge, pointing the way they
+                 move; centre-on-capital and zoom in a row at the top right. -->
+            <div class="mapctl" data-mapctl>
+              <button class="btn ctl pan pan-up"    data-pan="up"    aria-label="Pan up">&#9650;</button>
+              <button class="btn ctl pan pan-left"  data-pan="left"  aria-label="Pan left">&#9664;</button>
+              <button class="btn ctl pan pan-right" data-pan="right" aria-label="Pan right">&#9654;</button>
+              <button class="btn ctl pan pan-down"  data-pan="down"  aria-label="Pan down">&#9660;</button>
+              <div class="viewctl">
+                <button class="btn ctl" data-pan="home" aria-label="Centre on your capital" title="Centre on your capital">&#9678;</button>
+                <button class="btn ctl" data-zoom="out" aria-label="Zoom out">&minus;</button>
+                <span class="zoomlevel" data-zoomlevel></span>
+                <button class="btn ctl" data-zoom="in"  aria-label="Zoom in">+</button>
+              </div>
+            </div>
           </div>
 
           <div class="banner" data-banner hidden></div>
@@ -72,28 +90,12 @@
            asks for it. See view/Tabs.ts. -->
       <nav class="tabs" data-tabs aria-label="Panels"></nav>
 
-      <!-- The minimap with its controls, the store, and chat in an online game. -->
+      <!-- The minimap and the store. -->
       <aside class="side side-right">
         <details class="acc" data-acc="map" open>
           <summary>Map</summary>
           <div class="acc-body">
             <canvas class="minimap" data-minimap width="240" height="160"></canvas>
-            <div class="mapctl-home" data-mapctl-side>
-              <div class="mapctl" data-mapctl>
-                <div class="dpad">
-                  <button class="btn ctl" data-pan="up"    aria-label="Pan up">&#9650;</button>
-                  <button class="btn ctl" data-pan="left"  aria-label="Pan left">&#9664;</button>
-                  <button class="btn ctl" data-pan="home"  aria-label="Centre on your capital" title="Centre on your capital">&#9678;</button>
-                  <button class="btn ctl" data-pan="right" aria-label="Pan right">&#9654;</button>
-                  <button class="btn ctl" data-pan="down"  aria-label="Pan down">&#9660;</button>
-                </div>
-                <div class="zoomctl">
-                  <button class="btn ctl" data-zoom="out" aria-label="Zoom out">&minus;</button>
-                  <span class="zoomlevel" data-zoomlevel></span>
-                  <button class="btn ctl" data-zoom="in"  aria-label="Zoom in">+</button>
-                </div>
-              </div>
-            </div>
             <p class="hint" data-zoomhint></p>
           </div>
         </details>
@@ -106,11 +108,6 @@
           </div>
         </details>
 
-        <!-- Online games only. See view/Chat.ts. -->
-        <details class="acc acc-chat" data-acc="chat" data-chat-section hidden open>
-          <summary>Chat</summary>
-          <div class="acc-body" data-chat></div>
-        </details>
       </aside>
 
       <!-- The setup screen. Lobby, teams and game configuration live here and
