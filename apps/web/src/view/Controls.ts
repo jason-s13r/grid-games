@@ -225,7 +225,7 @@ export class Controls {
         <span class="meter-label">${member.popTimer} / ${rules.popMax}</span>
       </div>
       <span class="fact"><i>Tiles</i><b>${empire.tilesOwned}</b></span>
-      <span class="fact fact-pop"><i>Population</i><b class="full">${empire.popTotal.toLocaleString()}</b><b class="short">${short(empire.popTotal)}</b></span>
+      <span class="fact fact-pop"><i class="full">Population</i><i class="short">Pop</i><b class="full">${empire.popTotal.toLocaleString()}</b><b class="short">${short(empire.popTotal)}</b></span>
     `,
     );
 

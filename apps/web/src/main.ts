@@ -445,10 +445,22 @@ speedEl.addEventListener("click", () => {
   speedEl.textContent = `×${next}`;
 });
 
-// The menu screen, with the game still running behind it: settings, other
-// games, and "Back to the game".
-pick<HTMLButtonElement>('[data-action="menu"]').addEventListener("click", () => shell.show("menu"));
-
+// The wordmark and the menu's Start page both go to the start page. An online
+// game carries on without you and waits under Your games with a Resume button,
+// so the room is left; a solo game lives only in this tab, so it is kept, with
+// Back to the game on the start page. A new tab or window opens the page itself.
+for (const home of document.querySelectorAll<HTMLAnchorElement>("[data-home]")) {
+  home.addEventListener("click", (event) => {
+    if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+    event.preventDefault();
+    if (link) {
+      leaveRoom();
+      shell.left();
+    } else {
+      shell.show("menu");
+    }
+  });
+}
 // Settings, over the board: the game keeps running behind the dialog.
 const settingsDialog = new GameSettingsDialog(
   pick<HTMLDialogElement>("[data-settings-dialog]"),
@@ -489,11 +501,6 @@ async function openSettings(): Promise<void> {
   else settingsDialog.show(context);
 }
 pick<HTMLButtonElement>('[data-action="settings"]').addEventListener("click", () => void openSettings());
-
-pick<HTMLButtonElement>('[data-action="leave"]').addEventListener("click", () => {
-  if (link) leaveRoom();
-  shell.left();
-});
 
 // --- online ------------------------------------------------------------------
 

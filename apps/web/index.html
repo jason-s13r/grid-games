@@ -15,7 +15,7 @@
       <!-- The status bar: who you are and what you hold, at a glance. Everything
            else you might want during a game is one click away in the ≡ menu. -->
       <header class="topbar">
-        <h1 class="brand">Tessera</h1>
+        <h1 class="brand"><a href="/" data-home>Tessera</a></h1>
         <div class="hud" data-you></div>
         <div class="clock" data-clock></div>
 
@@ -25,8 +25,7 @@
             <button data-action="speed" class="btn" title="Replay speed: game time per second" hidden>×600</button>
             <button data-action="pause" class="btn">Pause</button>
             <button data-action="settings" class="btn">Settings</button>
-            <button data-action="menu" class="btn">Start page</button>
-            <button data-action="leave" class="btn">Leave the game</button>
+            <a href="/" class="btn" data-home>Start page</a>
             <span class="version" data-version></span>
           </div>
         </div>

@@ -174,6 +174,8 @@ h1, h2, h3, .brand, .screen-brand {
   color: var(--mint);
   margin: 0;
   line-height: 1;
+  a { color: inherit; text-decoration: none; }
+  a:hover { text-decoration: underline; text-underline-offset: 3px; }
 }
 
 .clock {
@@ -2094,18 +2096,24 @@ a.btn {
     // A zero-height item that takes a whole row, between the two rows.
     &::after { content: ""; order: 5; flex-basis: 100%; height: 0; }
   }
-  .brand, .hud .tag { display: none; }
+  .hud .tag { display: none; }
+  .brand { order: 0; font-size: 17px; }
   // The HUD's pieces join the bar's own row, so they can sit on either line.
   .hud { display: contents; }
   .hud .swatch { order: 1; }
   .hud-name { order: 2; font-size: 14px; }
-  .meter { order: 3; flex: 1; width: auto; min-width: 0; height: 18px; }
-  .menu-dock { order: 4; }
+  .meter { order: 3; flex: 1; width: auto; min-width: 0; max-width: 150px; height: 18px; }
+  .menu-dock { order: 4; margin-left: auto; }
   .menu-toggle { width: 34px; height: 30px; padding: 0; }
   .hud .fact { order: 6; font-size: 12px; }
   .fact-pop .full { display: none; }
   .fact-pop .short { display: inline; }
   .clock { order: 7; margin-left: auto; font-size: 11px; white-space: nowrap; }
+}
+// The smallest phones: a little smaller still, so the second row stays one row.
+@media (max-width: 360px) and (orientation: portrait) {
+  .hud .fact { font-size: 11px; }
+  .clock { font-size: 10px; }
 }
 
 // --- muting ------------------------------------------------------------------
