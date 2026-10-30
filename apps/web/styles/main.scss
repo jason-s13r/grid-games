@@ -1505,14 +1505,17 @@ a.btn {
 // board, console, then standings under it. Nothing is behind anything.
 
 @media (max-width: 900px) {
-  // One column: board, then the panels stacked under it. The stage keeps a
-  // definite height so the board can claim whatever the shut panels leave.
+  // One column: the board at 4:3, the tab row, then whichever panel is open,
+  // which takes all the height left. Both side columns share the panel area;
+  // only the one holding the open tab is shown.
   .app {
     grid-template-columns: 1fr;
-    grid-template-areas: "top" "stage" "tabs" "left" "right";
-    grid-template-rows: auto 1fr auto auto auto;
+    grid-template-areas: "top" "stage" "tabs" "panel";
+    grid-template-rows: auto auto auto minmax(0, 1fr);
     height: 100dvh;
   }
+  .side-left,
+  .side-right { grid-area: panel; }
 
   // The HUD is a row of facts and there is not a row's worth of width, so it
   // wraps onto a second line rather than pushing the buttons off the edge.
@@ -1530,16 +1533,16 @@ a.btn {
   .brand { font-size: 18px; }
   .clock { margin-left: auto; font-size: 12px; }
 
-  .stage { padding: 0; }
-
-  // 4:3 is the desktop rule; here the board simply takes the stage. A phone
-  // has height a landscape board cannot use, and capping the ratio left a band
-  // of dead paper above and below it — showing more map is the better answer,
-  // and shutting a panel hands the board the space directly.
+  // The board is 4:3 here too, as wide as the screen. On a phone held
+  // sideways that would be taller than the screen, so it is capped by the
+  // height left over (the status bar and tab row take about 140px) and
+  // centred.
+  .stage {
+    padding: 0;
+    container-type: inline-size;
+  }
   .board {
-    width: 100cqw;
-    height: 100cqh;
-    aspect-ratio: auto;
+    width: min(100cqw, (100dvh - 140px) * 4 / 3);
     border: none;
     border-radius: 0;
     box-shadow: none;
@@ -1570,6 +1573,22 @@ a.btn {
     grid-template-columns: minmax(0, 1fr) 52px;
     label { grid-column: 1 / -1; }
   }
+}
+
+// A phone held sideways: no room under the board, so the tab row and the
+// open panel go beside it, and the status bar is one line.
+@media (max-width: 900px) and (orientation: landscape) {
+  .app {
+    grid-template-columns: auto minmax(0, 1fr);
+    grid-template-areas: "top top" "stage tabs" "stage panel";
+    grid-template-rows: auto auto minmax(0, 1fr);
+  }
+  .topbar { flex-wrap: nowrap; }
+  .hud { order: 0; flex-basis: auto; flex-wrap: nowrap; overflow: hidden; }
+  // The board's width comes from the height here, so the stage sizes to it
+  // rather than containing it.
+  .board { width: calc((100dvh - 52px) * 4 / 3); }
+  .stage { container-type: normal; align-self: start; }
 }
 
 // Phone. Four tiles across is too tight to read, so wrap to two rows of two.
