@@ -23,7 +23,7 @@ export { GameRoom } from "./game-room.js";
 const ROOM_ID = "([A-Za-z0-9_-]{1,64})";
 
 export default {
-  async fetch(request: Request, env: Env): Promise<Response> {
+  async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     const url = new URL(request.url);
     const path = url.pathname;
 
@@ -62,7 +62,7 @@ export default {
 
     const archive = path.match(new RegExp(`^/api/games/${ROOM_ID}/archive$`));
     if (archive) {
-      const served = env.ARCHIVE ? await serveArchive(env.ARCHIVE, archive[1]!) : null;
+      const served = env.ARCHIVE ? await serveArchive(env.ARCHIVE, archive[1]!, request, ctx) : null;
       return served ?? json({ error: "no archive for that game" }, 404);
     }
 
