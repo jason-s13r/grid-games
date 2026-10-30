@@ -11,5 +11,6 @@ export interface Env {
   ARCHIVE?: R2Bucket;
   /** Days a finished game's room keeps its storage after archiving. */
   KEEP_DAYS?: string;
-  DEFAULT_DURATION_DAYS: string;
+  /** Minutes; 15 when unset. Set in the dashboard, not in wrangler.jsonc. */
+  DEFAULT_DURATION_MINUTES?: string;
 }

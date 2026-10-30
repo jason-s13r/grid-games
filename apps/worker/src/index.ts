@@ -6,6 +6,7 @@
 //   GET  /api/games/:id/archive  a finished game, whole, for a replay
 //   GET  /api/players/:key     one player's record and recent games
 //   GET  /api/leaderboard      the people who have won the most
+//   GET  /api/config           settings the page needs: the default length
 //   GET  /game/:id/ws      the game's WebSocket, handed to its Durable Object
 //   everything else        the web client, from static assets
 //
@@ -42,6 +43,10 @@ export default {
     if (player) {
       if (!env.DB) return json({ error: "no records here" }, 404);
       return json(await playerStats(env.DB, player[1]!), 200, 15);
+    }
+
+    if (path === "/api/config") {
+      return json({ defaultMinutes: defaultMinutes(env) }, 200, 60);
     }
 
     if (path === "/api/leaderboard") {
@@ -88,16 +93,22 @@ async function createGame(request: Request, env: Env): Promise<Response> {
   } catch {
     return json({ error: "expected a JSON body" }, 400);
   }
-  const defaultDays = Number(env.DEFAULT_DURATION_DAYS) || 10;
+  const defaultHours = defaultMinutes(env) / 60;
 
   // A collision is astronomically unlikely, and init refuses one anyway.
   for (let attempt = 0; attempt < 3; attempt++) {
     const id = newRoomId();
-    const config = configFrom(body, id, defaultDays, Date.now());
+    const config = configFrom(body, id, defaultHours, Date.now());
     if (typeof config === "string") return json({ error: config }, 400);
     if (await room(env, id).init(config)) return json({ id }, 201);
   }
   return json({ error: "could not allocate a room" }, 503);
+}
+
+/** The game length a form offers first: the dashboard's, or 15 minutes. */
+function defaultMinutes(env: Env): number {
+  const minutes = Number(env.DEFAULT_DURATION_MINUTES);
+  return Number.isFinite(minutes) && minutes > 0 ? minutes : 15;
 }
 
 function room(env: Env, id: string) {

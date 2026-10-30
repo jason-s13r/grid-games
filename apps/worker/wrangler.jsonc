@@ -33,9 +33,13 @@
   // KEEP_DAYS after archiving.
   "r2_buckets": [{ "binding": "ARCHIVE", "bucket_name": "tessera-archive" }],
 
+  // Settings that change without a rebuild are Worker variables set in the
+  // Cloudflare dashboard, and kept across deploys:
+  //   DEFAULT_DURATION_MINUTES  the game length the forms offer first, and
+  //                             what a create request without one gets
+  //                             (15 when unset; 14400 is ten days)
+  "keep_vars": true,
   "vars": {
-    // The game length the create form offers first.
-    "DEFAULT_DURATION_DAYS": "10",
     // How long a finished game's room keeps its storage once it is archived.
     "KEEP_DAYS": "30"
   },

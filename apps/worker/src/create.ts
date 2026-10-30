@@ -46,7 +46,7 @@ const isInt = (n: unknown, lo: number, hi: number): n is number =>
 export function configFrom(
   body: unknown,
   roomId: string,
-  defaultDays: number,
+  defaultHours: number,
   now: number,
 ): RoomConfig | string {
   if (!body || typeof body !== "object") return "expected a JSON object";
@@ -77,7 +77,7 @@ export function configFrom(
   const map = MAP_SIZES[request.map ?? "medium"];
   if (!map) return "map must be small, medium or large";
 
-  const hours = request.hours ?? defaultDays * 24;
+  const hours = request.hours ?? defaultHours;
   const duration = Math.round(hours * 60 * 60 * STEPS_PER_SECOND);
   if (typeof hours !== "number" || !(duration > 0) || duration > MAX_DURATION) {
     return `hours must be positive and at most ${MAX_DURATION / STEPS_PER_SECOND / 3600}`;

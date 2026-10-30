@@ -112,15 +112,29 @@ const COMMON_DURATIONS: ReadonlyArray<{ label: string; steps: number }> = [
   { label: "10 days", steps: hours(240) },
 ];
 
+/** Both forms start on the same length: 15 minutes, or what the Worker says
+ *  (DEFAULT_DURATION_MINUTES). A length the list does not have is added. */
 const lengthEl = pick<HTMLSelectElement>('[data-cfg="length"]');
-lengthEl.innerHTML = COMMON_DURATIONS.map(
-  (d, i) => `<option value="${d.steps}"${i === 4 ? " selected" : ""}>${d.label}</option>`,
-).join("");
-
 const onlineLengthEl = pick<HTMLSelectElement>('[data-online="length"]');
-onlineLengthEl.innerHTML = COMMON_DURATIONS.map(
-  (d) => `<option value="${d.steps}"${d.steps === hours(240) ? " selected" : ""}>${d.label}</option>`,
-).join("");
+
+function offerLengths(selected: number): void {
+  const choices = COMMON_DURATIONS.some((d) => d.steps === selected)
+    ? COMMON_DURATIONS
+    : [...COMMON_DURATIONS, { label: `${selected / minutes(1)} minutes`, steps: selected }].sort((a, b) => a.steps - b.steps);
+  const markup = choices
+    .map((d) => `<option value="${d.steps}"${d.steps === selected ? " selected" : ""}>${d.label}</option>`)
+    .join("");
+  lengthEl.innerHTML = markup;
+  onlineLengthEl.innerHTML = markup;
+}
+offerLengths(minutes(15));
+void fetch("/api/config")
+  .then((r) => (r.ok ? (r.json() as Promise<{ defaultMinutes?: number }>) : null))
+  .then((config) => {
+    const wanted = config?.defaultMinutes;
+    if (wanted && wanted > 0 && Math.round(minutes(wanted)) !== minutes(15)) offerLengths(Math.round(minutes(wanted)));
+  })
+  .catch(() => {});
 
 /** The duration the setup screen is asking for. Read at the moment a game
  *  starts rather than cached, the same way the map size is, so changing the
