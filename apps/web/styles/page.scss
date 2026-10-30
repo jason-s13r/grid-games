@@ -1,0 +1,76 @@
+// The plain pages beside the game: How to play and Privacy. Same house
+// colours and type as the start page, and no script.
+
+// The fonts are linked from each page (npm:@fontsource/…), as Sass does not
+// take CSS files.
+
+:root {
+  --forest: #1e352f;
+  --forest-ink: #24493d;
+  --mint: #8fdcb2;
+  --gold: #d9a85b;
+  --line: #1f2033;
+  --ink: #23201a;
+  --muted: #5f6b64;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  font: 17px/1.6 Nunito, ui-rounded, system-ui, sans-serif;
+  color: var(--ink);
+  background-color: #e3ebe5;
+  background-image: radial-gradient(rgba(36, 73, 61, 0.14) 1px, transparent 1.4px);
+  background-size: 18px 18px;
+}
+
+main {
+  max-width: 760px;
+  margin: 24px auto 48px;
+  padding: 28px 32px 32px;
+  background: #fff;
+  border: 2px solid var(--line);
+  border-radius: 16px;
+}
+
+h1, h2 { font-family: Fredoka, ui-rounded, system-ui, sans-serif; font-weight: 600; color: var(--forest-ink); }
+h1 { margin: 0 0 6px; font-size: 40px; line-height: 1.1; }
+h2 { margin: 30px 0 6px; font-size: 22px; }
+li { margin: 4px 0; }
+a { color: var(--forest-ink); }
+kbd {
+  padding: 0 5px;
+  font: 700 13px/1.4 Nunito, sans-serif;
+  border: 1px solid #c9d3cc;
+  border-radius: 4px;
+}
+
+.muted { color: var(--muted); font-size: 15px; }
+
+.play {
+  display: inline-block;
+  margin: 12px 0 4px;
+  padding: 10px 26px;
+  font: 600 19px Fredoka, sans-serif;
+  color: #2a1d07;
+  text-decoration: none;
+  background: var(--gold);
+  border: 2px solid var(--line);
+  border-radius: 999px;
+}
+
+nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 18px;
+  margin-top: 32px;
+  padding-top: 14px;
+  border-top: 1px solid #dfe6e0;
+  font-size: 15px;
+}
+
+@media (max-width: 560px) {
+  main { margin: 0; padding: 22px 18px 28px; border: none; border-radius: 0; }
+  h1 { font-size: 32px; }
+}

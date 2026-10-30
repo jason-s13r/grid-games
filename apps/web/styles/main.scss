@@ -877,6 +877,62 @@ h1, h2, h3, .brand, .screen-brand {
   .settings, .screen-foot, .screen-note { display: none; }
 }
 
+// The links every Qot. game has at the foot of its start page.
+.site-links {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 4px 22px;
+  padding: 6px 0;
+  font-family: var(--font-display);
+  font-size: 17px;
+  a, button {
+    padding: 4px 0;
+    font: inherit;
+    color: var(--forest-ink);
+    text-decoration: none;
+    background: none;
+    border: 0;
+    cursor: pointer;
+    &:hover { text-decoration: underline; }
+  }
+}
+.screen-foot a { color: var(--muted); font-size: 12px; }
+
+// The tip dialog: a QR code for your phone, or open the link here.
+.tip {
+  width: min(420px, calc(100vw - 32px));
+  padding: 24px;
+  text-align: center;
+  color: #eaf2ec;
+  background: var(--forest);
+  border: 2px solid var(--line);
+  border-radius: 18px;
+  &::backdrop { background: rgba(0, 0, 0, 0.55); }
+  h2 { margin: 0 32px 10px; font-family: var(--font-display); font-weight: 600; color: var(--mint); }
+  p { margin: 8px 0; }
+  .btn.primary { display: inline-block; width: auto; padding: 8px 22px; text-decoration: none; }
+}
+.tip-qr {
+  width: 200px;
+  margin: 10px auto;
+  padding: 12px;
+  background: #fff;
+  border-radius: 10px;
+  svg { display: block; width: 100%; height: auto; }
+}
+.tip-address { font-size: 13px; color: #9db8aa; }
+.tip-close {
+  position: absolute;
+  top: 12px;
+  right: 14px;
+  font-size: 18px;
+  color: #cfe2d6;
+  background: none;
+  border: 0;
+  cursor: pointer;
+}
+
 // --- the create page -----------------------------------------------------------
 
 .create { display: grid; gap: 14px; > .seg { justify-self: start; } }
@@ -1205,10 +1261,11 @@ h1, h2, h3, .brand, .screen-brand {
 .screen-foot {
   display: flex;
   align-items: center;
+  justify-content: center;
   flex-wrap: wrap;
   gap: 12px;
-  margin-top: 20px;
 }
+.screen-note { text-align: center; }
 
 // The prototype link is a button, and .btn was written for one.
 a.btn {

@@ -185,8 +185,17 @@
             </div>
           </details>
 
+          <!-- The same links as on the other Qot. games. Support shows only
+               when the Worker has a tip link (TIP_URL). -->
+          <footer class="site-links">
+            <a href="/about">How to play</a>
+            <a href="/privacy">Privacy</a>
+            <a href="https://qot.nz/games/tessera">Qot. games</a>
+            <button type="button" data-support hidden>Support the game &#9749;</button>
+          </footer>
+
           <footer class="screen-foot">
-            <a class="btn" href="/prototype/">Original prototype</a>
+            <a href="/prototype/">Original prototype</a>
             <span class="version" data-version-menu></span>
           </footer>
 
@@ -205,5 +214,15 @@
         </div>
       </section>
     </div>
+
+    <!-- The tip link as a QR code, to pay on your own phone, or open it here. -->
+    <dialog class="tip" data-tip>
+      <button class="tip-close" type="button" aria-label="Close" data-tip-close>&#10005;</button>
+      <h2>Support the game &#9749;</h2>
+      <p>Thanks! Scan this with your phone to leave a tip:</p>
+      <div class="tip-qr" data-tip-qr></div>
+      <p class="tip-address" data-tip-address></p>
+      <a class="btn primary" target="_blank" rel="noopener" data-tip-open>Open it here</a>
+    </dialog>
   </body>
 </html>

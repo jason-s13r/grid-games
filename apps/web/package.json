@@ -3,7 +3,11 @@
   "version": "0.10.0",
   "private": true,
   "type": "module",
-  "source": "index.html",
+  "source": [
+    "index.html",
+    "about.html",
+    "privacy.html"
+  ],
   "scripts": {
     "dev": "parcel",
     "build": "parcel build --public-url /",
@@ -16,7 +20,8 @@
     "@fontsource/nunito": "5.2.7",
     "@tessera/protocol": "workspace:*",
     "@tessera/room": "workspace:*",
-    "@tessera/sim": "workspace:*"
+    "@tessera/sim": "workspace:*",
+    "qrcode-generator": "2.0.4"
   },
   "devDependencies": {
     "@parcel/transformer-sass": "2.16.4",

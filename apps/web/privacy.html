@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Privacy · Tessera</title>
+    <meta name="description" content="What Tessera keeps, who can see it, and how to have it removed." />
+    <link rel="stylesheet" href="npm:@fontsource/fredoka/600.css" />
+    <link rel="stylesheet" href="npm:@fontsource/nunito/400.css" />
+    <link rel="stylesheet" href="npm:@fontsource/nunito/700.css" />
+    <link rel="stylesheet" href="styles/page.scss" />
+  </head>
+  <body>
+    <main>
+      <h1>Privacy</h1>
+      <p class="muted">Tessera (tessera.qot.nz). Last updated 30 October 2026.</p>
+
+      <p>Tessera has no accounts, no analytics, no ads and no tracking, and it doesn't ask for an email, age, photo or location. It doesn't set cookies: what it keeps on your device is in the browser's local storage, described below.</p>
+
+      <h2>What your browser keeps</h2>
+      <ul>
+        <li><strong>A key.</strong> The first time you play, your browser makes a key and keeps it. It's who you are in Tessera: your moves are signed with it, so nobody else can play your seat. It isn't linked to who you are outside the game.</li>
+        <li><strong>The name you choose</strong>, if you choose one, under Settings on the start page.</li>
+      </ul>
+
+      <h2>What the server keeps</h2>
+      <ul>
+        <li><strong>For each online game:</strong> who is in it (each player's public key and chosen name), every move, and the chat. This stays with the game while it runs and is deleted 30 days after it ends.</li>
+        <li><strong>A finished game's record:</strong> its moves, who played which empire, and the result, so it can be watched back. It doesn't include the chat.</li>
+        <li><strong>For the lists and the leaderboard:</strong> the games you've joined, your results, and the latest name your key used.</li>
+      </ul>
+      <p>Solo games stay in your browser. Nothing about them is sent anywhere.</p>
+
+      <h2>Who can see what</h2>
+      <ul>
+        <li>Other players in a game see your chosen name, the start of your key, your moves and what you say in chat. Team chat goes only to your own empire.</li>
+        <li>A game listed publicly appears on the start page for anyone. A game that isn't listed can still be joined or watched by anyone who has its link.</li>
+        <li>The leaderboard shows the names and the start of the keys of the top players.</li>
+      </ul>
+
+      <h2>Who else is involved</h2>
+      <p>Tessera runs on Cloudflare, which hosts the website, the games and the records, and keeps the usual server logs. We don't sell or share data with anyone else.</p>
+      <p>You can choose to tip the game's maker. The tip link opens Ko-fi, which handles the payment; the game never sees names, emails or card details from it.</p>
+
+      <h2>Removing it</h2>
+      <p>Clearing your browser's data for tessera.qot.nz removes your key and name from the device; the records left behind can't then be tied to you. To have your name and records removed from the server, email <a href="mailto:privacy@qot.nz">privacy@qot.nz</a> with the start of your key (shown beside your name in the game).</p>
+
+      <h2>Questions, copies and corrections</h2>
+      <p>To ask a question, or for a copy of what Tessera holds about your key, email <a href="mailto:privacy@qot.nz">privacy@qot.nz</a>. Tessera is made in New Zealand and follows the New Zealand Privacy Act 2020.</p>
+
+      <nav>
+        <a href="/">Play</a>
+        <a href="/about">How to play</a>
+        <a href="https://qot.nz/games/tessera">Qot. games</a>
+      </nav>
+    </main>
+  </body>
+</html>

@@ -8,6 +8,7 @@
 //   GET  /api/leaderboard?scope=total|game  the top ten for each stat: games
 //                              won, area, population, coin cascade
 //   GET  /api/config           settings the page needs: the default length
+//                              and the tip link
 //   GET  /game/:id/ws      the game's WebSocket, handed to its Durable Object
 //   everything else        the web client, from static assets
 //
@@ -47,7 +48,7 @@ export default {
     }
 
     if (path === "/api/config") {
-      return json({ defaultMinutes: defaultMinutes(env) }, 200, 60);
+      return json({ defaultMinutes: defaultMinutes(env), tipUrl: tipUrl(env) }, 200, 60);
     }
 
     if (path === "/api/leaderboard") {
@@ -110,6 +111,14 @@ async function createGame(request: Request, env: Env): Promise<Response> {
     if (await room(env, id).init(config)) return json({ id }, 201);
   }
   return json({ error: "could not allocate a room" }, 503);
+}
+
+/** Where "Support the game" goes: TIP_URL from the dashboard, the maker's
+ *  Ko-fi page when unset, or nowhere when it is "off". */
+function tipUrl(env: Env): string {
+  const set = (env.TIP_URL ?? "").trim();
+  if (set === "off") return "";
+  return /^https:\/\//.test(set) ? set : "https://ko-fi.com/jason_s13r";
 }
 
 /** The game length a form offers first: the dashboard's, or 15 minutes. */

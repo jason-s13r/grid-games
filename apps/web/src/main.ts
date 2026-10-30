@@ -34,6 +34,7 @@ import { PeoplePanel } from "./view/People";
 import { ChatPanel } from "./view/Chat";
 import { GamesPanel } from "./view/Games";
 import { Marks } from "./view/Marks";
+import { offerTip } from "./view/tip";
 import { ReplayGame, SPEEDS } from "./game/Replay";
 import type { Archive } from "./game/Replay";
 import { fromBase64Url, toBase64Url, utf8, fromUtf8 } from "@tessera/protocol";
@@ -79,8 +80,9 @@ const rivals = new Rivals(pick<HTMLElement>("[data-rivals]"));
  *  start from it. */
 let defaultLength = minutes(15);
 void fetch("/api/config")
-  .then((r) => (r.ok ? (r.json() as Promise<{ defaultMinutes?: number }>) : null))
+  .then((r) => (r.ok ? (r.json() as Promise<{ defaultMinutes?: number; tipUrl?: string }>) : null))
   .then((config) => {
+    offerTip(config?.tipUrl ?? "");
     const wanted = config?.defaultMinutes;
     if (!wanted || wanted <= 0) return;
     defaultLength = Math.round(minutes(wanted));

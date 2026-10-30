@@ -38,6 +38,8 @@
   //   DEFAULT_DURATION_MINUTES  the game length the forms offer first, and
   //                             what a create request without one gets
   //                             (15 when unset; 14400 is ten days)
+  //   TIP_URL                   where "Support the game" goes (the maker's
+  //                             Ko-fi page when unset), or "off" for none
   "keep_vars": true,
   "vars": {
     // How long a finished game's room keeps its storage once it is archived.

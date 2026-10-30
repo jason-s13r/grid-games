@@ -13,4 +13,6 @@ export interface Env {
   KEEP_DAYS?: string;
   /** Minutes; 15 when unset. Set in the dashboard, not in wrangler.jsonc. */
   DEFAULT_DURATION_MINUTES?: string;
+  /** "Support the game": a link, or "off". Set in the dashboard. */
+  TIP_URL?: string;
 }
