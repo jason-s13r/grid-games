@@ -1,5 +1,17 @@
 # Changelog
 
+## protocol@1.1.0 (2026-10-30)
+
+### Features
+
+- backup codes, and a signed request to forget a name
+  Identity.toBackup gives the keypair as a short code (T1 and 96 bytes in
+  base64url) and Identity.fromBackup reads one back, from the code or a
+  link with #restore= in it, refusing a code whose halves do not belong
+  together. forgetPayload is what a member signs to have its name taken
+  out of the records.
+
+
 ## protocol@1.0.0 (2026-10-30)
 
 ### Breaking Changes

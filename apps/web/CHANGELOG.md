@@ -1,5 +1,62 @@
 # Changelog
 
+## web@1.1.0 (2026-10-30)
+
+### Features
+
+- a gear on the start page for your name, backup and devices
+  The start page's Settings fold is gone. A quiet gear at the top right of
+  the header opens one dialog, You: your name, then Back up, Move between
+  devices, Use a backup code and Delete my data, each a step inside it with
+  Back to return. A game's Settings has a button to the same dialog.
+
+- your player under Settings: back up, move between devices, use a backup code, delete my data
+  Back up shows the player as a QR code, a link (#restore=) and a code;
+  opening the link on another device offers to play as that player there.
+  Move between devices: one device shows a four-letter code, the other
+  types it in, both show the same two pictures, and the player goes across
+  sealed with a secret the two devices agreed (copy, or move and sign the
+  old device out). Delete my data takes your name out of the records and
+  your games, optionally signing the device out. The privacy page says so.
+
+- the wordmark links to the start page; one Start page item in the menu
+  Tessera in the status bar, now kept on phones held upright with a
+  narrower meter beside it, goes to the start page, and so does the menu's
+  Start page, which replaces both Start page and Leave the game. From an
+  online game it leaves the room (the game waits under Your games with
+  Resume); a solo game is kept, with Back to the game. Population reads Pop
+  on a phone, so the second row stays one row on the smallest screens.
+
+- a steadier phone layout, a small map on the board, and a way to find each capital
+  On a phone the game is exactly the screen's height: the status bar, the
+  board and the tabs stay put and only the open panel scrolls, so the board
+  no longer scrolls away and no dark page shows under a short panel. Held
+  upright, the status bar is two short rows (empire, meter and menu; then
+  tiles, population and the clock), without the wordmark.
+
+  Phones get a small copy of the minimap in the board's bottom-left corner,
+  showing where the view is; tap it to jump, or tuck it away (remembered on
+  the device). It steps aside while the Map tab is open. The view rectangle
+  on both minimaps is now dark on the paper and never too small to find.
+
+  Each empire in the standings has a button that centres the board on its
+  capital. The standings redraw every step, so they, like the store, are
+  left alone while being pressed, or a tap could be lost.
+
+### Fixes
+
+- stop the page zooming on a double tap or a focused text field
+  Pressing a pan or zoom button twice quickly zoomed the page, and Safari
+  zoomed in on the chat box and name fields and stayed zoomed. The page now
+  ignores double-tap zoom, and the game's viewport has a maximum scale of
+  one; the board keeps its own zoom.
+
+### Dependencies
+
+- protocol: 1.0.0 -> 1.1.0
+- room: 1.0.0 -> 1.1.0
+
+
 ## web@1.0.0 (2026-10-30)
 
 ### Breaking Changes

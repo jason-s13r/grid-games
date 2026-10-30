@@ -1,5 +1,27 @@
 # Changelog
 
+## worker@0.2.0 (2026-10-30)
+
+### Features
+
+- Delete my data, names out of archives, and a meeting place for moving a player
+  Archives and results carry keys and no names; names stay in the records,
+  where their owners can take them out. POST /api/players/:key/forget,
+  signed by the key, sets the name to the key's stand-in in players and
+  seats, and tells the room of every game the key sat in to forget it too
+  (the player list and the chat), so running games show it straight away.
+
+  A Pairing Durable Object (migration v2) at /api/pair/:code/ws passes
+  messages between two devices for up to ten minutes and keeps nothing,
+  for moving a player from one to the other.
+
+### Dependencies
+
+- protocol: 1.0.0 -> 1.1.0
+- room: 1.0.0 -> 1.1.0
+- web: 1.0.0 -> 1.1.0
+
+
 ## worker@0.1.0 (2026-10-30)
 
 ### Features
