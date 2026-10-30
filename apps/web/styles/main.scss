@@ -246,7 +246,7 @@ h1, h2, h3, .brand, .screen-brand {
   overflow: hidden;
   border: 2px solid var(--line);
   border-radius: 10px;
-  box-shadow: 4px 4px 0 var(--line);
+  box-shadow: 0 4px 16px rgba(20, 40, 33, 0.18);
 }
 
 .viewport {
@@ -419,9 +419,6 @@ h1, h2, h3, .brand, .screen-brand {
 .pan-down  { bottom: 8px; left: 50%; transform: translateX(-50%); }
 .pan-left  { left: 8px;   top: 50%;  transform: translateY(-50%); }
 .pan-right { right: 8px;  top: 50%;  transform: translateY(-50%); }
-// Pressing still sinks into the shadow, from wherever the button sits.
-.pan-up:active:not(:disabled), .pan-down:active:not(:disabled) { transform: translate(calc(-50% + 2px), 2px); }
-.pan-left:active:not(:disabled), .pan-right:active:not(:disabled) { transform: translate(2px, calc(-50% + 2px)); }
 
 .viewctl {
   position: absolute;
@@ -558,11 +555,9 @@ h1, h2, h3, .brand, .screen-brand {
   border: 2px solid var(--line);
   border-radius: 8px;
   background: var(--card);
-  box-shadow: 2px 2px 0 var(--line);
   cursor: pointer;
 
   &:hover:not(:disabled) { background: #f1f8f3; }
-  &:active:not(:disabled) { transform: translate(2px, 2px); box-shadow: none; }
   &:disabled { cursor: default; .act-glyph, .act-name, .act-what { opacity: 0.5; } }
 }
 
@@ -717,7 +712,7 @@ h1, h2, h3, .brand, .screen-brand {
   background: var(--forest-2);
   border: 2px solid var(--line);
   border-radius: 10px;
-  box-shadow: 4px 4px 0 var(--line);
+  box-shadow: 0 4px 16px rgba(20, 40, 33, 0.18);
 
   .btn { text-align: left; }
   .version { padding: 2px 4px 0; }
@@ -1018,8 +1013,7 @@ a.btn {
   a { color: inherit; }
 }
 
-// Rounded, outlined and sitting on a small hard shadow, like the buttons on
-// qot.nz; it presses down into the shadow.
+// Rounded and outlined.
 .btn {
   font: inherit;
   font-weight: 600;
@@ -1028,10 +1022,8 @@ a.btn {
   border: 2px solid var(--line);
   background: #fffdf6;
   border-radius: 8px;
-  box-shadow: 2px 2px 0 var(--line);
   cursor: pointer;
   &:hover:not(:disabled) { background: #fff; }
-  &:active:not(:disabled) { transform: translate(2px, 2px); box-shadow: none; }
   &:disabled { opacity: 0.45; cursor: default; }
   &:focus-visible { outline: 2px solid var(--mint); outline-offset: 2px; }
   &.sm { font-size: 11px; padding: 4px 6px; }
