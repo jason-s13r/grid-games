@@ -240,6 +240,7 @@ function mount(driver: Driver): void {
   controls = new Controls(game, {
     hud: pick<HTMLElement>("[data-you]"),
     acts: pick<HTMLElement>("[data-acts]"),
+    storeHead: pick<HTMLElement>("[data-store-head]"),
     standings: pick<HTMLElement>("[data-standings]"),
     roster: pick<HTMLElement>("[data-roster]"),
     rosterPanel: pick<HTMLElement>("[data-roster-panel]"),

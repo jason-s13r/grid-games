@@ -35,6 +35,7 @@ const mount = () => {
     els: {
       hud: el("hud"),
       acts: el("acts"),
+      storeHead: el("storeHead"),
       standings: el("standings"),
       roster: el("roster"),
       rosterPanel: el("rosterPanel"),

@@ -26,6 +26,7 @@ const stub = () =>
 const elementsFor = () => ({
   hud: stub(),
   acts: stub(),
+  storeHead: stub(),
   standings: stub(),
   roster: stub(),
   rosterPanel: stub(),
@@ -180,16 +181,17 @@ describe("clicking the board", () => {
       expect(els.acts.innerHTML).not.toContain('data-buy="march"');
     });
 
-    it("shows a bought modifier on the HUD instead", () => {
+    it("shows a bought modifier among what is owned instead", () => {
       const els = elementsFor();
       const controls = new Controls(game, els);
 
       controls.render(game.sim.state);
-      expect(els.hud.innerHTML).not.toContain("Growth");
+      expect(els.storeHead.innerHTML).not.toContain("Growth");
 
       empire.growthUnlocked = 1;
       controls.render(game.sim.state);
-      expect(els.hud.innerHTML).toContain("Growth");
+      expect(els.storeHead.innerHTML).toContain("Growth");
+      expect(els.hud.innerHTML).not.toContain("Growth");
     });
 
     it("keeps bridges buyable however many are already held", () => {
@@ -200,7 +202,7 @@ describe("clicking the board", () => {
       empire.diamonds = 99;
       controls.render(game.sim.state);
       expect(els.acts.innerHTML).toContain('data-buy="bridge"');
-      expect(els.acts.innerHTML).toContain("&times;3");
+      expect(els.storeHead.innerHTML).toContain("&times;3");
     });
   });
 });

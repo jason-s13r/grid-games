@@ -227,14 +227,40 @@ h1, h2, h3, .brand, .screen-brand {
 // A standing modifier, once bought. It is not a control — there is nothing to
 // press and nothing to spend — so it reads as a property of the empire.
 .mod {
-  font-size: 10px;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  padding: 2px 7px;
-  border-radius: 3px;
-  background: #e9f1e3;
-  border: 1px solid #a8c093;
-  color: #3d5c2d;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 1px 8px;
+  border-radius: 999px;
+  background: #e3ebe5;
+  color: var(--forest-ink);
+}
+
+// The store's first line: diamonds to spend, then what is already owned.
+.store-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 12px;
+  margin-bottom: 8px;
+
+  &:empty { display: none; }
+  i {
+    font-style: normal;
+    font-size: 11px;
+    color: var(--muted);
+  }
+}
+.store-diamonds {
+  font-size: 15px;
+  color: #9a6a1c;
+  b { font-family: var(--font-display); font-size: 20px; font-weight: 600; }
+  i { margin-left: 2px; }
+}
+.store-owned {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
 }
 
 // The stage is the letterbox; the board is the picture. Sizing the board from

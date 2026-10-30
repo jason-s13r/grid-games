@@ -74,15 +74,13 @@ interface Act {
   name: string;
   what: string;
   cost: number;
-  /** How many are in hand, for the things you can stockpile. */
-  held?: number;
   affordable: boolean;
 }
 
 const tile = (act: Act): string =>
   `<button class="act" data-buy="${act.buy}"${act.affordable ? "" : " disabled"}>
      <span class="act-glyph">${act.glyph}</span>
-     <span class="act-name">${act.name}${act.held ? `<span class="act-count">&times;${act.held}</span>` : ""}</span>
+     <span class="act-name">${act.name}</span>
      <span class="act-meta">${act.cost}&#9670;</span>
      <span class="act-what">${act.what}</span>
    </button>`;
@@ -93,6 +91,7 @@ export class Controls {
     private els: {
       hud: HTMLElement;
       acts: HTMLElement;
+      storeHead: HTMLElement;
       standings: HTMLElement;
       roster: HTMLElement;
       rosterPanel: HTMLElement;
@@ -145,6 +144,7 @@ export class Controls {
       this.showClock(state);
       this.put(this.els.hud, "hud", `<strong class="hud-name">Watching</strong>`);
       this.put(this.els.acts, "acts", "");
+      this.put(this.els.storeHead, "storeHead", "");
       this.els.rosterPanel.hidden = true;
       this.renderStandings(state);
       return;
@@ -170,18 +170,22 @@ export class Controls {
       </div>
       <span class="fact"><i>Tiles</i><b>${empire.tilesOwned}</b></span>
       <span class="fact fact-pop"><i>Population</i><b>${empire.popTotal.toLocaleString()}</b></span>
-      <span class="fact"><i>Diamonds</i><b>${empire.diamonds}</b></span>
-      ${
-        empire.marchUnlocked
-          ? '<span class="mod" title="Claims reach two tiles out instead of one.">March</span>'
-          : ""
-      }
-      ${
-        empire.growthUnlocked
-          ? '<span class="mod" title="Tiles connected to your capital gain population over time.">Growth</span>'
-          : ""
-      }
     `,
+    );
+
+    // What there is to spend, and what is already bought, at the top of the
+    // store: that is where the number matters.
+    const owned = [
+      empire.bridges ? `<span class="mod" title="Bridges in hand: click a river tile beside your border.">Bridge &times;${empire.bridges}</span>` : "",
+      empire.ladders ? `<span class="mod" title="Ladders in hand: click a wall tile beside your border.">Ladder &times;${empire.ladders}</span>` : "",
+      empire.marchUnlocked ? '<span class="mod" title="Claims reach two tiles out instead of one.">March</span>' : "",
+      empire.growthUnlocked ? '<span class="mod" title="Tiles connected to your capital gain population over time.">Growth</span>' : "",
+    ].join("");
+    this.put(
+      this.els.storeHead,
+      "storeHead",
+      `<span class="store-diamonds"><b>${empire.diamonds}</b>&#9670; <i>diamonds</i></span>
+       ${owned ? `<span class="store-owned"><i>Owned</i>${owned}</span>` : ""}`,
     );
 
     // A bought modifier is not a button. It has no second state to toggle and
@@ -196,7 +200,6 @@ export class Controls {
         name: "Bridge",
         what: "Crosses a river. Click any river tile beside your border.",
         cost: rules.bridgeCost,
-        held: empire.bridges,
         affordable: empire.diamonds >= rules.bridgeCost,
       }),
       tile({
@@ -205,7 +208,6 @@ export class Controls {
         name: "Ladder",
         what: "Crosses a wall. Click any wall tile beside your border.",
         cost: rules.ladderCost,
-        held: empire.ladders,
         affordable: empire.diamonds >= rules.ladderCost,
       }),
       empire.marchUnlocked
