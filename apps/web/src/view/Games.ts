@@ -57,8 +57,8 @@ export class GamesPanel {
     root.innerHTML = `
       <section class="card" data-list="mine" hidden></section>
       <section class="card" data-list="public"></section>
-      <section class="card" data-list="finished"></section>
-      <section class="card" data-list="leaders"></section>`;
+      <section class="card" data-list="leaders"></section>
+      <section class="card" data-list="finished"></section>`;
   }
 
   /** Load every list afresh. */
