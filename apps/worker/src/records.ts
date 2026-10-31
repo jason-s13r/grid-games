@@ -41,6 +41,16 @@ export function writeGame(db: D1Database, game: GameSummary, now: number): Promi
     .run();
 }
 
+/** Take a game out of the records altogether: a deserted one, which nobody
+ *  played and nobody needs to find again. */
+export function dropGame(db: D1Database, id: string): Promise<unknown> {
+  return db.batch([
+    db.prepare(`DELETE FROM results WHERE game_id = ?1`).bind(id),
+    db.prepare(`DELETE FROM seats WHERE game_id = ?1`).bind(id),
+    db.prepare(`DELETE FROM games WHERE id = ?1`).bind(id),
+  ]);
+}
+
 export function writePlayer(db: D1Database, player: PlayerRecord): Promise<unknown> {
   const name = player.name || `player ${player.key.slice(0, 6)}`;
   return db.batch([

@@ -688,6 +688,9 @@ describe("records", () => {
     expect(last.players).toBe(2);
     expect(last.startedAt).toBe(h.clock.time);
     expect(last.endsAt).toBe(last.startedAt! + 30 * 60_000);
+    // First when joining closes, to see whether anybody came; then the end.
+    expect(h.room.wakeAt()).toBe(last.joinUntil);
+    h.clock.time = last.joinUntil!;
     expect(h.room.wakeAt()).toBe(last.endsAt! + 1000);
   });
 
@@ -785,5 +788,43 @@ describe("forgetting a name", () => {
     // It sticks, and a second time there is nothing to forget.
     h.restart();
     expect(h.room.forget(alice.key)).toBe(false);
+  });
+});
+
+describe("a game nobody came to", () => {
+  it("is deserted when its scheduled start finds nobody in an empire", async () => {
+    const startAt = 1_800_000_000_000 + 60_000;
+    const h = new Harness({ creator: alice.key, bots: ["easy"], startAt });
+    await h.join(bob); // here, but never picks
+    expect(h.room.deserted()).toBe(false);
+    await h.run(61_000, 1000);
+    expect(h.room.phase).toBe("lobby");
+    expect(h.room.deserted()).toBe(true);
+  });
+
+  it("is not deserted while a person holds a seat, before or after the join window", async () => {
+    const { h } = await started();
+    expect(h.room.deserted()).toBe(false);
+    const joinUntil = h.games.at(-1)!.joinUntil!;
+    expect(h.room.wakeAt()).toBe(joinUntil);
+    h.clock.time = joinUntil + 1;
+    expect(h.room.deserted()).toBe(false);
+  });
+
+  it("is deserted once the join window closes with only bots seated", async () => {
+    const h = new Harness({ creator: alice.key, empires: 2, bots: ["easy"] });
+    const a = await h.join(alice, "alice"); // starts it, takes no seat
+    const bot = await h.join(dave, "night watch", { bot: true });
+    bot.client.pickEmpire(0);
+    await h.settle();
+    a.client.start();
+    await h.settle();
+    expect(h.room.phase).toBe("playing");
+
+    const joinUntil = h.games.at(-1)!.joinUntil!;
+    h.clock.time = joinUntil - 1;
+    expect(h.room.deserted()).toBe(false);
+    h.clock.time = joinUntil;
+    expect(h.room.deserted()).toBe(true);
   });
 });

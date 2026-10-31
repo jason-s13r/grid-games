@@ -15,13 +15,16 @@
 //
 // A game that has ended is archived to R2, and some days later (KEEP_DAYS)
 // the object deletes its own storage: from then on the archive is the game.
+//
+// A game nobody came to (see Room.deserted) goes entirely, once joining has
+// closed: its storage and its rows in D1, with no archive.
 
 import { DurableObject } from "cloudflare:workers";
 import { Room } from "@tessera/room";
 import type { Connection, RoomConfig, RoomEvents } from "@tessera/room";
 import { SqlStore } from "./store.js";
 import type { StoreUsage } from "./store.js";
-import { writeGame, writePlayer, writeResult } from "./records.js";
+import { dropGame, writeGame, writePlayer, writeResult } from "./records.js";
 import { writeArchive } from "./archive.js";
 import type { Env } from "./env.js";
 
@@ -134,6 +137,11 @@ export class GameRoom extends DurableObject<Env> {
     const until = this.keptUntil();
     if (until !== undefined && Date.now() >= until) return this.forget();
     await room.tick();
+    if (room.deserted()) {
+      await this.flush();
+      if (this.env.DB) await dropGame(this.env.DB, room.id).catch((error: unknown) => console.error("D1 delete failed", error));
+      return this.forget("nobody played this game");
+    }
     await this.schedule();
     await this.flush();
   }
@@ -204,11 +212,12 @@ export class GameRoom extends DurableObject<Env> {
     return at + (Number.isFinite(days) && days >= 0 ? days : 30) * 86_400_000;
   }
 
-  /** Delete everything: the game lives on as its archive. */
-  private async forget(): Promise<void> {
+  /** Delete everything: the game lives on as its archive, or, deserted, not
+   *  at all. */
+  private async forget(reason = "this game has been archived"): Promise<void> {
     for (const ws of this.ctx.getWebSockets()) {
       try {
-        ws.close(1000, "this game has been archived");
+        ws.close(1000, reason);
       } catch {
         // Already closed.
       }

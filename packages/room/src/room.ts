@@ -260,7 +260,35 @@ export class Room {
     const start = this.genesis.startedAt;
     const next = start + (Math.floor((this.now() - start) / CHECK_EVERY_MS) + 1) * CHECK_EVERY_MS;
     const end = this.endsAt();
-    return end === undefined ? next : Math.min(next, end + 1000);
+    // And once when the join window closes, to see whether anybody came.
+    const joins = this.joinUntil();
+    const soon = joins !== undefined && joins > this.now() ? Math.min(next, joins) : next;
+    return end === undefined ? soon : Math.min(soon, end + 1000);
+  }
+
+  /** When nobody new can take a seat any more: the end of the join window, or
+   *  the start for a game without one. Undefined before the game starts. */
+  private joinUntil(): number | undefined {
+    const genesis = this.genesis;
+    if (!genesis) return undefined;
+    const window = genesis.rules.joinWindow ?? 0;
+    return window > 0 ? timeOf(genesis.startedAt, window) : genesis.startedAt;
+  }
+
+  /** Nobody is going to play this game: joining has closed and no person (as
+   *  opposed to a bot) holds a seat, or its scheduled start came with nobody
+   *  having picked an empire. The host deletes such a game outright; there is
+   *  nothing in it worth keeping. */
+  deserted(): boolean {
+    if (this.finished) return false;
+    const now = this.now();
+    if (this._phase === "lobby") {
+      const at = this.config.startAt;
+      return at !== undefined && now >= at && !this.players.some((p) => p.empire !== null && !p.bot);
+    }
+    const joins = this.joinUntil();
+    if (joins === undefined || now < joins || !this.roster) return false;
+    return !this.roster.all().some((seat) => !this.isBot(seat.key));
   }
 
   /** The game as a listing shows it. */
