@@ -124,8 +124,10 @@ export const DEFAULT_RULES: Rules = {
   decayDen: 8,
   decayMin: 1,
 
-  coinNearBias: 72,
-  coinNearRadius: 4,
+  // Most coins land within six steps of somebody's ground or another coin,
+  // which is where cascades happen.
+  coinNearBias: 85,
+  coinNearRadius: 6,
 
   // v5. 5,000 a tile for the first three hours, 10,000 for the next three, and
   // so on to 50,000 thirty hours in.

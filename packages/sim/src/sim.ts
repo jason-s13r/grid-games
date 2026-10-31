@@ -47,7 +47,11 @@ export function makeGenesis(init: GenesisInit): Genesis {
     seed: init.seed >>> 0,
     startedAt: init.startedAt ?? 0,
     map: { ...mapFor(init.map?.width ?? DEFAULT_MAP.width, init.map?.height ?? DEFAULT_MAP.height), ...init.map },
-    rules: { ...DEFAULT_RULES, ...init.rules },
+    rules: {
+      ...DEFAULT_RULES,
+      ...coinsFor(init.map?.width ?? DEFAULT_MAP.width, init.map?.height ?? DEFAULT_MAP.height),
+      ...init.rules,
+    },
     empires: init.empires,
   };
 }
@@ -72,6 +76,19 @@ export function mapFor(width: number, height: number): MapConfig {
     walls: scale(DEFAULT_MAP.walls, area),
     rivers: scale(DEFAULT_MAP.rivers, side),
     riverGaps: scale(DEFAULT_MAP.riverGaps, side),
+  };
+}
+
+/** How often coins appear, and how many may lie about, for a map of this
+ *  size. The defaults are for 96 by 64; a map with three times the ground gets
+ *  coins three times as often and room for three times as many, so a larger
+ *  map is not a sparser one. At the default size this is the defaults. */
+export function coinsFor(width: number, height: number): Pick<Rules, "coinIntervalMin" | "coinIntervalMax" | "maxItemsOnMap"> {
+  const area = (width * height) / (DEFAULT_MAP.width * DEFAULT_MAP.height);
+  return {
+    coinIntervalMin: Math.max(1, Math.round(DEFAULT_RULES.coinIntervalMin / area)),
+    coinIntervalMax: Math.max(2, Math.round(DEFAULT_RULES.coinIntervalMax / area)),
+    maxItemsOnMap: Math.max(1, Math.round(DEFAULT_RULES.maxItemsOnMap * area)),
   };
 }
 

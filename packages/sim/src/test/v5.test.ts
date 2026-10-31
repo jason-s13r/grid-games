@@ -3,8 +3,8 @@
 // the gate on the version is tested along with the rule.
 
 import { describe, expect, it } from "vitest";
-import { Sim, makeGenesis, mapFor, CLAIM } from "../sim.js";
-import { DEFAULT_MAP, hours, minutes } from "../constants.js";
+import { Sim, makeGenesis, mapFor, coinsFor, CLAIM } from "../sim.js";
+import { DEFAULT_MAP, DEFAULT_RULES, hours, minutes } from "../constants.js";
 import { ITEM, TERRAIN, CONTROL } from "../types.js";
 import { place } from "../rules.js";
 import { upkeep } from "../upkeep.js";
@@ -224,6 +224,18 @@ describe("coins", () => {
 describe("map size", () => {
   it("is the default map at the default size", () => {
     expect(mapFor(DEFAULT_MAP.width, DEFAULT_MAP.height)).toEqual(DEFAULT_MAP);
+  });
+
+  it("gives a bigger map coins as often for its size", () => {
+    expect(coinsFor(DEFAULT_MAP.width, DEFAULT_MAP.height)).toEqual({
+      coinIntervalMin: DEFAULT_RULES.coinIntervalMin,
+      coinIntervalMax: DEFAULT_RULES.coinIntervalMax,
+      maxItemsOnMap: DEFAULT_RULES.maxItemsOnMap,
+    });
+    const big = coinsFor(DEFAULT_MAP.width * 2, DEFAULT_MAP.height * 2);
+    expect(big.maxItemsOnMap).toBe(DEFAULT_RULES.maxItemsOnMap * 4);
+    expect(big.coinIntervalMax).toBe(Math.round(DEFAULT_RULES.coinIntervalMax / 4));
+    expect(makeGenesis({ seed: 1, map: { width: 192, height: 128 }, empires: [humans(1)] }).rules.maxItemsOnMap).toBe(1440);
   });
 
   it("scales mountains with the area and rivers with the side", () => {
