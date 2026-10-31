@@ -7,10 +7,11 @@ export type { RoomClientOptions } from "./client.js";
 export { MemoryStore } from "./store.js";
 export type { RoomStore, StoredSnapshot } from "./store.js";
 export { CHECKPOINT_EVERY, SNAPSHOT_EVERY, advanceTo, stepAt } from "./advance.js";
-export { decode, encode } from "./messages.js";
+export { CHAT_MODES, decode, encode } from "./messages.js";
 export type {
   Catchup,
   ChatLine,
+  ChatMode,
   GameSettings,
   ClientMessage,
   LobbyPlayer,

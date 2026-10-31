@@ -33,6 +33,8 @@ export interface CreateRequest {
   startAt?: number;
   /** Show it in the public list of games. */
   public?: boolean;
+  /** Who may chat. Absent: open, or team only for a public game. */
+  chat?: "open" | "team" | "off";
 }
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -79,6 +81,10 @@ export function configFrom(
   const seatsPerEmpire = request.seatsPerEmpire ?? 2;
   if (!isInt(seatsPerEmpire, 1, 4)) return "seatsPerEmpire must be between 1 and 4";
 
+  if (request.chat !== undefined && !["open", "team", "off"].includes(request.chat)) {
+    return "chat must be open, team or off";
+  }
+
   const name = request.map ?? "medium";
   const map = Object.hasOwn(MAP_SIZES, name) ? MAP_SIZES[name] : undefined;
   if (!map) return `map must be one of ${Object.keys(MAP_SIZES).join(", ")}`;
@@ -111,6 +117,7 @@ export function configFrom(
     joinShare,
     ...(request.startAt !== undefined ? { startAt: request.startAt } : {}),
     public: request.public === true,
+    chat: request.chat ?? (request.public === true ? "team" : "open"),
     createdAt: now,
   };
 }

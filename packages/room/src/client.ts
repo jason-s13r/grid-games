@@ -31,6 +31,7 @@ import type {
   Catchup,
   ChatLine,
   GameSettings,
+  ChatMode,
   ClientMessage,
   LobbyView,
   People,
@@ -210,6 +211,11 @@ export class RoomClient {
   setPublic(value: boolean): void {
     this.send({ t: "public", public: value });
   }
+  /** Who may chat, for the creator to change. */
+  setChatMode(mode: ChatMode): void {
+    this.send({ t: "chat-mode", mode });
+  }
+
 
   setName(name: string): void {
     this.name = name;

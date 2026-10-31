@@ -99,6 +99,8 @@ export interface CreateGame {
   hours: number;
   startAt?: number;
   public?: boolean;
+  /** Who may chat: open, team or off. Absent: the Worker's default. */
+  chat?: "open" | "team" | "off";
 }
 
 /** Ask the Worker for a new room. Returns its id, or throws with the reason. */

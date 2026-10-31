@@ -7,6 +7,7 @@ import { beforeAll, describe, expect, it } from "vitest";
 import { MOVE, STEPS_PER_SECOND, Sim, hex } from "@tessera/sim";
 import type { Identity } from "@tessera/protocol";
 import type { RoomClient } from "../client.js";
+import type { RoomConfig } from "../messages.js";
 import { SNAPSHOT_EVERY, advanceTo } from "../advance.js";
 import { Harness, identities } from "./harness.js";
 import type { Linked } from "./harness.js";
@@ -562,6 +563,81 @@ describe("chat", () => {
   });
 });
 
+describe("chat moderation", () => {
+  const game = async (config: Partial<RoomConfig> = {}) => {
+    const h = new Harness({ creator: alice.key, bots: ["easy"], ...config });
+    const a = await h.join(alice, "alice");
+    const b = await h.join(bob, "bob");
+    a.client.pickEmpire(0);
+    b.client.pickEmpire(1);
+    await h.settle();
+    a.client.start();
+    await h.settle();
+    return { h, a, b };
+  };
+
+  it("takes links out of a line", async () => {
+    const { h, a, b } = await game();
+    a.client.say("see https://evil.example/x or www.bad.net and shop.example.com/deal, at 3.14");
+    await h.settle();
+    expect(b.client.chat.map((l) => l.text)).toEqual(["see [link] or [link] and [link], at 3.14"]);
+  });
+
+  it("drops the same line again, and slows lines to everyone", async () => {
+    const { h, a, b } = await game();
+    a.client.say("hi");
+    await h.run(500);
+    a.client.say("there"); // too soon after the last
+    await h.run(2_000);
+    a.client.say("hi"); // the same again
+    await h.settle();
+    expect(b.client.chat.map((l) => l.text)).toEqual(["hi"]);
+    await h.run(500);
+    a.client.say("there");
+    await h.settle();
+    expect(b.client.chat.map((l) => l.text)).toEqual(["hi", "there"]);
+  });
+
+  it("keeps a team-only game to team lines, and an off one quiet", async () => {
+    const team = await game({ chat: "team" });
+    team.a.client.say("hello all");
+    await team.h.settle();
+    expect(team.b.client.chat).toEqual([]);
+    expect(team.a.errors).toContain("chat is team only in this game");
+
+    const off = await game({ chat: "off" });
+    off.a.client.say("hello", "team");
+    await off.h.settle();
+    expect(off.a.errors).toContain("chat is off in this game");
+  });
+
+  it("in a public game, waits two minutes in a seat before chatting to everyone, and watchers read along", async () => {
+    const { h, a, b } = await game({ public: true });
+    a.client.say("too soon");
+    await h.settle();
+    expect(b.client.chat).toEqual([]);
+    expect(a.errors.at(-1)).toMatch(/after two minutes/);
+    const watcher = await h.join(dave);
+    watcher.client.say("hi from the stands");
+    await h.settle();
+    expect(watcher.errors.at(-1)).toMatch(/take a seat/);
+    await h.run(2 * 60 * 1000 + 1_000);
+    a.client.say("now then");
+    await h.settle();
+    expect(b.client.chat.map((l) => l.text)).toEqual(["now then"]);
+  });
+
+  it("lets the creator, and only the creator, change who may chat", async () => {
+    const { h, a, b } = await game();
+    b.client.setChatMode("off");
+    await h.settle();
+    expect(b.errors).toContain("only the game's creator can change that");
+    a.client.setChatMode("team");
+    await h.settle();
+    expect(b.client.settings!.chat).toBe("team");
+  });
+});
+
 describe("bots", () => {
   it("are seated as bot seats, by invite, even after the join window", async () => {
     const h = new Harness({ creator: alice.key, empires: 2, bots: ["easy"], joinShare: 0 });
@@ -654,7 +730,7 @@ describe("settings", () => {
   it("lets the creator list a running game publicly, and nobody else", async () => {
     const { h, a, b } = await started();
     await h.run(1_000);
-    expect(a.client.settings).toEqual({ creator: alice.key, public: false });
+    expect(a.client.settings).toEqual({ creator: alice.key, public: false, chat: "open" });
 
     b.client.setPublic(true);
     await h.settle();

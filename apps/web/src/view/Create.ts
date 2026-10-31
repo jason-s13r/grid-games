@@ -29,6 +29,8 @@ export interface CreateState {
   /** ms since the epoch, for a scheduled start. */
   startAt?: number;
   public: boolean;
+  /** Who may chat. Absent: open, or team only for a public game. */
+  chat?: "open" | "team" | "off";
 }
 
 export interface CreateHandlers {
@@ -108,7 +110,11 @@ export class CreatePage {
     root.addEventListener("change", (event) => {
       const input = event.target as HTMLInputElement;
       if (!input.dataset.createField) return; // a bot row's own controls
-      if (input.dataset.createField === "public") this.state.public = input.checked;
+      if (input.dataset.createField === "public") {
+        this.state.public = input.checked;
+        this.render();
+      }
+      if (input.dataset.createField === "chat") this.state.chat = input.value as CreateState["chat"];
       if (input.dataset.createField === "start-at") {
         const at = Date.parse(input.value);
         if (Number.isFinite(at)) this.state.startAt = at;
@@ -276,7 +282,9 @@ export class CreatePage {
                    : ""
                }
                <label class="create-row field-check"><input type="checkbox" data-create-field="public"${s.public ? " checked" : ""} />
-                 List it publicly, so anybody can find and join it</label>`
+                 List it publicly, so anybody can find and join it</label>
+               <label class="create-row"><span class="create-label">Chat</span>
+                 <select class="lobby-code create-select" data-create-field="chat">${chatChoices(s.chat ?? (s.public ? "team" : "open"))}</select></label>`
         }
         <p class="create-label">Each bot</p>
         <div class="create-rivals" data-create-rivals></div>
@@ -298,4 +306,14 @@ const clamp = (n: number, lo: number, hi: number): number => Math.max(lo, Math.m
 function localInput(ms: number): string {
   const d = new Date(ms - new Date(ms).getTimezoneOffset() * 60_000);
   return d.toISOString().slice(0, 16);
+}
+
+/** The chat choices, for the create page and a game's Settings. */
+export function chatChoices(current: "open" | "team" | "off"): string {
+  const options: Array<["open" | "team" | "off", string]> = [
+    ["open", "Everyone, to all or to their team"],
+    ["team", "Team only"],
+    ["off", "Off"],
+  ];
+  return options.map(([value, label]) => `<option value="${value}"${value === current ? " selected" : ""}>${label}</option>`).join("");
 }

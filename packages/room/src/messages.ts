@@ -119,9 +119,15 @@ export type ServerMessage =
 
 /** What can change about a game once it exists, and who may change it. Map,
  *  length, teams and bots are sealed into the genesis at the start. */
+/** Who may chat in a game, set by its creator. `open`: everybody, to all or
+ *  to their team. `team`: to their own team only. `off`: nobody. */
+export type ChatMode = "open" | "team" | "off";
+export const CHAT_MODES: readonly ChatMode[] = ["open", "team", "off"];
+
 export interface GameSettings {
   creator: string;
   public: boolean;
+  chat: ChatMode;
 }
 
 export type ClientMessage =
@@ -154,6 +160,7 @@ export type ClientMessage =
   | { t: "name"; name: string }
   /** The creator lists or unlists the game. */
   | { t: "public"; public: boolean }
+  | { t: "chat-mode"; mode: ChatMode }
   | { t: "say"; channel: "all" | "team"; text: string };
 
 /** How a room is set up when it is created. Fixed for the room's life. */
@@ -177,6 +184,8 @@ export interface RoomConfig {
   startAt?: number;
   /** Shown in the public list of games. */
   public?: boolean;
+  /** Who may chat. Absent: open, which is every room made before it. */
+  chat?: ChatMode;
   /** When the room was made, ms since the epoch. */
   createdAt?: number;
 }

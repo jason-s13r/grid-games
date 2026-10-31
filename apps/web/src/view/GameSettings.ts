@@ -6,6 +6,7 @@
 // the start (map, length, teams, bots) is shown for reference.
 
 import { CONTROL, STEPS_PER_SECOND } from "@tessera/sim";
+import { chatChoices } from "./Create";
 import type { State } from "@tessera/sim";
 import type { GameSettings } from "@tessera/room";
 import { escape } from "./escape";
@@ -21,6 +22,7 @@ export interface SettingsContext {
 export interface SettingsHandlers {
   rename: (name: string) => void;
   setPublic: (value: boolean) => void;
+  setChat: (mode: "open" | "team" | "off") => void;
 }
 
 export class GameSettingsDialog {
@@ -43,6 +45,7 @@ export class GameSettingsDialog {
       const input = event.target as HTMLInputElement;
       if (input.dataset.settings === "name") handlers.rename(input.value);
       if (input.dataset.settings === "public") handlers.setPublic(input.checked);
+      if (input.dataset.settings === "chat") handlers.setChat(input.value as "open" | "team" | "off");
     });
   }
 
@@ -100,6 +103,8 @@ export class GameSettingsDialog {
                   online.mine ? "" : " disabled"
                 } />
                 List it publicly, so anybody can find and join it</label>
+              <label class="settings-field">Chat
+                <select class="lobby-code" data-settings="chat"${online.mine ? "" : " disabled"}>${chatChoices(online.settings?.chat ?? "open")}</select></label>
               <p class="hint">${
                 online.mine
                   ? "Unlisted games can still be joined by anyone with the link."

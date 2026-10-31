@@ -527,6 +527,7 @@ const settingsDialog = new GameSettingsDialog(
       void openSettings();
     },
     setPublic: (value) => link?.client.setPublic(value),
+    setChat: (mode) => link?.client.setChatMode(mode),
   },
 );
 
@@ -674,6 +675,7 @@ async function createRoom(form: CreateState): Promise<void> {
       map: form.map,
       hours: form.length / 12 / 3600,
       public: form.public,
+      ...(form.mode === "friends" && form.chat ? { chat: form.chat } : {}),
       ...(form.start === "scheduled" && form.startAt ? { startAt: form.startAt } : {}),
     });
     afterCreate = { start: form.start === "now" };
@@ -731,7 +733,11 @@ async function enterRoom(roomId: string): Promise<void> {
   const client = opened.client;
 
   client.onError = (message) => {
-    if (link === opened && !client.sim) online.connecting(roomId, message);
+    if (link !== opened) return;
+    // Before the game, a refusal is the whole story; during it, it is about
+    // something just said or done, and the chat is where it is read.
+    if (!client.sim) online.connecting(roomId, message);
+    else chat.notice(message);
   };
   client.onLobby = (lobby) => {
     if (link !== opened) return;
@@ -764,7 +770,9 @@ async function enterRoom(roomId: string): Promise<void> {
   };
   client.onPeople = showPeople;
   client.onSettings = () => {
-    if (link === opened && settingsDialog.open) void settingsContext().then((c) => settingsDialog.update(c));
+    if (link !== opened) return;
+    chat.mode(client.settings?.chat ?? "open");
+    if (settingsDialog.open) void settingsContext().then((c) => settingsDialog.update(c));
   };
   client.onChat = (lines) => {
     if (link === opened) chat.add(lines, identity.key);

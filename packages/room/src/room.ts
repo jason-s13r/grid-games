@@ -47,12 +47,13 @@ import {
   verifyMove,
 } from "@tessera/protocol";
 import { SNAPSHOT_EVERY, advanceTo, stepAt } from "./advance.js";
-import { decode, encode } from "./messages.js";
+import { CHAT_MODES, decode, encode } from "./messages.js";
 import { resultOf, timeOf } from "./record.js";
 import type { GameArchive, GameResult, GameSummary, RoomEvents } from "./record.js";
 import type {
   Catchup,
   GameSettings,
+  ChatMode,
   ClientMessage,
   LobbyPlayer,
   ChatLine,
@@ -120,6 +121,20 @@ const KEEP_CHAT = 200;
  *  speaker's lines. */
 const CHAT_MAX = 500;
 const CHAT_GAP_MS = 400;
+/** Lines to everyone come no closer than this from one seat. */
+const CHAT_GAP_ALL_MS = 2000;
+/** The same line again within this is dropped. */
+const REPEAT_MS = 30_000;
+/** Steps in a seat before a public game's open chat (two minutes). */
+const PUBLIC_CHAT_AFTER = 2 * 60 * 12;
+
+/** Links out of a chat line, `[link]` in their place: anything with a scheme,
+ *  a www., or a dotted name ending in a word of letters (example.com/x). */
+export function withoutLinks(text: string): string {
+  return text
+    .replace(/\b(?:[a-z][a-z0-9+.-]*:\/\/|www\.)[^\s,;!?)]+/gi, "[link]")
+    .replace(/\b[\w-]+(?:\.[\w-]+)*\.[a-z]{2,}(?:\/[^\s,;!?)]*)?/gi, (match) => (/^\d+(\.\d+)*$/.test(match) ? match : "[link]"));
+}
 
 /** Recent checkpoint hashes kept for comparison. */
 const KEEP_CHECKPOINTS = 64;
@@ -151,6 +166,7 @@ export class Room {
   private usedInvites: string[];
   private chat: ChatLine[];
   private readonly spoke = new Map<string, number>();
+  private readonly saidLast = new Map<string, { text: string; at: number }>();
   private readonly checkpoints = new Map<number, number>();
   /** The result has been reported. */
   private finished: boolean;
@@ -355,9 +371,11 @@ export class Room {
       case "name":
         return this.rename(peer.key, message.name);
       case "say":
-        return this.say(peer.key, message.channel, message.text);
+        return this.say(peer, message.channel, message.text);
       case "public":
         return this.setPublic(peer, message.public);
+      case "chat-mode":
+        return this.setChatMode(peer, message.mode);
     }
   }
 
@@ -892,7 +910,19 @@ export class Room {
   }
 
   private settings(): GameSettings {
-    return { creator: this.config.creator, public: this.config.public ?? false };
+    return { creator: this.config.creator, public: this.config.public ?? false, chat: this.config.chat ?? "open" };
+  }
+
+  private setChatMode(peer: Peer, mode: unknown): void {
+    if (!CHAT_MODES.includes(mode as ChatMode)) return;
+    if (peer.key !== this.config.creator) return this.error(peer, "only the game's creator can change that");
+    if ((this.config.chat ?? "open") === mode) return;
+    this.config.chat = mode as ChatMode;
+    this.store.put("config", this.config);
+    const message: ServerMessage = { t: "settings", settings: this.settings() };
+    for (const other of this.peers.values()) {
+      if (other.key) this.sendTo(other.conn, message);
+    }
   }
 
   /** Take a member's name out of this game: the player list, the chat it has
@@ -938,22 +968,47 @@ export class Room {
   /** Chat is the room's to carry and nothing in the game depends on it, so it
    *  is neither signed nor stamped: a line is a line as soon as the room has
    *  it. Team lines reach the speaker's empire and nobody else. */
-  private say(key: string, channel: unknown, raw: unknown): void {
+  private say(peer: Peer, channel: unknown, raw: unknown): void {
+    const key = peer.key!;
     if (typeof raw !== "string") return;
-    // Control characters out (bidi overrides included), whitespace collapsed.
-    const text = raw
-      .normalize("NFC")
-      .replace(/[\u0000-\u001f\u007f-\u009f\u200b-\u200f\u202a-\u202e\u2066-\u2069]/g, "")
-      .replace(/\s+/g, " ")
-      .trim()
-      .slice(0, CHAT_MAX);
+    const mode = this.config.chat ?? "open";
+    if (mode === "off") return this.error(peer, "chat is off in this game");
+    // Control characters out (bidi overrides included), whitespace collapsed,
+    // and links out: in a game anybody can join, a link is the one thing in a
+    // line that can take a reader somewhere else.
+    const text = withoutLinks(
+      raw
+        .normalize("NFC")
+        .replace(/[\u0000-\u001f\u007f-\u009f\u200b-\u200f\u202a-\u202e\u2066-\u2069]/g, "")
+        .replace(/\s+/g, " ")
+        .trim(),
+    ).slice(0, CHAT_MAX);
     if (!text) return;
-    const now = this.now();
-    if (now - (this.spoke.get(key) ?? 0) < CHAT_GAP_MS) return;
-    this.spoke.set(key, now);
 
     const empire = this.roster?.seatOf(key)?.empire ?? 0;
     const team = channel === "team" && empire > 0;
+    if (!team && mode === "team") return this.error(peer, "chat is team only in this game");
+    if (!team && this.config.public && this._phase === "playing") {
+      // A public game's open chat is for the people playing it, and for those
+      // who have been at it a little while: a key costs nothing to make, so
+      // this is what keeps a fresh one from arriving to shout.
+      if (empire === 0) return this.error(peer, "take a seat to chat to everyone; watchers read along");
+      const seatedAt = this.seatings.find((s) => s.key === key)?.step ?? 0;
+      if (this.next - seatedAt < PUBLIC_CHAT_AFTER) {
+        return this.error(peer, "in a public game you can chat to everyone after two minutes in your seat; your team can hear you now");
+      }
+    }
+
+    const now = this.now();
+    // Slower to everyone than to a team, and the same line twice in a row is
+    // dropped.
+    const gap = team ? CHAT_GAP_MS : CHAT_GAP_ALL_MS;
+    if (now - (this.spoke.get(key) ?? 0) < gap) return;
+    const last = this.saidLast.get(key);
+    if (last && last.text === text && now - last.at < REPEAT_MS) return;
+    this.spoke.set(key, now);
+    this.saidLast.set(key, { text, at: now });
+
     const line: ChatLine = {
       key,
       name: this.players.find((p) => p.key === key)?.name ?? "",
