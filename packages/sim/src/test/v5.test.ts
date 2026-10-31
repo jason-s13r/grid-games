@@ -221,6 +221,41 @@ describe("coins", () => {
   });
 });
 
+describe("coin farms", () => {
+  // A field 20 by 20 walled in by empire 1, on a default-sized map, and a few
+  // minutes of coins.
+  const field = (share?: number) => {
+    const rules = share === undefined ? { coinFarmShare: undefined } : { coinFarmShare: share };
+    const genesis = makeGenesis({ seed: 5, empires: [humans(1), humans(1)], rules });
+    const sim = new Sim(genesis);
+    const { width, owner } = sim.state;
+    const [x0, y0, size] = [30, 20, 22];
+    for (let k = 0; k < size; k++) {
+      for (const [x, y] of [[x0 + k, y0], [x0 + k, y0 + size - 1], [x0, y0 + k], [x0 + size - 1, y0 + k]]) {
+        // Strong enough to outlast the decay of ground cut off from a capital.
+        owner[idx(x!, y!, width)] = 1;
+        sim.state.pop[idx(x!, y!, width)] = 100_000;
+      }
+    }
+    sim.fastForward(minutes(5));
+    let inside = 0;
+    for (let y = y0 + 1; y < y0 + size - 1; y++) {
+      for (let x = x0 + 1; x < x0 + size - 1; x++) {
+        const item = sim.state.item[idx(x, y, width)]!;
+        if (item > ITEM.NONE && item < ITEM.DIAMOND) inside++;
+      }
+    }
+    return inside;
+  };
+
+  it("fill up when a share of coins goes into them", () => {
+    const without = field();
+    const with35 = field(35);
+    expect(with35).toBeGreaterThan(without * 3);
+    expect(with35).toBeGreaterThan(20);
+  });
+});
+
 describe("map size", () => {
   it("is the default map at the default size", () => {
     expect(mapFor(DEFAULT_MAP.width, DEFAULT_MAP.height)).toEqual(DEFAULT_MAP);

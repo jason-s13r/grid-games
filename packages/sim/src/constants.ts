@@ -143,6 +143,10 @@ export const DEFAULT_RULES: Rules = {
   mineYield: 3,
   mineEvery: 15,
   marchTakesCoins: true,
+  // On half of spawns, an extra coin goes into a farm: ground walled in by one
+  // empire, up to 16 steps from its middle to a wall.
+  coinFarmShare: 50,
+  coinFarmReach: 16,
 
   noobTiles: 40,
   noobSteps: minutes(3),

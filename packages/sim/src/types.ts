@@ -134,6 +134,13 @@ export interface Rules {
   mineYield?: number;
   mineEvery?: number;
 
+  /** Percent of spawns that also put an extra coin into a farm: open ground
+   *  one empire has walled in (see Sim.spawnInFarm). Absent (every game
+   *  composed before it): none. */
+  coinFarmShare?: number;
+  /** How far a farm's walls may be from a tile inside it, in steps. */
+  coinFarmReach?: number;
+
   /** A march's target fires the coin on it, as its gap does. Absent (every
    *  game composed before it) leaves a coin on the target where it lies. In
    *  the record rather than read from the version, so a v5 game started

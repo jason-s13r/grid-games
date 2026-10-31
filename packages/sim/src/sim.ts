@@ -79,6 +79,38 @@ export function mapFor(width: number, height: number): MapConfig {
   };
 }
 
+/** Whether open ground at `i` is walled in by one empire: see spawnInFarm. */
+function enclosed(state: State, i: number, reach: number): boolean {
+  const { width, height, owner, terrain } = state;
+  const x0 = xOf(i, width);
+  const y0 = yOf(i, width);
+  let wall = 0;
+  let hits = 0;
+  for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]] as const) {
+    let met = false;
+    for (let k = 1; k <= reach; k++) {
+      const x = x0 + dx * k;
+      const y = y0 + dy * k;
+      if (x < 0 || y < 0 || x >= width || y >= height) return false;
+      const j = idx(x, y, width);
+      const o = owner[j]!;
+      if (o > 0) {
+        if (wall === 0) wall = o;
+        else if (o !== wall) return false;
+        hits++;
+        met = true;
+        break;
+      }
+      if (!PASSABLE[terrain[j]!]) {
+        met = true;
+        break;
+      }
+    }
+    if (!met) return false;
+  }
+  return hits >= 2;
+}
+
 /** How often coins appear, and how many may lie about, for a map of this
  *  size. The defaults are for 96 by 64; a map with three times the ground gets
  *  coins three times as often and room for three times as many, so a larger
@@ -282,8 +314,17 @@ export class Sim {
     const { width, height } = state;
     const n = state.owner.length;
     const r = rules.coinNearRadius;
-    const near = state.rng.int(100) < rules.coinNearBias;
     const weights = rules.coinWeights.filter(([item]) => item !== ITEM.DIAMOND);
+    // A game composed with `coinFarmShare` also puts an extra coin into a farm
+    // (open ground an empire has walled in) on that share of spawns, on top of
+    // the usual one. Drawn only in such a game, so a game composed before it
+    // keeps its stream.
+    const farms = rules.coinFarmShare ?? 0;
+    if (farms > 0 && state.rng.int(100) < farms) {
+      this.spawnInFarm(dirty, weights);
+      if (state.itemCount >= rules.maxItemsOnMap) return;
+    }
+    const near = state.rng.int(100) < rules.coinNearBias;
 
     for (let probe = 0; probe < 64; probe++) {
       const seed = state.rng.int(n);
@@ -307,6 +348,29 @@ export class Sim {
       dirty.add(i);
       return;
     }
+  }
+
+  /** An extra coin on open ground inside a farm, if a few probes find one. One draw
+   *  per probe, and the test is local: from the tile, each of the four straight
+   *  lines must meet the same empire's ground or impassable terrain within
+   *  `coinFarmReach` steps, at least two of them the empire. Not a flood fill,
+   *  which would cost the whole map on every coin. A farm that is a field
+   *  walled on all sides passes; open country, and ground between two
+   *  empires, does not. */
+  private spawnInFarm(dirty: DirtySet, weights: Array<[Item, number]>): boolean {
+    const state = this.state;
+    const n = state.owner.length;
+    const reach = state.genesis.rules.coinFarmReach ?? 16;
+    for (let probe = 0; probe < 64; probe++) {
+      const i = state.rng.int(n);
+      if (state.owner[i] !== 0 || state.item[i] !== ITEM.NONE || !PASSABLE[state.terrain[i]!]) continue;
+      if (!enclosed(state, i, reach)) continue;
+      state.item[i] = state.rng.weighted(weights) as Item;
+      state.itemCount++;
+      dirty.add(i);
+      return true;
+    }
+    return false;
   }
 
   /** Catch up to `toStep`, skipping steps where nothing can happen.
