@@ -11,6 +11,7 @@ import {
   MAX_EMPIRES,
   bannerById,
   MIN_ABANDON_WINDOW,
+  NO_ABANDONMENT,
   SEAT_CEILING,
   playsProtocol,
 } from "@tessera/sim";
@@ -143,8 +144,12 @@ export async function inspectGenesis(genesis: Genesis): Promise<GenesisProblem[]
   // it, and the worst a disagreement between two builds can produce is a peer
   // declining to join. A new check in inspectGenesis is safe across versions;
   // a new branch in validate() is not.
+  //
+  // Zero is the one value below the floor that is allowed: NO_ABANDONMENT, a
+  // window nobody can be present inside, so nobody can win by it.
   const rules = genesis.rules ?? DEFAULT_RULES;
-  if ((rules.abandonWindow ?? DEFAULT_RULES.abandonWindow) < MIN_ABANDON_WINDOW) {
+  const abandon = rules.abandonWindow ?? DEFAULT_RULES.abandonWindow;
+  if (abandon !== NO_ABANDONMENT && abandon < MIN_ABANDON_WINDOW) {
     problems.push("rules");
   }
   // Negative windows are nonsense rather than unfair, and cheaper to refuse

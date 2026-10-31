@@ -55,7 +55,7 @@ genesis parameter.
 | `noobTiles` / `noobSteps` | 40 / 3 min | capital protection lifts on **either** |
 | `heartbeatInterval` | 30 s | auto-heartbeat cadence |
 | `livenessWindow` | 2 min | "live" for lockstep's wait decision |
-| `abandonWindow` | 3 h | "present" for the abandonment win — a **floor**, not a norm: [durations](durations.md) scale it to a third of the game, capped at 36 h |
+| `abandonWindow` | 3 h | "present" for the abandonment win, in an open-ended game; a game with a [duration](durations.md) sets `0`, no abandonment |
 | `elimination` | `CAPITAL` | vs `ANNIHILATION` |
 | `endStep` | 0 | 0 = no timeout; a host sets it by choosing a [duration](durations.md) |
 | `joinWindow` | *absent* | steps after which no **human** seat may be added; absent or 0 = always open. Optional, so a game with no duration is byte-identical to a v3 record |

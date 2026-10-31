@@ -8,6 +8,7 @@ import {
   DEFAULT_RULES,
   MEMBER,
   MIN_ABANDON_WINDOW,
+  NO_ABANDONMENT,
   durationRules,
   hours,
   MAX_EMPIRES,
@@ -86,7 +87,12 @@ describe("genesis", () => {
       expect(problems).not.toContain("rules");
     });
 
-    it("accepts a scaled window from a real duration", async () => {
+    it("accepts no abandonment at all", async () => {
+      const problems = await inspectGenesis(withRules({ abandonWindow: NO_ABANDONMENT }));
+      expect(problems).not.toContain("rules");
+    });
+
+    it("accepts the window from a real duration", async () => {
       const problems = await inspectGenesis(withRules(durationRules(hours(240))));
       expect(problems).not.toContain("rules");
     });

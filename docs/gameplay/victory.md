@@ -14,7 +14,7 @@ tests four end conditions.
 |---|---|---|---|
 | **Last empire** | exactly 1 empire `alive` | that empire | `LAST_EMPIRE` |
 | **Everyone gone** | 0 empires `alive` | `0` (nobody) | `LAST_EMPIRE` |
-| **Abandonment** | more than 1 alive, but only 1 is *present* | the present one | `LAST_ROSTER` |
+| **Abandonment** | open-ended games: more than 1 alive, but only 1 is *present* | the present one | `LAST_ROSTER` |
 | **Timeout** | `endStep > 0` and `step >= endStep` | the [leader](#the-leader) | `TIMEOUT` |
 
 Every count above is over empires **somebody is playing**. An empire nobody has
@@ -24,16 +24,17 @@ happens to hold. Inside those counts it would make the first three conditions
 unreachable or instant, depending on which one you forgot.
 
 `endStep` defaults to **0** (no timeout), and a host sets it by choosing a
-[duration](durations.md). It is never set alone: `abandonWindow` scales with it,
-because a 3-hour abandonment window in a 10-day game is a losing condition for
-going to bed. See [durations](durations.md) for the trap and the arithmetic.
+[duration](durations.md). It is never set alone: a game with an end has no
+abandonment (`abandonWindow: 0`), because any window short of the game is a
+losing condition for going to bed. See [durations](durations.md).
 
 ## Presence, and why the abandon window is hours
 
 [`silentFor(state, empire)`](../../packages/sim/src/victory.ts#L22) = steps since
 the empire last had *any* seat send a `HEARTBEAT`.
 An empire is "present" for the abandonment test if `silentFor < abandonWindow`
-(**3 hours** of game time).
+(**3 hours** of game time). The test runs in open-ended games only; with a
+window of `0` nobody is present and it never decides anything.
 
 Deliberately long: **being asleep is not being defeated.** A short window would
 reward waiting until an opponent's team is offline — exactly what shift rotation

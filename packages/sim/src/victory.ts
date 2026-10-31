@@ -72,10 +72,16 @@ export function checkVictory(state: State): void {
     return;
   }
 
-  // Abandonment. The window is deliberately hours of game time: being asleep is
-  // not being defeated, and a short window would reward waiting until an
-  // opponent's team is offline — exactly what shift rotation exists to avoid.
-  const present = alive.filter((e) => silentFor(state, e) < rules.abandonWindow);
+  // Abandonment, for an open-ended game only: one with an end has a window of
+  // NO_ABANDONMENT and idles to its timeout. The guard changes nothing a record
+  // can produce (a zero window leaves `present` empty anyway); it says so.
+  // The window is deliberately hours of game time: being asleep is not being
+  // defeated, and a short window would reward waiting until an opponent's team
+  // is offline — exactly what shift rotation exists to avoid.
+  const present =
+    rules.abandonWindow > 0
+      ? alive.filter((e) => silentFor(state, e) < rules.abandonWindow)
+      : [];
   if (present.length === 1 && alive.length > 1) {
     end(state, present[0]!.id, WIN.LAST_ROSTER);
     return;

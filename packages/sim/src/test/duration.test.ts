@@ -10,30 +10,25 @@ import { DEFAULT_RULES, days, hours, minutes } from "../constants.js";
 import {
   MAX_DURATION,
   MIN_ABANDON_WINDOW,
+  NO_ABANDONMENT,
   durationRules,
 } from "../duration.js";
 
-describe("the abandonment window scales with the game", () => {
+describe("a game with an end has no abandonment", () => {
   it.each([
-    ["15 minutes", minutes(15), hours(3)],
-    ["1 hour", hours(1), hours(3)],
-    ["6 hours", hours(6), hours(3)],
-    ["1 day", hours(24), hours(8)],
-    ["3 days", hours(72), hours(24)],
-    ["10 days", hours(240), hours(36)],
-    ["open-ended", 0, hours(3)],
-  ])("a %s game abandons after %#", (_label, endStep, expected) => {
-    expect(durationRules(endStep).abandonWindow).toBe(expected);
+    ["15 minutes", minutes(15)],
+    ["1 hour", hours(1)],
+    ["1 day", hours(24)],
+    ["10 days", hours(240)],
+    ["31 days", days(31)],
+  ])("a %s game idles to its timeout", (_label, endStep) => {
+    // The trap this closes: any window short of the game is a losing condition
+    // for going to bed, or for checking in every few days.
+    expect(durationRules(endStep).abandonWindow).toBe(NO_ABANDONMENT);
   });
 
-  it("never drops below the floor, whatever is asked for", () => {
-    // The trap this whole plan exists to close: a short window in a long game
-    // is a losing condition for going to bed.
-    for (const length of [1, 12, minutes(1), hours(1), hours(9), days(31)]) {
-      expect(durationRules(length).abandonWindow).toBeGreaterThanOrEqual(
-        MIN_ABANDON_WINDOW,
-      );
-    }
+  it("an open-ended game keeps the floor, having nothing else to end it", () => {
+    expect(durationRules(0).abandonWindow).toBe(MIN_ABANDON_WINDOW);
   });
 });
 

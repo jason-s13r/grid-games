@@ -8,7 +8,8 @@ import { beforeAll, describe, expect, it } from "vitest";
 import { Sim, makeGenesis, CLAIM } from "../sim.js";
 import { MOVE, MEMBER, CONTROL, TERRAIN, ITEM, WIN } from "../types.js";
 import { idx } from "../geometry.js";
-import { DEFAULT_RULES, STAT, STEPS_PER_SECOND, VACANCY_RULES } from "../constants.js";
+import { DEFAULT_RULES, STAT, STEPS_PER_SECOND, VACANCY_RULES, days } from "../constants.js";
+import { durationRules } from "../duration.js";
 import { arena, at, claimNow, held, humans, own, ownerAt, popAt } from "./testkit.js";
 import { DIFFICULTY, TUNING, checkProfile, simbot, tuneBot } from "../specs.js";
 import { turnOf } from "../policy.js";
@@ -565,6 +566,16 @@ describe("win conditions", () => {
       sim.state.empires[0]!.members[0]!.lastBeat = sim.state.step;
       sim.advance([]);
       expect(sim.ended && sim.state.winner === 1).toBe(true);
+    });
+
+    it("does not fire in a game with an end, however long the silence", () => {
+      const timed = arena([humans(1), humans(1)], 1, durationRules(days(10)));
+      own(timed, 5, 5, 1);
+      own(timed, 15, 15, 2);
+      timed.state.step = days(9);
+      timed.state.empires[0]!.members[0]!.lastBeat = timed.state.step;
+      timed.advance([]);
+      expect(timed.ended).toBe(false);
     });
   });
 

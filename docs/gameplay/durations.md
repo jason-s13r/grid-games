@@ -15,7 +15,7 @@ it is **a losing condition for going to bed**: three teams sleep, one insomniac
 is the only empire still "present", and the game is over by 03:00 without a tile
 changing hands.
 
-So a host does not get to set an ending without the abandonment window moving
+So a host does not get to set an ending without the abandonment rule changing
 with it. That is the whole reason a duration is a function.
 
 ## One number in, three out
@@ -35,31 +35,30 @@ minutes; `COMMON_DURATIONS` in the client is a dropdown, not a type.
 
 ### The abandonment window
 
-A third of the game, floored at 3 h and capped at 36 h. The formula is not
-invented: it reproduces the hand-written preset table durations used to be,
-row for row.
+Off, for any game with an end: `abandonWindow` is `NO_ABANDONMENT` (`0`), and
+an empire may idle until the timeout. The timeout is what stops a long game
+waiting for somebody who has left, so abandonment adds nothing there but a way
+to lose by not opening the tab.
 
-| duration | `endStep`/3 | after clamp |
-|---|---|---|
-| 15 min | 5 min | 3 h |
-| 1 h | 20 min | 3 h |
-| 6 h | 2 h | 3 h |
-| 1 day | 8 h | 8 h |
-| 3 days | 24 h | 24 h |
-| 10 days | 80 h | **36 h** |
-| open (`0`) | 0 | 3 h |
+| duration | `abandonWindow` |
+|---|---|
+| any length | `0` — none |
+| open (`0`) | 3 h, the floor |
 
-The **floor** is what makes short games safe: under about nine hours the rule
-simply never decides anything, which is correct — nobody goes to bed inside a
-15-minute game, and the rule exists for the ones where they do. The **cap** is
-what makes long games safe in the other direction: a third of 240 hours is a
-window nothing could fire inside, and a table that has genuinely stopped playing
-should end.
+An open-ended game keeps the floor, because it has nothing else to end it. That
+is what `DEFAULT_RULES` has always said, so `durationRules(0)` still equals it
+field for field.
 
-The open-ended case needs no special case at all. `0/3` clamps to the floor,
-which is exactly what `DEFAULT_RULES` has always said.
+This replaced a window of a third of the game, floored at 3 h and capped at
+36 h. Under the cap a 10-day game could end on day three, as soon as one
+empire's players were the only ones to have opened it in the last 36 hours.
 
-The floor is also checked in `inspectGenesis`, because
+A window of zero holds no heartbeat, so `present` is empty and `LAST_ROSTER`
+cannot fire, under this build or any earlier one. `inspectGenesis` accepts `0`
+as the one value below the floor; an older build refuses it, so an old peer
+declines to join rather than desyncing, and no protocol bump is needed.
+
+The floor is still checked in `inspectGenesis`, because
 a type binds our client and not a hostile one.
 
 ### The join window
@@ -131,7 +130,7 @@ with the abandonment floor is the whole design:
 
 | | `abandonWindow` floor | duration ceiling |
 |---|---|---|
-| what a bad value does | hands the composer the win before anyone moves | makes that game's own archive large |
+| what a bad value does | hands the composer the win before anyone moves (`0` excepted: nobody can be present inside it) | makes that game's own archive large |
 | who it hurts | everyone else at the table | the people who chose it, visibly |
 | where it is checked | `inspectGenesis` — it must bind a hostile host | the composing path only |
 
