@@ -1,5 +1,36 @@
 # Changelog
 
+## worker@0.4.0 (2026-10-31)
+
+### Features
+
+- delete a game nobody came to once joining closes
+  When a game's join window closes with no person seated (only bots), or
+  its scheduled start comes with nobody having picked an empire, the room
+  deletes its storage and its rows in D1. Nothing is archived. The room
+  now also wakes when the join window closes, to check.
+
+- chat a game's creator can set, links out, slower open chat, and blocking
+  - Who may chat is set per game by its creator: everyone, team only, or
+    off. On the create page under More, and in Settings during the game
+    (the creator's to change, everybody else's to read). Public games
+    start team only, others open.
+  - The room takes links out of a line ("[link]" in their place), drops the
+    same line said twice within 30 seconds, and keeps lines to everyone two
+    seconds apart from one seat. In a public game, open chat is for players
+    two minutes into their seats; watchers read along.
+  - Click a name in the chat to block that player: their lines are hidden
+    in every game, kept in this browser, with a Blocked row to undo it.
+  - A refusal from the room during a game shows in the chat, where it is
+    read.
+
+### Dependencies
+
+- sim: 5.0.1 -> 5.1.0
+- room: 1.1.0 -> 1.2.0
+- web: 1.4.1 -> 1.5.0
+
+
 ## worker@0.3.0 (2026-10-31)
 
 ### Features

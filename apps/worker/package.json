@@ -1,6 +1,6 @@
 {
   "name": "@tessera/worker",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "private": true,
   "description": "The Cloudflare Worker: serves the web client, creates games, and hosts each game room in a Durable Object.",
   "license": "MIT",

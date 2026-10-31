@@ -1,5 +1,49 @@
 # Changelog
 
+## sim@5.1.0 (2026-10-31)
+
+### Features
+
+- no cap on coins short of the map itself
+  New games put no limit on how many coins lie about: they keep coming
+  until there is no open ground left. The 360 cap was reached within the
+  hour on anything but the smallest map, and after that a farm refilled
+  only as fast as somebody somewhere took a coin.
+
+  With no cap, a spawn rate in proportion to the area carpeted the map (a
+  two-hour bot game on a medium map ended 92% taken), so a bigger map now
+  gets coins more often by the square root of its area instead: 55% taken
+  in the same game, with 3,068 coins taken and a best cascade of 1,256.
+
+  Games already running keep the cap and rate in their records.
+
+- coin farms: ground walled in by one empire gets extra coins
+  On half of spawns an extra coin goes into a farm: open ground where each
+  straight line from the tile meets the same empire's ground, or impassable
+  terrain, within 16 steps, at least two of them the empire. A local test
+  rather than a flood fill, so it stays cheap on the largest map.
+
+  A 20 by 20 field walled in on a default map gets 81 coins in five
+  minutes, against 15 without. In a two-hour bot game on a medium map,
+  1,522 coins are taken and the best cascade is 328 tiles, against 1,185
+  and 248.
+
+  Rules in the record (coinFarmShare, coinFarmReach), so games already
+  running keep theirs.
+
+- more coins on bigger maps, and more of them near the action
+  Coins came at the same rate, and up to the same 360 at once, on every map,
+  so a medium map was a third as dense as the default one and hit the cap:
+  in a two-hour bot game on 160 by 112 the map sat at 360 coins and 216 were
+  taken. New games now scale the spawn rate and the cap with the map's area
+  (coinsFor), 85% of coins land near ground or another coin (was 72%), and
+  the hop from it reaches six steps (was four). In the same game: 1,185
+  coins taken and a best cascade of 248 tiles, against 64.
+
+  These are rules in each game's record, so games already running keep
+  theirs.
+
+
 ## sim@5.0.1 (2026-10-31)
 
 ### Fixes

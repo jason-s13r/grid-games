@@ -1,5 +1,41 @@
 # Changelog
 
+## web@1.5.0 (2026-10-31)
+
+### Features
+
+- chat a game's creator can set, links out, slower open chat, and blocking
+  - Who may chat is set per game by its creator: everyone, team only, or
+    off. On the create page under More, and in Settings during the game
+    (the creator's to change, everybody else's to read). Public games
+    start team only, others open.
+  - The room takes links out of a line ("[link]" in their place), drops the
+    same line said twice within 30 seconds, and keeps lines to everyone two
+    seconds apart from one seat. In a public game, open chat is for players
+    two minutes into their seats; watchers read along.
+  - Click a name in the chat to block that player: their lines are hidden
+    in every game, kept in this browser, with a Blocked row to undo it.
+  - A refusal from the room during a game shows in the chat, where it is
+    read.
+
+- long-press a tile on a touch screen, show bridge places on demand, and a mine that is giving glows
+  - On a touch screen the line under the board is gone, since a tap is a
+    claim and could not also be how you pick a tile to read. A long press
+    shows what the tile is in a popover over the board and claims nothing;
+    a tap claims as before.
+  - The tile line says what a click would do without the bank figures.
+  - Where a bridge or ladder can go is lit for a few seconds after buying
+    one, when you press one held in the store, and while the pointer is on a
+    river or wall, rather than the whole time one is held.
+  - A mine that is giving has a cyan shaft and its diamond in front at the
+    top right, clear of the number.
+
+### Dependencies
+
+- sim: 5.0.1 -> 5.1.0
+- room: 1.1.0 -> 1.2.0
+
+
 ## web@1.4.1 (2026-10-31)
 
 ### Fixes
