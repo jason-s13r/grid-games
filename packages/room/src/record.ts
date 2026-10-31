@@ -7,7 +7,7 @@
 // somebody joins, picks, or the phase moves, never per move.
 
 import { STEPS_PER_SECOND, summarise } from "@tessera/sim";
-import type { Genesis, Sim } from "@tessera/sim";
+import type { Genesis, Sim, State } from "@tessera/sim";
 import type { Stamped } from "./messages.js";
 
 export type GamePhase = "lobby" | "playing" | "ended";
@@ -94,7 +94,12 @@ export function timeOf(startedAt: number, step: number): number {
 /** Places by the sim's own measures: the winner, then whoever survived, then
  *  tiles, population, and how late an empire fell. */
 export function places(sim: Sim): Map<number, number> {
-  const state = sim.state;
+  return placesOf(sim.state);
+}
+
+/** `places`, from a state alone: what a client showing the result reads, so
+ *  the end of a game and the start page's "you came 4th" agree. */
+export function placesOf(state: State): Map<number, number> {
   const order = state.empires
     .filter((e) => e.members.length > 0)
     .slice()

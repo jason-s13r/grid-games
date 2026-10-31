@@ -9,9 +9,11 @@
 // it stops being a button and becomes a badge on the HUD.
 
 import type { EmpireSummary, State } from "@tessera/sim";
-import { MEMBER, MOVE, PHASE, TUNING, WIN, STEPS_PER_SECOND, growthCeiling, isProtected, isVacant, summarise } from "@tessera/sim";
+import { MEMBER, MOVE, PHASE, TUNING, STEPS_PER_SECOND, growthCeiling, isProtected, isVacant, summarise } from "@tessera/sim";
 import type { Person } from "@tessera/room";
 import { escape } from "./escape";
+import { endBar, endCard } from "./EndCard";
+import { span } from "./clock";
 import { empireTheme } from "./palette";
 import type { Driver } from "../game/Driver";
 
@@ -49,6 +51,9 @@ const short = (n: number): string =>
  *  seats in it — but there is nobody who could walk through that door, so
  *  counting down to it closing is a countdown to nothing. */
 export function clockLine(state: State, online = true): string {
+  // Over: what is left of a game that has ended is nothing, and the countdown
+  // it stopped on reads as a game that froze.
+  if (state.phase === PHASE.ENDED) return `Game over · lasted ${span(state.step)}`;
   const end = state.genesis.rules.endStep ?? 0;
   const label = end > 0 ? `${clock(Math.max(0, end - state.step))} left` : clock(state.step);
 
@@ -65,12 +70,6 @@ export function clockLine(state: State, online = true): string {
   // clock's tooltip rather than on the bar.
   return `${label}${joining}`;
 }
-
-const WIN_TEXT: Record<number, string> = {
-  [WIN.TIMEOUT]: "time expired",
-  [WIN.LAST_EMPIRE]: "last empire standing",
-  [WIN.LAST_ROSTER]: "opponents abandoned the field",
-};
 
 /** One tile of the shop. Every one of these is a purchase now — the things
  *  that used to need placing place themselves. */
@@ -149,6 +148,8 @@ export class Controls {
       standings: HTMLElement;
       clock: HTMLElement;
       banner: HTMLElement;
+      /** The end card's dialog. Optional, so a test can leave it out. */
+      end?: HTMLDialogElement;
       zoomhint: HTMLElement;
     },
   ) {
@@ -176,6 +177,32 @@ export class Controls {
     };
     press(this.els.standings);
     press(this.els.acts);
+
+    // The end card's buttons, and the bar's way back to it. Assigned rather
+    // than added: these elements outlive a game, and a Controls is made for
+    // each one, so the next game's handlers replace this one's instead of
+    // stacking up beside them.
+    const end = this.els.end;
+    if (end) {
+      if (end.open) end.close();
+      end.onclick = (event) => {
+        const target = event.target as HTMLElement;
+        if (target.closest("[data-end-home]")) {
+          end.close();
+          this.onHome?.();
+        } else if (target.closest("[data-end-hide]")) {
+          end.close();
+        }
+      };
+      // However it closes (the button, or Escape), the board comes back to colour.
+      end.onclose = () => this.dim(false);
+      this.els.banner.onclick = (event) => {
+        if (!(event.target as HTMLElement).closest("[data-end-show]")) return;
+        end.showModal();
+        this.dim(true);
+      };
+    }
+    this.dim(false);
 
     // What the standings are ranked by.
     this.els.standings.addEventListener?.("click", (event) => {
@@ -272,6 +299,7 @@ export class Controls {
       this.offered.clear();
       this.put(this.els.storeHead, "storeHead", "");
       this.renderStandings(state);
+      this.renderEnd(state);
       return;
     }
     const member = empire.members[this.game.member]!;
@@ -373,18 +401,43 @@ export class Controls {
 
     this.renderStandings(state);
 
-    if (state.phase === PHASE.ENDED) {
-      const winner = state.winner > 0 ? empireTheme(state.winner).name : "Nobody";
-      this.els.banner.hidden = false;
-      this.put(
-        this.els.banner,
-        "banner",
-        `<strong>${winner} wins</strong><span>${WIN_TEXT[state.winReason] ?? ""}</span>`,
-      );
-    } else {
-      this.els.banner.hidden = true;
+    this.renderEnd(state);
+  }
+
+  /** The end of the game: a card over a dimmed board, or the bar it tucks
+   *  into. Watchers and replays get it too. A replay seeked back before the
+   *  end takes both away again. */
+  private renderEnd(state: State): void {
+    const ended = state.phase === PHASE.ENDED;
+    const end = this.els.end;
+    this.els.banner.hidden = !ended;
+    if (ended) {
+      this.put(this.els.banner, "banner", endBar(state, this.game.empire));
+      if (end) this.put(end, "end", endCard(state, this.game.empire, (id) => this.who(state, id)));
+      // Once per ending: when the game ends in front of you, or when you open
+      // one that already has. After that it is yours to open from the bar.
+      if (!this.endShown) {
+        this.endShown = true;
+        if (end && !end.open) end.showModal();
+        this.dim(true);
+      }
+    } else if (this.endShown) {
+      this.endShown = false;
+      if (end?.open) end.close();
+      this.dim(false);
     }
   }
+
+  /** Whether this ending's card has been shown. */
+  private endShown = false;
+
+  /** The board in muted colours, while the end card is over it. */
+  private dim(on: boolean): void {
+    this.els.banner.closest?.(".board")?.toggleAttribute("data-ended", on);
+  }
+
+  /** The start page, from the end card. */
+  onHome: (() => void) | null = null;
 
   private showClock(state: State): void {
     this.els.clock.textContent = clockLine(state, this.game.online);

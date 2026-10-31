@@ -1,7 +1,7 @@
 export { Room, LEAD_STEPS } from "./room.js";
 export type { Connection, RoomOptions } from "./room.js";
 export { RoomClient } from "./client.js";
-export { places, resultOf, timeOf } from "./record.js";
+export { places, placesOf, resultOf, timeOf } from "./record.js";
 export type { EmpireResult, GameArchive, GamePhase, GameResult, GameSummary, PlayerRecord, RoomEvents, SeatResult } from "./record.js";
 export type { RoomClientOptions } from "./client.js";
 export { MemoryStore } from "./store.js";

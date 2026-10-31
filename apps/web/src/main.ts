@@ -252,9 +252,11 @@ function mount(driver: Driver, options: { background?: boolean } = {}): void {
     standings: pick<HTMLElement>("[data-standings]"),
     clock: pick<HTMLElement>("[data-clock]"),
     banner: pick<HTMLElement>("[data-banner]"),
+    end: pick<HTMLDialogElement>("[data-end-dialog]"),
     zoomhint: pick<HTMLElement>("[data-zoomhint]"),
   });
   controls.onPlaces = () => marks.showPlaces();
+  controls.onHome = () => document.querySelector<HTMLElement>("[data-home]")?.click();
 
   // A chat column for an online game; none for a solo one.
   appEl.dataset.chat = driver.online ? "on" : "off";

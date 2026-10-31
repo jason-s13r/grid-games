@@ -70,6 +70,7 @@
             <button class="inset-toggle" type="button" data-inset-toggle aria-label="Hide the small map" title="Hide the small map">&times;</button>
           </div>
 
+          <!-- A finished game's bar, with a way back to its result. -->
           <div class="banner" data-banner hidden></div>
           <!-- What a long-pressed tile is, on a touch screen. -->
           <div class="tile-pop" data-tile-pop hidden></div>
@@ -235,6 +236,11 @@
       </div>
       <div class="keys-body" data-keys-body hidden></div>
     </dialog>
+
+    <!-- The end of a game: who won, why, and the standings. A dialog so it sits
+         above everything, which a phone's small board could not hold. See
+         view/EndCard.ts. -->
+    <dialog class="end-dialog" data-end-dialog aria-labelledby="end-title"></dialog>
 
     <!-- The game's settings, over the board. See view/GameSettings.ts. -->
     <dialog class="modal settings-dialog" data-settings-dialog>

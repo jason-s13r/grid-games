@@ -5,7 +5,7 @@
 // whether an online game is listed publicly. What was sealed into the game at
 // the start (map, length, teams, bots) is shown for reference.
 
-import { CONTROL, STEPS_PER_SECOND } from "@tessera/sim";
+import { CONTROL, PHASE, STEPS_PER_SECOND } from "@tessera/sim";
 import { chatChoices } from "./Create";
 import type { State } from "@tessera/sim";
 import type { GameSettings } from "@tessera/room";
@@ -74,7 +74,12 @@ export class GameSettingsDialog {
     if (!c) return;
     const rules = c.state.genesis.rules;
     const length = rules.endStep > 0 ? duration(rules.endStep) : "no end";
-    const left = rules.endStep > 0 ? duration(Math.max(0, rules.endStep - c.state.step)) : "";
+    const over = c.state.phase === PHASE.ENDED;
+    const left = over
+      ? `ended after ${duration(c.state.step)}`
+      : rules.endStep > 0
+        ? `${duration(Math.max(0, rules.endStep - c.state.step))} left`
+        : "";
     const window = rules.joinWindow ?? 0;
     const humans = c.state.genesis.empires.filter((e) => e.control === CONTROL.HUMAN).length;
     const bots = c.state.genesis.empires.length - humans;
@@ -118,9 +123,9 @@ export class GameSettingsDialog {
         <h3>Set at the start</h3>
         <dl class="settings-facts">
           <dt>Map</dt><dd>${c.state.width} × ${c.state.height}</dd>
-          <dt>Length</dt><dd>${length}${left ? `, ${left} left` : ""}</dd>
+          <dt>Length</dt><dd>${length}${left ? `, ${left}` : ""}</dd>
           <dt>Empires</dt><dd>${humans} for people, up to ${rules.maxSeats} each, and ${bots} ${bots === 1 ? "bot" : "bots"}</dd>
-          ${online && window > 0 ? `<dt>Joining</dt><dd>${c.state.step < window ? `open for ${duration(window - c.state.step)}` : "closed"}</dd>` : ""}
+          ${online && window > 0 ? `<dt>Joining</dt><dd>${c.state.step < window && !over ? `open for ${duration(window - c.state.step)}` : "closed"}</dd>` : ""}
         </dl>
         <p class="hint">These are part of the game's rules, so they cannot change once it has started.</p>
       </section>`;
