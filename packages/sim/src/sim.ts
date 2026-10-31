@@ -111,16 +111,23 @@ function enclosed(state: State, i: number, reach: number): boolean {
   return hits >= 2;
 }
 
-/** How often coins appear, and how many may lie about, for a map of this
- *  size. The defaults are for 96 by 64; a map with three times the ground gets
- *  coins three times as often and room for three times as many, so a larger
- *  map is not a sparser one. At the default size this is the defaults. */
+/** How often coins appear for a map of this size, and how many may lie about.
+ *  The interval is set for 96 by 64. A bigger map gets coins more often, by
+ *  the square root of its area: with no cap, coins at a rate in proportion to
+ *  the area carpeted a medium map and a two-hour bot game ended with 92% of it
+ *  taken; at the square root it is about half.
+ *
+ *  And no cap short of the map itself: coins keep coming until there is no
+ *  open ground left to put one on. The old cap of 360 (DEFAULT_RULES, which
+ *  games composed before this still carry) was reached within the hour on
+ *  anything but the smallest map, and from then on a farm only refilled as
+ *  fast as somebody somewhere took a coin. */
 export function coinsFor(width: number, height: number): Pick<Rules, "coinIntervalMin" | "coinIntervalMax" | "maxItemsOnMap"> {
-  const area = (width * height) / (DEFAULT_MAP.width * DEFAULT_MAP.height);
+  const faster = Math.sqrt((width * height) / (DEFAULT_MAP.width * DEFAULT_MAP.height));
   return {
-    coinIntervalMin: Math.max(1, Math.round(DEFAULT_RULES.coinIntervalMin / area)),
-    coinIntervalMax: Math.max(2, Math.round(DEFAULT_RULES.coinIntervalMax / area)),
-    maxItemsOnMap: Math.max(1, Math.round(DEFAULT_RULES.maxItemsOnMap * area)),
+    coinIntervalMin: Math.max(1, Math.round(DEFAULT_RULES.coinIntervalMin / faster)),
+    coinIntervalMax: Math.max(2, Math.round(DEFAULT_RULES.coinIntervalMax / faster)),
+    maxItemsOnMap: width * height,
   };
 }
 

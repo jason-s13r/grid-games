@@ -261,16 +261,16 @@ describe("map size", () => {
     expect(mapFor(DEFAULT_MAP.width, DEFAULT_MAP.height)).toEqual(DEFAULT_MAP);
   });
 
-  it("gives a bigger map coins as often for its size", () => {
+  it("gives a bigger map coins more often, and no cap short of the map", () => {
     expect(coinsFor(DEFAULT_MAP.width, DEFAULT_MAP.height)).toEqual({
       coinIntervalMin: DEFAULT_RULES.coinIntervalMin,
       coinIntervalMax: DEFAULT_RULES.coinIntervalMax,
-      maxItemsOnMap: DEFAULT_RULES.maxItemsOnMap,
+      // No cap short of the map itself.
+      maxItemsOnMap: DEFAULT_MAP.width * DEFAULT_MAP.height,
     });
     const big = coinsFor(DEFAULT_MAP.width * 2, DEFAULT_MAP.height * 2);
-    expect(big.maxItemsOnMap).toBe(DEFAULT_RULES.maxItemsOnMap * 4);
-    expect(big.coinIntervalMax).toBe(Math.round(DEFAULT_RULES.coinIntervalMax / 4));
-    expect(makeGenesis({ seed: 1, map: { width: 192, height: 128 }, empires: [humans(1)] }).rules.maxItemsOnMap).toBe(1440);
+    expect(big.coinIntervalMax).toBe(Math.round(DEFAULT_RULES.coinIntervalMax / 2));
+    expect(makeGenesis({ seed: 1, map: { width: 192, height: 128 }, empires: [humans(1)] }).rules.maxItemsOnMap).toBe(192 * 128);
   });
 
   it("scales mountains with the area and rivers with the side", () => {
