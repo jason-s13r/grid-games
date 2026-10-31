@@ -8,8 +8,8 @@
 // march on, permanently, and a bought modifier has nothing left to press, so
 // it stops being a button and becomes a badge on the HUD.
 
-import type { State } from "@tessera/sim";
-import { MEMBER, MOVE, PHASE, WIN, STEPS_PER_SECOND, growthCeiling, isProtected, isVacant, summarise } from "@tessera/sim";
+import type { EmpireSummary, State } from "@tessera/sim";
+import { MEMBER, MOVE, PHASE, TUNING, WIN, STEPS_PER_SECOND, growthCeiling, isProtected, isVacant, summarise } from "@tessera/sim";
 import type { Person } from "@tessera/room";
 import { escape } from "./escape";
 import { empireTheme } from "./palette";
@@ -106,6 +106,20 @@ const BUY: Record<string, (typeof MOVE)[keyof typeof MOVE]> = {
   growth: MOVE.BUY_GROWTH,
 };
 
+/** The ways the standings can be ranked, all from the same public summary. */
+type Ranking = "tiles" | "pop" | "cascade" | "coins" | "mined";
+const RANKINGS: Record<Ranking, { label: string; title: string; value: (e: EmpireSummary) => number }> = {
+  tiles: { label: "Tiles", title: "Tiles held now", value: (e) => e.tilesOwned },
+  pop: { label: "Pop", title: "Population now", value: (e) => e.popTotal },
+  cascade: { label: "Cascade", title: "Largest coin cascade this game, in tiles", value: (e) => e.largestCascade.tiles },
+  coins: { label: "Coins", title: "Coins taken this game", value: (e) => e.coins.bronze + e.coins.silver + e.coins.gold },
+  mined: { label: "&#9670;", title: "Diamonds collected this game", value: (e) => e.diamonds },
+};
+
+/** A number in a few characters: 12.2M. */
+const compact = (n: number): string =>
+  n < 10_000 ? String(n) : n.toLocaleString(undefined, { notation: "compact", maximumFractionDigits: 1 });
+
 export class Controls {
   constructor(
     private game: Driver,
@@ -137,6 +151,15 @@ export class Controls {
     press(this.els.standings);
     press(this.els.acts);
 
+    // What the standings are ranked by.
+    this.els.standings.addEventListener?.("click", (event) => {
+      const button = (event.target as HTMLElement).closest<HTMLElement>("[data-rank-by]");
+      const key = button?.dataset.rankBy as Ranking | undefined;
+      if (!key || !(key in RANKINGS)) return;
+      this.rankBy = key;
+      this.drawn.delete("standings");
+    });
+
     // Which empires' player lists are open, kept across redraws.
     this.els.standings.addEventListener?.(
       "toggle",
@@ -162,6 +185,9 @@ export class Controls {
     this.game.act(BUY[name]!);
     return true;
   }
+
+  /** What the standings are ranked by. */
+  private rankBy: Ranking = "tiles";
 
   /** The last markup written to each subtree, so an unchanged one is left
    *  alone.
@@ -327,36 +353,76 @@ export class Controls {
 
   /** The players of one empire, one line each: name, a dot for whether they
    *  are live, and for your own empire each seat's bank. */
+  /** What to call a seat: the person's name, "hard bot" and the like for a
+   *  seat the simulation plays, or a stand-in. */
+  private seatName(state: State, empireId: number, i: number): { name: string; bot: boolean } {
+    const m = state.empires[empireId - 1]!.members[i]!;
+    const person = this.people.find((p) => p.seat?.empire === empireId && p.seat.member === i);
+    const you = empireId === this.game.empire && i === this.game.member;
+    if (person) return { name: escape(person.name || `player ${person.key.slice(0, 6)}`), bot: !!person.bot || m.kind === MEMBER.BOT };
+    if (m.kind === MEMBER.BOT) {
+      const level = (Object.keys(TUNING) as Array<keyof typeof TUNING>).find((d) => TUNING[d].popMax === m.popMax);
+      return { name: level ? `${level} bot` : "bot", bot: true };
+    }
+    return { name: you ? "You" : `Seat ${i + 1}`, bot: false };
+  }
+
+  /** An empire's stock in a few symbols: diamonds, bridges and ladders in
+   *  hand, and the two standing upgrades. Everything here is public: every
+   *  peer runs the same simulation. */
+  private stock(state: State, empireId: number): string {
+    const e = state.empires[empireId - 1]!;
+    const bits = [
+      e.diamonds ? `<span class="stock-diamonds" title="diamonds">&#9670;${e.diamonds}</span>` : "",
+      e.bridges ? `<span title="bridges in hand">&#9636;${e.bridges}</span>` : "",
+      e.ladders ? `<span title="ladders in hand">&#9637;${e.ladders}</span>` : "",
+      e.marchUnlocked ? `<span class="stock-mod" title="claims reach two tiles out">&#187;March</span>` : "",
+      e.growthUnlocked ? `<span class="stock-mod" title="joined-up land fills by itself">&#8593;Growth</span>` : "",
+    ].filter(Boolean);
+    // Nothing at all says nothing: no empty symbols at zero.
+    return bits.length ? `<span class="member-stock">${bits.join("")}</span>` : "";
+  }
+
+  /** After an empire's name: "(you)" for yours, and the player's name when
+   *  one seat holds it, so a bot's empire says it is a bot. */
+  private who(state: State, empireId: number): string {
+    if (empireId === this.game.empire) return " (you)";
+    const empire = state.empires[empireId - 1]!;
+    if (empire.members.length !== 1) return "";
+    return ` <span class="standing-who">(${this.seatName(state, empireId, 0).name})</span>`;
+  }
+
   private members(state: State, empireId: number): string {
     const empire = state.empires[empireId - 1]!;
     const rules = state.genesis.rules;
     const ours = empireId === this.game.empire;
-    return empire.members
+    // The empire's stock is shared by its seats: on the seat's own line when
+    // there is one, on a line of its own above them when there are several.
+    const single = empire.members.length === 1;
+    const stock = this.stock(state, empireId);
+    const shared = single || !stock ? "" : `<div class="member member-shared"><span></span><span class="member-name">shared</span>${stock}<span></span></div>`;
+    return shared + empire.members
       .map((m, i) => {
-        const person = this.people.find((p) => p.seat?.empire === empireId && p.seat.member === i);
+        const { name, bot } = this.seatName(state, empireId, i);
         const you = ours && i === this.game.member;
-        const name = person
-          ? escape(person.name || `player ${person.key.slice(0, 6)}`)
-          : m.kind === MEMBER.BOT
-            ? "Bot"
-            : you
-              ? "You"
-              : `Seat ${i + 1}`;
-        const bot = person?.bot || (m.kind === MEMBER.BOT && person) ? ' <span class="tag">bot</span>' : "";
+        const person = this.people.some((p) => p.seat?.empire === empireId && p.seat.member === i);
+        const tag = bot && person ? ' <span class="tag">bot</span>' : "";
         const live = state.step - m.lastBeat <= rules.livenessWindow;
         return `<div class="member${live ? "" : " afk"}">
           <span class="dot${live ? " on" : ""}" title="${live ? "here" : "away"}"></span>
-          <span class="member-name">${name}${you && person ? " (you)" : ""}${bot}</span>
-          ${ours ? `<span class="member-bank" title="this seat's bank">${m.popTimer}</span>` : ""}
+          <span class="member-name">${name}${you && person ? " (you)" : ""}${tag}</span>
+          ${single && stock ? stock : "<span></span>"}
+          <span class="member-bank" title="this seat's bank: what its next claim puts down">${m.popTimer}</span>
         </div>`;
       })
       .join("");
   }
 
   private renderStandings(state: State): void {
+    const rank = RANKINGS[this.rankBy];
     const rows = summarise(state)
       .slice()
-      .sort((a, b) => b.tilesOwned - a.tilesOwned);
+      .sort((a, b) => rank.value(b) - rank.value(a) || b.tilesOwned - a.tilesOwned);
 
     // Whether *this* viewer could take an empire nobody has taken: a mesh game,
     // watching rather than playing, and the door still open. The same
@@ -379,9 +445,16 @@ export class Controls {
       this.expandedYours = true;
     }
 
+    const choices = (Object.keys(RANKINGS) as Ranking[])
+      .map(
+        (key) =>
+          `<button type="button" class="rank-btn${key === this.rankBy ? " on" : ""}" data-rank-by="${key}" title="${RANKINGS[key].title}">${RANKINGS[key].label}</button>`,
+      )
+      .join("");
     this.put(
       this.els.standings,
       "standings",
+      `<div class="rank-by" role="group" aria-label="Rank empires by">${choices}</div>` +
       rows
       .map((e) => {
         const t = empireTheme(e.id);
@@ -392,7 +465,7 @@ export class Controls {
         // rendering — and it never shows as dead, because it was never alive.
         const vacant = isVacant(state.empires[e.id - 1]!);
         const row = `<span class="swatch" data-banner="${empireTheme(e.id).id}"></span>
-          <span class="standing-name">${t.name}${e.id === this.game.empire ? " (you)" : ""}</span>
+          <span class="standing-name">${t.name}${this.who(state, e.id)}</span>
           <span class="standing-tiles">${
             vacant && claimable
               ? `<button class="btn btn-small" type="button" data-claim="${e.id}">Take it</button>`
@@ -400,9 +473,9 @@ export class Controls {
                 ? "unclaimed"
                 : claimable && e.alive
                   ? `<button class="btn btn-small" type="button" data-ask="${e.id}">Ask</button>`
-                  : e.tilesOwned
+                  : compact(rank.value(e))
           }</span>
-          <span class="standing-meta">${e.largestCascade.tiles ? `${e.largestCascade.tiles}&#9733;` : ""}</span>
+          <span class="standing-meta">${this.rankBy !== "cascade" && e.largestCascade.tiles ? `${e.largestCascade.tiles}&#9733;` : ""}</span>
           <button class="find" type="button" data-find="${e.id}" title="Show ${t.name}'s capital" aria-label="Show ${t.name}'s capital">&#9678;</button>`;
         const cls = `standing${!vacant && !e.alive ? " dead" : ""}${vacant ? " vacant" : ""}`;
         // An empire with people in it opens to list them.
