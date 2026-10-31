@@ -1,5 +1,21 @@
 # Changelog
 
+## sim@5.0.1 (2026-10-31)
+
+### Fixes
+
+- a march fires the coin on its target
+  A march is two steps, the gap and then the target, and a coin in the gap
+  fired while a coin on the target was left lying on ground the empire now
+  held. The target now lands like a claim, its coin backed by the other
+  half of the bank.
+
+  Behind a rule in the genesis record, marchTakesCoins, which new games
+  carry: a game composed before it, v5 ones included, has no such field and
+  keeps the rule it started with, so every existing record replays to the
+  same hash.
+
+
 ## sim@5.0.0 (2026-10-31)
 
 ### Breaking Changes

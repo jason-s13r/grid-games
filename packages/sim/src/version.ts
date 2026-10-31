@@ -9,4 +9,4 @@
 // it may be ahead of the manifest: a major pinned with Release-As is in force
 // here from the commit that pins it, so builds made before the release already
 // play the protocol the release will publish.
-export const SIM_VERSION = "5.0.0";
+export const SIM_VERSION = "5.0.1";

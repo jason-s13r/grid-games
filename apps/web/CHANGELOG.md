@@ -1,5 +1,34 @@
 # Changelog
 
+## web@1.3.0 (2026-10-31)
+
+### Features
+
+- the tile line sits under the board, and a tap shows it on a phone
+  What a tile is and what a click on it would do was a pill floating over
+  the bottom of the board, and only for a mouse. It is a line under the
+  board now, as wide as it, with its height kept when there is nothing to
+  say. A mouse shows the tile under it; on a phone it is the last tile
+  tapped, which stays until another is.
+
+### Fixes
+
+- a mine tile shows its population
+  The mine was drawn over the tile, hiding the number on it. It is drawn
+  beneath the number now, and the diamond of a dug mine sits at the top of
+  the tile, clear of it.
+
+- a large screen near 4:3 keeps the two columns
+  The tabbed column on the right was for tablets, but it was chosen by
+  shape alone, so a laptop window at 1320 by 958 got it too. It now applies
+  up to 1180 pixels wide (an iPad held sideways); wider screens of any shape
+  keep the side column and the chat under the board.
+
+### Dependencies
+
+- sim: 5.0.0 -> 5.0.1
+
+
 ## web@1.2.0 (2026-10-31)
 
 ### Features
