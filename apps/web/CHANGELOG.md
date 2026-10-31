@@ -1,5 +1,19 @@
 # Changelog
 
+## web@1.4.1 (2026-10-31)
+
+### Fixes
+
+- the standings and status bar update their numbers in place
+  Every bank in the standings changes every step, so the whole panel, and
+  the status bar with its meter, were rebuilt five times a second, which
+  flickered and cost a layout each time. The numbers that change every step
+  now sit in slots filled in place; the markup around them is rewritten
+  only when its shape changes (the order moves, an empire falls, somebody
+  joins). In four seconds of a game that is one rebuild of the standings
+  and none of the status bar, against nineteen of each before.
+
+
 ## web@1.4.0 (2026-10-31)
 
 ### Features
