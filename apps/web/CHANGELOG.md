@@ -1,5 +1,22 @@
 # Changelog
 
+## web@1.4.0 (2026-10-31)
+
+### Features
+
+- standings name one-seat empires, show every seat's stock and bank, and rank by more than tiles
+  An empire with one seat says who holds it after its name, so a bot's
+  empire reads "Cobalt (steady bot)". Under each empire, every seat shows
+  its bank, and the empire's stock is in symbols: diamonds, bridges and
+  ladders in hand, and March and Growth once bought, nothing shown at zero.
+  It sits on the seat's line when there is one seat and on a shared line
+  above them when there are several; everything there is public, since
+  every player runs the same simulation.
+
+  The standings can be ranked by tiles, population, the largest cascade,
+  coins taken or diamonds collected this game.
+
+
 ## web@1.3.0 (2026-10-31)
 
 ### Features
