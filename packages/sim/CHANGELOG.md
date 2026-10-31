@@ -1,5 +1,35 @@
 # Changelog
 
+## sim@5.0.0 (2026-10-31)
+
+### Breaking Changes
+
+- protocol 5: coins gather, a ceiling on bot tiles, growth that stops, and diamond mines
+  Every change reads state.genesis.protocol, so v4 games in progress keep
+  their rules. Supported protocols are 5 and 4; v3 and its fixture go, and
+  v4 is retired on 2026-12-15.
+
+  - Coins: a coinNearBias share of spawns now keeps probing until it finds
+    an owned tile or another coin to hop off, rather than landing wherever
+    the first probe fell. In a test game the share of coins within a hop of
+    an empire goes from 1 in 8 to 1 in 2, and coins have about twice as
+    many neighbours. Farming enclosed ground is left to emerge from this.
+  - Bots: a tile of an empire the simulation plays holds at most 5,000 for
+    the first three hours, 10,000 for the next three, and so on to 50,000.
+    A fortifying bot whose tile is full thickens its thinnest instead.
+  - Growth: fills a connected tile to 999 and stops, and only while
+    somebody in the empire has moved or sent a heartbeat recently.
+  - Diamonds come from mines instead of lying about: plain tiles beside
+    mountains, one per 1,024 tiles and one within twelve steps of every
+    capital (with a mountain tile of its own if there is none). A claim with
+    a bank of 800 or more digs one; it gives a diamond every fifteen upkeep
+    passes (five minutes), three in all, while the capital reaches it, then
+    is worked out until dug again. Mines live in the item layer, so the
+    snapshot layout is unchanged. Bots that can bank 800 dig them.
+  - Maps scale their mountains, lakes and walls with the area, and rivers
+    with the side (mapFor), so larger maps are not open plain.
+
+
 ## sim@4.0.0 (2026-10-30)
 
 ### Breaking Changes

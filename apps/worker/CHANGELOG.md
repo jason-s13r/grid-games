@@ -1,5 +1,22 @@
 # Changelog
 
+## worker@0.3.0 (2026-10-31)
+
+### Features
+
+- Huge and Vast maps, mines on the board, and v5 words
+  Two larger maps, 384 by 256 and 512 by 352 (a snapshot of about 1.3 MB,
+  inside a Durable Object's 2 MB value limit). Mines are drawn on the board
+  and the minimap, dark until dug and lit while they give, and the hover
+  says what one has left or what a dig takes. How to play and the Growth
+  item in the store describe the v5 rules.
+
+### Dependencies
+
+- sim: 4.0.0 -> 5.0.0
+- web: 1.1.0 -> 1.2.0
+
+
 ## worker@0.2.0 (2026-10-30)
 
 ### Features
