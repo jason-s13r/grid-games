@@ -2074,11 +2074,11 @@ a.btn {
   }
 }
 
-// A tablet, or any screen 3:2 or squarer that is too wide to count as a
-// phone: two columns would leave the board too little width, so there is one
-// on the right, holding the tabs and the open panel, as on a phone held
-// sideways.
-@media (min-width: 901px) and (max-aspect-ratio: 3/2) {
+// A tablet: 3:2 or squarer, too wide to count as a phone and no wider than an
+// iPad held sideways. Two columns would leave the board too little width, so
+// there is one on the right, holding the tabs and the open panel, as on a
+// phone held sideways. A larger screen of the same shape keeps the columns.
+@media (min-width: 901px) and (max-width: 1180px) and (max-aspect-ratio: 3/2) {
   .app {
     grid-template-columns: minmax(0, 1fr) 320px;
     grid-template-areas: "top top" "scrub scrub" "stage tabs" "stage panel";

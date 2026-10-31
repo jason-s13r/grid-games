@@ -15,11 +15,13 @@
 // panel that appears mid-game — the seats list, once your empire has more than
 // one — brings its own tab with it and nothing has to be kept in step by hand.
 
-/** When the panels are tabs rather than two columns: a narrow screen, or one
- *  3:2 or squarer (a tablet), where two columns would leave the board too
- *  little width. Matches the layout rules in the styles; they are two
- *  statements of one condition, so they move together. */
-const NARROW = "(max-width: 900px), (max-aspect-ratio: 3/2)";
+/** When the panels are tabs rather than two columns: a narrow screen, or a
+ *  tablet-sized one 3:2 or squarer, where two columns would leave the board
+ *  too little width. A large screen of the same shape (a laptop at 1320 by
+ *  958, say) has room for the columns and keeps them. Matches the layout rules
+ *  in the styles; they are two statements of one condition, so they move
+ *  together. */
+const NARROW = "(max-width: 900px), (max-width: 1180px) and (max-aspect-ratio: 3/2)";
 
 export class Tabs {
   private readonly media = window.matchMedia(NARROW);
