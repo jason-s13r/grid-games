@@ -3,8 +3,11 @@ name: Release
 # dispat computes the release from the conventional commits, writes the
 # changelogs, rewrites the manifests, creates one release commit carrying all
 # of it, tags every released package on that commit ({name}@{version}) and
-# pushes the branch and the tags. Deploying the release commit to Cloudflare
-# is added with the Worker.
+# pushes the branch and the tags. Then the `cloudflare` branch is moved to the
+# release commit, and Cloudflare's Workers Builds, which deploys that branch,
+# puts it live. So what is deployed is always a release, with the version
+# numbers it says it has, and work on main deploys nothing until it is
+# released.
 #
 # Manual, not on push: a release is a decision, and dispat's own commits would
 # otherwise re-enter the trigger. Note that tags pushed with the workflow's
@@ -113,3 +116,31 @@ jobs:
       - name: Record the release commit
         id: released
         run: echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
+  # Move the branch Cloudflare deploys from to the release commit. A plain
+  # push, so it only ever moves forward: if something was pushed to
+  # `cloudflare` by hand, this fails rather than throwing it away, and the run
+  # says so. A push made with GITHUB_TOKEN starts no workflow here, but the
+  # webhook Cloudflare's GitHub app listens for is still sent.
+  deploy:
+    name: Deploy the release to Cloudflare
+    needs: release
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # to move the cloudflare branch
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.release.outputs.sha }}
+          fetch-depth: 0
+
+      - name: Point the cloudflare branch at the release commit
+        env:
+          SHA: ${{ needs.release.outputs.sha }}
+        run: |
+          git push origin "$SHA:refs/heads/cloudflare"
+          {
+            echo "### Deploying"
+            echo ""
+            echo "\`cloudflare\` now points at \`$SHA\`; Workers Builds deploys it from there."
+          } >> "$GITHUB_STEP_SUMMARY"
