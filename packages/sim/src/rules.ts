@@ -587,6 +587,7 @@ function march(
   const target = idx(move.x, move.y, state.width);
   const via = marchVia(state, move.x, move.y, empire.id);
   if (via < 0) return;
+  const rules = state.genesis.rules;
 
   const mult = multiplier(state, xOf(via, state.width), yOf(via, state.width), empire.id);
   const spent = member.popTimer;
@@ -599,10 +600,20 @@ function march(
 
   const half = Math.floor(base / 2);
   let captured = 0;
-  // Half the raw spend backs the gap's coin, because half the raw spend is what
-  // went into that tile. The multiplier is not charged twice; see land().
+  // Two steps: the gap first, then the target. Half the raw spend backs the
+  // gap's coin, because half the raw spend is what went into that tile, and
+  // the other half the target's. The multiplier is not charged twice; see
+  // land().
+  //
+  // A game composed with `marchTakesCoins` fires a coin on the target too, as a
+  // claim there would. Before it, the target's coin was left lying on ground
+  // the empire now held, to be clicked next turn, which read as a march that
+  // missed the coin it was aimed at.
   if (land(state, via, half, Math.floor(spent / 2), empire, member, dirty)) captured++;
-  if (place(state, target, empire.id, base - half, dirty)) captured++;
+  const landed = rules.marchTakesCoins
+    ? land(state, target, base - half, spent - Math.floor(spent / 2), empire, member, dirty)
+    : place(state, target, empire.id, base - half, dirty);
+  if (landed) captured++;
 
   bump(empire, member, STAT.TILES_TAKEN, captured);
   raise(empire, member, STAT.TILES_ONE_MOVE, captured);

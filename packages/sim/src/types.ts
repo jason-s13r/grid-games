@@ -134,6 +134,12 @@ export interface Rules {
   mineYield?: number;
   mineEvery?: number;
 
+  /** A march's target fires the coin on it, as its gap does. Absent (every
+   *  game composed before it) leaves a coin on the target where it lies. In
+   *  the record rather than read from the version, so a v5 game started
+   *  before it keeps the rule it started with. */
+  marchTakesCoins?: boolean;
+
   /** Superseded by `graceTiles` / `graceSteps` and kept because every record
    *  written before vacancies carries them. Read through the grace fields, which
    *  fall back to these, so a stored game keeps the protection it was composed

@@ -140,6 +140,7 @@ export const DEFAULT_RULES: Rules = {
   mineDigCost: 800,
   mineYield: 3,
   mineEvery: 15,
+  marchTakesCoins: true,
 
   noobTiles: 40,
   noobSteps: minutes(3),

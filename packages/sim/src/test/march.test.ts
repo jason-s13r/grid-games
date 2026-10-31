@@ -198,8 +198,22 @@ describe("march", () => {
     expect(held(s, 1)).toBe(5);
   });
 
-  it("a coin under a march is left where it lies", () => {
+  it("a coin on the target fires, as a claim there would", () => {
     const s = arena([humans(1), humans(1)]);
+    own(s, 5, 5, 1);
+    s.state.item[idx(7, 5, s.state.width)] = ITEM.BRONZE;
+    s.state.itemCount = 1;
+    s.state.empires[0]!.marchUnlocked = 1;
+    s.state.empires[0]!.members[0]!.popTimer = 100;
+    s.advance([{ step: s.step, empire: 1, member: 0, seq: 0, type: MOVE.MARCH, x: 7, y: 5 }]);
+    expect(s.state.item[idx(7, 5, s.state.width)]).toBe(ITEM.NONE);
+    // The seed tile, the gap, and the bronze's ball around the target: the
+    // target, (8,5), (7,4) and (7,6), the gap being already counted.
+    expect(held(s, 1)).toBe(6);
+  });
+
+  it("in a game composed before that, a coin under a march is left where it lies", () => {
+    const s = arena([humans(1), humans(1)], 1, { marchTakesCoins: undefined });
     own(s, 5, 5, 1);
     s.state.item[idx(7, 5, s.state.width)] = 3; // gold
     s.state.itemCount = 1;
