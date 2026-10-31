@@ -116,6 +116,25 @@ const RANKINGS: Record<Ranking, { label: string; title: string; value: (e: Empir
   mined: { label: "&#9670;", title: "Diamonds collected this game", value: (e) => e.diamonds },
 };
 
+/** Fill a panel's `data-v` (text) and `data-w` (width) slots, touching only
+ *  what changed. */
+function fill(root: HTMLElement, values: Record<string, string>): void {
+  const slots = root.querySelectorAll?.<HTMLElement>("[data-v], [data-w]");
+  if (!slots) return;
+  for (const slot of slots) {
+    const v = slot.dataset.v;
+    if (v !== undefined) {
+      const text = values[v] ?? "";
+      if (slot.textContent !== text) slot.textContent = text;
+    }
+    const w = slot.dataset.w;
+    if (w !== undefined) {
+      const width = values[w] ?? "";
+      if (slot.style.width !== width) slot.style.width = width;
+    }
+  }
+}
+
 /** A number in a few characters: 12.2M. */
 const compact = (n: number): string =>
   n < 10_000 ? String(n) : n.toLocaleString(undefined, { notation: "compact", maximumFractionDigits: 1 });
@@ -208,14 +227,26 @@ export class Controls {
   /** Subtrees with a press in progress on them. */
   private readonly pressed = new Set<HTMLElement>();
 
-  /** Write only if it changed. Returns whether it did. */
-  private put(el: HTMLElement, key: string, markup: string): boolean {
-    if (this.drawn.get(key) === markup) return false;
+  /** Write only if it changed. Returns whether it did.
+   *
+   *  `values` are the numbers that change every step: banks, the meter, tile
+   *  and population counts. They are not part of the markup compared here;
+   *  the markup carries an empty `data-v` (text) or `data-w` (width) slot for
+   *  each, filled in place afterwards. Rewriting a whole panel twelve times a
+   *  second because one bank ticked made it flicker and cost a layout every
+   *  time; this way the panel is rebuilt when its shape changes (an empire
+   *  falls, the order moves, somebody joins) and otherwise only text nodes
+   *  change. */
+  private put(el: HTMLElement, key: string, markup: string, values?: Record<string, string>): boolean {
+    let wrote = false;
     // Pressed: the next render after the release writes it.
-    if (this.pressed.has(el)) return false;
-    this.drawn.set(key, markup);
-    el.innerHTML = markup;
-    return true;
+    if (this.drawn.get(key) !== markup && !this.pressed.has(el)) {
+      this.drawn.set(key, markup);
+      el.innerHTML = markup;
+      wrote = true;
+    }
+    if (values) fill(el, values);
+    return wrote;
   }
 
   render(state: State): void {
@@ -247,12 +278,19 @@ export class Controls {
       <strong class="hud-name">${theme.name}</strong>
       ${isProtected(state, empire) ? '<span class="tag">protected</span>' : ""}
       <div class="meter" title="population timer">
-        <div class="meter-fill" style="width:${pct}%; background:${theme.c1}"></div>
-        <span class="meter-label">${member.popTimer} / ${rules.popMax}</span>
+        <div class="meter-fill" data-w="pct" style="background:${theme.c1}"></div>
+        <span class="meter-label" data-v="bank"></span>
       </div>
-      <span class="fact"><i>Tiles</i><b>${empire.tilesOwned}</b></span>
-      <span class="fact fact-pop"><i class="full">Population</i><i class="short">Pop</i><b class="full">${empire.popTotal.toLocaleString()}</b><b class="short">${short(empire.popTotal)}</b></span>
+      <span class="fact"><i>Tiles</i><b data-v="tiles"></b></span>
+      <span class="fact fact-pop"><i class="full">Population</i><i class="short">Pop</i><b class="full" data-v="pop"></b><b class="short" data-v="popShort"></b></span>
     `,
+      {
+        pct: `${pct}%`,
+        bank: `${member.popTimer} / ${rules.popMax}`,
+        tiles: String(empire.tilesOwned),
+        pop: empire.popTotal.toLocaleString(),
+        popShort: short(empire.popTotal),
+      },
     );
 
     // What there is to spend, and what is already bought, at the top of the
@@ -412,7 +450,7 @@ export class Controls {
           <span class="dot${live ? " on" : ""}" title="${live ? "here" : "away"}"></span>
           <span class="member-name">${name}${you && person ? " (you)" : ""}${tag}</span>
           ${single && stock ? stock : "<span></span>"}
-          <span class="member-bank" title="this seat's bank: what its next claim puts down">${m.popTimer}</span>
+          <span class="member-bank" title="this seat's bank: what its next claim puts down" data-v="bank:${empireId}:${i}"></span>
         </div>`;
       })
       .join("");
@@ -451,6 +489,12 @@ export class Controls {
           `<button type="button" class="rank-btn${key === this.rankBy ? " on" : ""}" data-rank-by="${key}" title="${RANKINGS[key].title}">${RANKINGS[key].label}</button>`,
       )
       .join("");
+    // The numbers that change every step, filled in place. See put().
+    const values: Record<string, string> = {};
+    for (const e of rows) {
+      values[`val:${e.id}`] = compact(rank.value(e));
+      state.empires[e.id - 1]!.members.forEach((m, i) => (values[`bank:${e.id}:${i}`] = String(m.popTimer)));
+    }
     this.put(
       this.els.standings,
       "standings",
@@ -473,7 +517,7 @@ export class Controls {
                 ? "unclaimed"
                 : claimable && e.alive
                   ? `<button class="btn btn-small" type="button" data-ask="${e.id}">Ask</button>`
-                  : compact(rank.value(e))
+                  : `<span data-v="val:${e.id}"></span>`
           }</span>
           <span class="standing-meta">${this.rankBy !== "cascade" && e.largestCascade.tiles ? `${e.largestCascade.tiles}&#9733;` : ""}</span>
           <button class="find" type="button" data-find="${e.id}" title="Show ${t.name}'s capital" aria-label="Show ${t.name}'s capital">&#9678;</button>`;
@@ -486,6 +530,7 @@ export class Controls {
         </details>`;
         })
         .join(""),
+      values,
     );
   }
 
