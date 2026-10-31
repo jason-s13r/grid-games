@@ -395,10 +395,14 @@ h1, h2, h3, .brand, .screen-brand {
 }
 
 // A diamond mine: a dark shaft in the ground, and a diamond at its mouth once
-// it is dug and giving.
+// it is dug and giving. Drawn beneath the tile's number (the tile is its own
+// stacking context, so the shaft sits over its colour and under its text):
+// a mine is ground somebody holds, and what it holds still shows.
+.tile.i-mine { isolation: isolate; }
 .tile.i-mine::after {
   content: "";
   position: absolute;
+  z-index: -1;
   inset: 18%;
   border-radius: 3px 3px 40% 40%;
   background: #3d3a52;
@@ -407,11 +411,11 @@ h1, h2, h3, .brand, .screen-brand {
 .tile.i-mine.is-dug::before {
   content: "";
   position: absolute;
-  z-index: 1;
-  left: 36%;
-  top: 30%;
-  width: 28%;
-  height: 28%;
+  z-index: -1;
+  left: 38%;
+  top: 8%;
+  width: 24%;
+  height: 24%;
   transform: rotate(45deg);
   background: radial-gradient(circle at 35% 30%, #ffffff, #7fe8f0);
   box-shadow: 0 0 6px rgba(127, 232, 240, 0.9);
