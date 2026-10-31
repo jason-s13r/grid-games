@@ -39,6 +39,8 @@ export class Marks {
   private readonly ctx: CanvasRenderingContext2D;
   /** The tile under the pointer, or null when it is off the board. */
   private hover: [number, number] | null = null;
+  /** What the line under the board says while no tile is chosen. */
+  idle = "";
   /** What was drawn last, so an unchanged frame costs nothing. */
   private drawn = "";
 
@@ -99,8 +101,8 @@ export class Marks {
       ctx.strokeRect(sx + 1, sy + 1, Math.max(2, z - 2), Math.max(2, z - 2));
     }
 
-    const line = hover ? this.describe(state, game, hover[0], hover[1]) : "";
-    this.info.hidden = !line;
+    const line = hover ? this.describe(state, game, hover[0], hover[1]) : this.idle;
+    this.info.classList.toggle("is-idle", !hover);
     if (this.info.textContent !== line) this.info.textContent = line;
   }
 

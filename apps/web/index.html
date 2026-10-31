@@ -36,7 +36,9 @@
 
       <main class="stage">
         <!-- Fixed 4:3, centred, letterboxed. Everyone plays the same shape of
-             board regardless of the screen it is on. -->
+             board regardless of the screen it is on. Under it, one line about
+             the tile under the pointer (or the last one tapped). -->
+        <div class="board-col">
         <div class="board">
           <div class="viewport" data-viewport>
             <canvas class="lod" data-lod></canvas>
@@ -44,7 +46,6 @@
             <!-- Where a held bridge or ladder can go, and the tile under the
                  pointer. See view/Marks.ts. -->
             <canvas class="marks" data-marks></canvas>
-            <div class="tile-info" data-tile-info hidden></div>
             <!-- Pan buttons at the middle of each edge, pointing the way they
                  move; centre-on-capital and zoom in a row at the top right. -->
             <div class="mapctl" data-mapctl>
@@ -70,6 +71,8 @@
           </div>
 
           <div class="banner" data-banner hidden></div>
+        </div>
+        <p class="tile-info" data-tile-info aria-live="polite"></p>
         </div>
       </main>
 

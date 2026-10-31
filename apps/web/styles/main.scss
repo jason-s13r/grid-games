@@ -281,9 +281,12 @@ h1, h2, h3, .brand, .screen-brand {
 
 // A fixed 4:3 board, as large as fits and no larger. Whichever axis runs out
 // first decides, so a wide screen letterboxes and a phone goes edge to edge.
+// The tile line under it takes --info of the height.
+.stage { --info: 26px; }
+.board-col { display: grid; justify-items: center; }
 .board {
   position: relative;
-  width: min(100cqw, 100cqh * 4 / 3);
+  width: min(100cqw, (100cqh - var(--info)) * 4 / 3);
   aspect-ratio: 4 / 3;
   overflow: hidden;
   border: 2px solid var(--line);
@@ -657,23 +660,25 @@ h1, h2, h3, .brand, .screen-brand {
 }
 
 // What the tile under the pointer is, and what clicking it would do.
+// The line under the board: what the tile under the pointer (or the last one
+// tapped) is, and what a click on it would do. Its height is kept when there
+// is nothing to say, so the board does not move.
 .tile-info {
-  position: absolute;
-  left: 50%;
-  bottom: 52px;
-  transform: translateX(-50%);
-  z-index: 3;
-  max-width: calc(100% - 120px);
-  padding: 4px 10px;
-  font-size: 12px;
+  margin: 0;
+  width: 100%;
+  // As wide as the board and no wider: a long line is cut short rather than
+  // widening the column.
+  contain: inline-size;
+  min-height: 22px;
+  padding: 3px 4px 0;
+  font-size: 12.5px;
   font-weight: 600;
+  line-height: 1.4;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  color: #fff;
-  background: rgba(30, 53, 47, 0.88);
-  border-radius: 999px;
-  pointer-events: none;
+  color: var(--forest-ink);
+  &.is-idle { font-weight: 400; color: var(--muted); }
 }
 
 // How many are in hand. Sits on the tile rather than under it, so the tile
@@ -2041,7 +2046,7 @@ a.btn {
     container-type: inline-size;
   }
   .board {
-    width: min(100cqw, (100dvh - 140px) * 4 / 3);
+    width: min(100cqw, (100dvh - 140px - var(--info)) * 4 / 3);
     border: none;
     border-radius: 0;
     box-shadow: none;
@@ -2051,6 +2056,7 @@ a.btn {
   // a drag on a small board competes with a tap, so panning by button is the
   // precise way.
   .btn.ctl { width: 36px; height: 36px; font-size: 13px; }
+  .tile-info { padding: 3px 10px 0; }
 
   // Both sidebars become one stack of collapsed strips under the board. Shut,
   // each costs about 34px; the board takes everything they are not using.
@@ -2120,7 +2126,7 @@ a.btn {
   .hud { order: 0; flex-basis: auto; flex-wrap: nowrap; overflow: hidden; }
   // The board's width comes from the height here, so the stage sizes to it
   // rather than containing it.
-  .board { width: calc((100dvh - 52px) * 4 / 3); }
+  .board { width: calc((100dvh - 52px - var(--info)) * 4 / 3); }
   .stage { container-type: normal; align-self: start; }
   // The same dark line as under the status bar, between the board and the
   // panels, running the full height.

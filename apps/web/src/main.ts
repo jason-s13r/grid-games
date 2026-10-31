@@ -312,15 +312,25 @@ viewportEl.addEventListener("pointerdown", (event) => {
 
 const marks = new Marks(pick<HTMLCanvasElement>("[data-marks]"), pick<HTMLElement>("[data-tile-info]"));
 
-/** The tile under the pointer, for the outline and the line describing it.
- *  Touch has no hover, so only a mouse or pen sets it. */
+/** The tile under the pointer, for the outline and the line describing it
+ *  under the board. Touch has no hover, so there the tile is the last one
+ *  tapped, and it stays chosen until another is. */
 function pointAt(event: PointerEvent): void {
-  if (event.pointerType === "touch" || onControls(event)) return marks.pointAt(null);
+  if (event.pointerType === "touch") return;
+  if (onControls(event)) return marks.pointAt(null);
+  marks.pointAt(tileOf(event));
+}
+function tileOf(event: PointerEvent): [number, number] | null {
   const rect = viewportEl.getBoundingClientRect();
   const [x, y] = camera.tileAt(event.clientX - rect.left, event.clientY - rect.top);
-  marks.pointAt(x < 0 || y < 0 || x >= MAP.width || y >= MAP.height ? null : [x, y]);
+  return x < 0 || y < 0 || x >= MAP.width || y >= MAP.height ? null : [x, y];
 }
-viewportEl.addEventListener("pointerleave", () => marks.pointAt(null));
+marks.idle = matchMedia("(pointer: coarse)").matches
+  ? "Tap a tile to see what's on it."
+  : "Point at a tile to see what's on it.";
+viewportEl.addEventListener("pointerleave", (event) => {
+  if (event.pointerType !== "touch") marks.pointAt(null);
+});
 
 viewportEl.addEventListener("pointermove", (event) => {
   if (!dragging) return pointAt(event);
@@ -347,6 +357,7 @@ viewportEl.addEventListener("pointerup", (event) => {
   // without the controls on top of them.
   if (x < 0 || y < 0 || x >= MAP.width || y >= MAP.height) return;
 
+  if (event.pointerType === "touch") marks.pointAt([x, y]);
   boardClick(game, x, y);
   // Clicking near the edge says where you are going. Following it there saves
   // a separate pan gesture, which on a phone is several.
