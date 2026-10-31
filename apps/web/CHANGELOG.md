@@ -1,5 +1,53 @@
 # Changelog
 
+## web@1.6.0 (2026-10-31)
+
+### Features
+
+- a game that ends says so
+  A game used to end with a strip along the bottom of the board, while the
+  clock stayed on the time that had been left, so on a phone it read as the
+  game freezing.
+
+  Now the end opens a card over everything, once per ending: who won ("You
+  won!" for your own win, with tiles in your colours falling behind it), why
+  in a sentence, where you came, the final standings, and how long it lasted.
+  The board dims behind it. "See the board" closes it and leaves a bar along
+  the bottom of the board with Results to open it again; Start page goes home.
+  Watchers and replays get it too.
+
+  The card is a dialog because the stage is a size container on a phone,
+  which would hold even a fixed card to the board.
+
+  The clock reads "Game over · lasted 2d 22h", and Settings says the length
+  ended after 2d 22h with joining closed.
+
+  room exports placesOf(state), the same placing as the recorded result, so
+  the card and the start page's "you came 4th" agree.
+
+- a game with an end has no abandonment
+  An empire may idle until the timeout. durationRules gives any game with an
+  end abandonWindow 0 (NO_ABANDONMENT), which nobody can be present inside, so
+  LAST_ROSTER cannot fire. Open-ended games keep the 3 h floor, having nothing
+  else to end them.
+
+  The scaled window (a third of the game, capped at 36 h) could end a 10-day
+  game on day three, as soon as one empire was the only one opened in the last
+  36 hours.
+
+  inspectGenesis accepts 0 as the one value below the floor. An older build
+  refuses it, so an old peer declines to join rather than desyncing; any build
+  that runs such a record reaches the same verdict, so no protocol bump.
+
+  Games already running keep the window in their records.
+
+### Dependencies
+
+- sim: 5.1.0 -> 5.2.0
+- protocol: 1.1.0 -> 1.2.0
+- room: 1.2.0 -> 1.3.0
+
+
 ## web@1.5.0 (2026-10-31)
 
 ### Features

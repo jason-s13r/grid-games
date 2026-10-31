@@ -1,5 +1,30 @@
 # Changelog
 
+## protocol@1.2.0 (2026-10-31)
+
+### Features
+
+- a game with an end has no abandonment
+  An empire may idle until the timeout. durationRules gives any game with an
+  end abandonWindow 0 (NO_ABANDONMENT), which nobody can be present inside, so
+  LAST_ROSTER cannot fire. Open-ended games keep the 3 h floor, having nothing
+  else to end them.
+
+  The scaled window (a third of the game, capped at 36 h) could end a 10-day
+  game on day three, as soon as one empire was the only one opened in the last
+  36 hours.
+
+  inspectGenesis accepts 0 as the one value below the floor. An older build
+  refuses it, so an old peer declines to join rather than desyncing; any build
+  that runs such a record reaches the same verdict, so no protocol bump.
+
+  Games already running keep the window in their records.
+
+### Dependencies
+
+- sim: 5.1.0 -> 5.2.0
+
+
 ## protocol@1.1.0 (2026-10-30)
 
 ### Features
