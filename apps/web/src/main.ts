@@ -254,6 +254,7 @@ function mount(driver: Driver, options: { background?: boolean } = {}): void {
     banner: pick<HTMLElement>("[data-banner]"),
     zoomhint: pick<HTMLElement>("[data-zoomhint]"),
   });
+  controls.onPlaces = () => marks.showPlaces();
 
   // A chat column for an online game; none for a solo one.
   appEl.dataset.chat = driver.online ? "on" : "off";
@@ -301,6 +302,24 @@ let lastY = 0;
 const onControls = (event: Event): boolean =>
   !!(event.target as HTMLElement).closest(".mapctl");
 
+// What a tile is: on a screen with a pointer, the line under the board follows
+// it; on a touch screen a long press shows the same words over the board,
+// without claiming, and a tap claims as it always has.
+const touchScreen = matchMedia("(pointer: coarse)").matches;
+const popEl = pick<HTMLElement>("[data-tile-pop]");
+const marks = new Marks(
+  pick<HTMLCanvasElement>("[data-marks]"),
+  touchScreen ? popEl : pick<HTMLElement>("[data-tile-info]"),
+);
+marks.idle = touchScreen ? "" : "Point at a tile to see what's on it.";
+marks.press = touchScreen ? "tap" : "click";
+
+/** A press held this long without moving shows the tile instead of claiming. */
+const LONG_PRESS_MS = 450;
+let pressTimer: ReturnType<typeof setTimeout> | undefined;
+let longPressed = false;
+let popHide: ReturnType<typeof setTimeout> | undefined;
+
 viewportEl.addEventListener("pointerdown", (event) => {
   if (onControls(event)) return;
   dragging = true;
@@ -308,26 +327,42 @@ viewportEl.addEventListener("pointerdown", (event) => {
   lastX = event.clientX;
   lastY = event.clientY;
   viewportEl.setPointerCapture(event.pointerId);
+  longPressed = false;
+  if (event.pointerType === "touch") {
+    clearTimeout(pressTimer);
+    clearTimeout(popHide);
+    marks.pointAt(null);
+    const { clientX, clientY } = event;
+    pressTimer = setTimeout(() => {
+      if (!dragging || dragMoved > 8) return;
+      const tile = tileAt(clientX, clientY);
+      if (!tile) return;
+      longPressed = true;
+      const board = popEl.parentElement!.getBoundingClientRect();
+      const x = Math.min(Math.max(clientX - board.left, 90), board.width - 90);
+      popEl.style.left = `${x}px`;
+      popEl.style.top = `${Math.max(clientY - board.top, 60)}px`;
+      marks.pointAt(tile);
+      navigator.vibrate?.(10);
+    }, LONG_PRESS_MS);
+  }
 });
-
-const marks = new Marks(pick<HTMLCanvasElement>("[data-marks]"), pick<HTMLElement>("[data-tile-info]"));
+// A long press is not a request for the browser's own menu.
+viewportEl.addEventListener("contextmenu", (event) => event.preventDefault());
 
 /** The tile under the pointer, for the outline and the line describing it
- *  under the board. Touch has no hover, so there the tile is the last one
- *  tapped, and it stays chosen until another is. */
+ *  under the board. Touch has no hover: see the long press above. */
 function pointAt(event: PointerEvent): void {
   if (event.pointerType === "touch") return;
   if (onControls(event)) return marks.pointAt(null);
   marks.pointAt(tileOf(event));
 }
-function tileOf(event: PointerEvent): [number, number] | null {
+function tileAt(clientX: number, clientY: number): [number, number] | null {
   const rect = viewportEl.getBoundingClientRect();
-  const [x, y] = camera.tileAt(event.clientX - rect.left, event.clientY - rect.top);
+  const [x, y] = camera.tileAt(clientX - rect.left, clientY - rect.top);
   return x < 0 || y < 0 || x >= MAP.width || y >= MAP.height ? null : [x, y];
 }
-marks.idle = matchMedia("(pointer: coarse)").matches
-  ? "Tap a tile to see what's on it."
-  : "Point at a tile to see what's on it.";
+const tileOf = (event: PointerEvent): [number, number] | null => tileAt(event.clientX, event.clientY);
 viewportEl.addEventListener("pointerleave", (event) => {
   if (event.pointerType !== "touch") marks.pointAt(null);
 });
@@ -339,6 +374,7 @@ viewportEl.addEventListener("pointermove", (event) => {
   lastX = event.clientX;
   lastY = event.clientY;
   dragMoved += Math.abs(dx) + Math.abs(dy);
+  if (longPressed) return;
   camera.panByPixels(dx, dy);
 });
 
@@ -348,6 +384,13 @@ viewportEl.addEventListener("pointerup", (event) => {
   dragging = false;
   viewportEl.releasePointerCapture(event.pointerId);
   // A drag is a pan, not a click.
+  clearTimeout(pressTimer);
+  if (longPressed) {
+    // Shown, not claimed. The words stay a moment after the finger lifts.
+    longPressed = false;
+    popHide = setTimeout(() => marks.pointAt(null), 1800);
+    return;
+  }
   if (dragMoved > 4) return;
 
   const rect = viewportEl.getBoundingClientRect();
@@ -357,7 +400,6 @@ viewportEl.addEventListener("pointerup", (event) => {
   // without the controls on top of them.
   if (x < 0 || y < 0 || x >= MAP.width || y >= MAP.height) return;
 
-  if (event.pointerType === "touch") marks.pointAt([x, y]);
   boardClick(game, x, y);
   // Clicking near the edge says where you are going. Following it there saves
   // a separate pan gesture, which on a phone is several.

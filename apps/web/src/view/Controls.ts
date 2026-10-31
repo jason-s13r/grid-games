@@ -155,7 +155,14 @@ export class Controls {
     this.els.acts.addEventListener("click", (event) => {
       const target = (event.target as HTMLElement).closest<HTMLElement>("[data-buy]");
       const type = target ? BUY[target.dataset.buy ?? ""] : undefined;
-      if (type !== undefined) this.game.act(type);
+      if (type === undefined) return;
+      this.game.act(type);
+      if (type === MOVE.BUY_BRIDGE || type === MOVE.BUY_LADDER) this.onPlaces?.();
+    });
+    // A bridge or ladder in hand, in the store's Owned line: press it to see
+    // where it can go.
+    this.els.storeHead.addEventListener?.("click", (event) => {
+      if ((event.target as HTMLElement).closest("[data-places]")) this.onPlaces?.();
     });
 
     // The standings do change every step (each member's counter), and they
@@ -202,8 +209,13 @@ export class Controls {
     const name = Object.keys(KEYS).find((k) => KEYS[k] === key.toUpperCase());
     if (!name || !this.offered.has(name)) return false;
     this.game.act(BUY[name]!);
+    if (name === "bridge" || name === "ladder") this.onPlaces?.();
     return true;
   }
+
+  /** Show where a bridge or ladder can go: after buying one, or pressing one
+   *  in hand. */
+  onPlaces: (() => void) | null = null;
 
   /** What the standings are ranked by. */
   private rankBy: Ranking = "tiles";
@@ -296,8 +308,8 @@ export class Controls {
     // What there is to spend, and what is already bought, at the top of the
     // store: that is where the number matters.
     const owned = [
-      empire.bridges ? `<span class="mod" title="Bridges in hand: click a river tile beside your border.">Bridge &times;${empire.bridges}</span>` : "",
-      empire.ladders ? `<span class="mod" title="Ladders in hand: click a wall tile beside your border.">Ladder &times;${empire.ladders}</span>` : "",
+      empire.bridges ? `<button type="button" class="mod mod-place" data-places title="Bridges in hand: show where one can go, then click a river tile beside your border.">Bridge &times;${empire.bridges}</button>` : "",
+      empire.ladders ? `<button type="button" class="mod mod-place" data-places title="Ladders in hand: show where one can go, then click a wall tile beside your border.">Ladder &times;${empire.ladders}</button>` : "",
       empire.marchUnlocked ? '<span class="mod" title="Claims reach two tiles out instead of one.">March</span>' : "",
       empire.growthUnlocked ? '<span class="mod" title="Tiles connected to your capital gain population over time.">Growth</span>' : "",
     ].join("");

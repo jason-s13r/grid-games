@@ -35,12 +35,24 @@ const ITEM_NAME: Record<number, string> = {
   [ITEM.DIAMOND]: "a diamond",
 };
 
+/** How long the places a bridge or ladder can go stay lit. */
+const PLACES_MS = 6000;
+
 export class Marks {
   private readonly ctx: CanvasRenderingContext2D;
   /** The tile under the pointer, or null when it is off the board. */
   private hover: [number, number] | null = null;
   /** What the line under the board says while no tile is chosen. */
   idle = "";
+  /** "click", or "tap" on a touch screen. */
+  press = "click";
+  /** Until when (ms) to show where a bridge or ladder in hand can go. */
+  private placesUntil = 0;
+
+  /** Show the places a held bridge or ladder can go, for a few seconds. */
+  showPlaces(): void {
+    this.placesUntil = Date.now() + PLACES_MS;
+  }
   /** What was drawn last, so an unchanged frame costs nothing. */
   private drawn = "";
 
@@ -57,7 +69,16 @@ export class Marks {
 
   render(state: State, game: Driver, camera: Camera): void {
     const empire = state.empires[game.empire - 1];
-    const placing = !!empire && (empire.bridges > 0 || empire.ladders > 0);
+    // Where a held bridge or ladder can go: shown for a few seconds after
+    // buying one or pressing one in hand, and while the pointer is on a river
+    // or wall. Not all the time an item is held, which lit up half the map.
+    const hoverTerrain = this.hover ? state.terrain[idx(this.hover[0], this.hover[1], state.width)] : -1;
+    const placing =
+      !!empire &&
+      (empire.bridges > 0 || empire.ladders > 0) &&
+      (Date.now() < this.placesUntil ||
+        (hoverTerrain === TERRAIN.RIVER && empire.bridges > 0) ||
+        (hoverTerrain === TERRAIN.WALL && empire.ladders > 0));
     const key = [
       camera.x, camera.y, camera.zoom, camera.width, camera.height,
       state.step, this.hover?.join(",") ?? "", game.empire, placing,
@@ -103,6 +124,7 @@ export class Marks {
 
     const line = hover ? this.describe(state, game, hover[0], hover[1]) : this.idle;
     this.info.classList.toggle("is-idle", !hover);
+    this.info.hidden = !line;
     if (this.info.textContent !== line) this.info.textContent = line;
   }
 
@@ -139,11 +161,11 @@ export class Marks {
     const terrain = state.terrain[i]!;
 
     if (terrain === TERRAIN.RIVER) {
-      if (game.sim.validate(this.move(state, game, MOVE.PLACE_BRIDGE, x, y))) return "click to bridge it";
+      if (game.sim.validate(this.move(state, game, MOVE.PLACE_BRIDGE, x, y))) return `${this.press} to bridge it`;
       return empire.bridges > 0 ? "a bridge has to start beside your border" : "buy a bridge to cross";
     }
     if (terrain === TERRAIN.WALL) {
-      if (game.sim.validate(this.move(state, game, MOVE.PLACE_LADDER, x, y))) return "click to put a ladder on it";
+      if (game.sim.validate(this.move(state, game, MOVE.PLACE_LADDER, x, y))) return `${this.press} to put a ladder on it`;
       return empire.ladders > 0 ? "a ladder has to start beside your border" : "buy a ladder to cross";
     }
 
@@ -155,12 +177,9 @@ export class Marks {
       if (!adjacent) return empire.marchUnlocked ? "too far, even for a march" : "too far: claim beside your border";
       return "your bank is empty";
     }
-    const bank = empire.members[game.member]?.popTimer ?? 0;
     const owner = state.owner[i]!;
-    const verb = type === MOVE.MARCH ? "march" : owner === game.empire ? "reinforce" : "claim";
-    return owner > 0 && owner !== game.empire
-      ? `click to ${verb}: your bank ${bank} against ${state.pop[i]!}`
-      : `click to ${verb} with your bank of ${bank}`;
+    const verb = type === MOVE.MARCH ? "march" : owner === game.empire ? "reinforce" : owner > 0 ? "attack" : "claim";
+    return `${this.press} to ${verb}`;
   }
 
   private move(state: State, game: Driver, type: Move["type"], x: number, y: number): Move {
