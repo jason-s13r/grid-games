@@ -1,5 +1,27 @@
 # Changelog
 
+## web@1.7.0 (2026-11-01)
+
+### Features
+
+- start page hero in the style of the share image
+  The title is cream and larger, and the tagline is its own line in mint over a
+  quieter line about how to play. Behind the right of the card sits a tilted
+  corner of a board, four empires spreading across it, drawn with the board's
+  own tile patterns and fading into the green. On a phone it is a band across
+  the top of the card instead. The gear gets a plate of green so it reads over
+  the tiles.
+
+- share image, icons and search metadata
+  Every page gets a canonical URL, theme colour, favicon, touch icon and web
+  manifest, plus Open Graph and Twitter card tags pointing at a 1200x630 share
+  image. The start page also carries schema.org VideoGame data. robots.txt and
+  sitemap.xml list the three pages and keep crawlers off /api and /game.
+
+  public/ is copied into dist/ as it is, for files that need a fixed URL. The
+  sources for the share image and icons are in share/.
+
+
 ## web@1.6.0 (2026-10-31)
 
 ### Features
