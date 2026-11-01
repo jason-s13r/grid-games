@@ -180,11 +180,17 @@
                and the leaderboard. -->
           <div class="start" data-start>
             <header class="hero">
+              <!-- A corner of a board behind the title, as on the share
+                   image. See view/HeroBoard.ts. -->
+              <div class="hero-art" aria-hidden="true">
+                <div class="hero-board" data-hero-board></div>
+              </div>
               <!-- You: your name, and your player's backup and devices. -->
               <button class="hero-gear" type="button" data-account-open aria-label="You: name, backup and devices" title="You: name, backup and devices">&#9881;</button>
               <h1 class="screen-brand">Tessera</h1>
-              <p class="hero-tag">Claim the map, one tile at a time. Play against
-              bots, or with other people in games that keep running for days.</p>
+              <p class="hero-tag">Claim the map, one tile at a time.</p>
+              <p class="hero-sub">Play against bots, or with other people in games
+              that keep running for days.</p>
               <div class="hero-actions">
                 <button class="btn primary hero-play" type="button" data-start-action="play">Play now</button>
                 <button class="btn" type="button" data-start-action="new">New game</button>

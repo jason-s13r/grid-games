@@ -1035,10 +1035,11 @@ h1, h2, h3, .brand, .screen-brand {
 
 .screen-brand {
   margin: 0;
-  font-size: 56px;
+  font-size: 72px;
   font-weight: 600;
   line-height: 1;
-  color: var(--mint);
+  letter-spacing: -0.5px;
+  color: var(--paper);
 }
 
 .card {
@@ -1063,7 +1064,7 @@ h1, h2, h3, .brand, .screen-brand {
   position: relative;
   display: grid;
   gap: 14px;
-  padding: 26px 26px 22px;
+  padding: 30px 30px 24px;
   color: #eaf2ec;
   border: 2px solid var(--line);
   border-radius: 18px;
@@ -1074,7 +1075,48 @@ h1, h2, h3, .brand, .screen-brand {
     linear-gradient(180deg, var(--forest), var(--forest-2));
   background-size: 28px 28px, 28px 28px, auto;
 }
-.hero-tag { margin: 0; max-width: 560px; font-size: 16px; color: #cfe2d6; }
+// The words and the ways in keep to the left; the board takes the right.
+.hero > :not(.hero-art, .hero-gear) { position: relative; max-width: 470px; }
+.hero-tag { margin: 4px 0 0; font-size: 22px; font-weight: 700; line-height: 1.25; color: var(--mint); }
+.hero-sub { margin: -6px 0 4px; font-size: 16px; line-height: 1.45; color: #c9d8cf; }
+
+// A corner of a board, tilted, fading into the green from the left. Drawn by
+// view/HeroBoard.ts with the board's own tile patterns.
+.hero-art {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  border-radius: 16px;
+  pointer-events: none;
+  -webkit-mask-image: linear-gradient(90deg, transparent 55%, #000 85%);
+  mask-image: linear-gradient(90deg, transparent 55%, #000 85%);
+}
+.hero-board {
+  position: absolute;
+  top: -70px;
+  right: -150px;
+  display: grid;
+  grid-template-columns: repeat(14, 40px);
+  grid-auto-rows: 40px;
+  gap: 2px;
+  padding: 2px;
+  background: var(--grid-line);
+  border-radius: 8px;
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.45);
+  transform: rotate(-8deg);
+
+  .tile {
+    --tile-size: 40px;
+    position: static;
+    border: 0;
+  }
+  // Unclaimed ground; the patterns and terrain bring their own.
+  .tile:not([class*="p-"], [class*="t-"]) { background: var(--paper); }
+  .tile.capital { box-shadow: inset 0 0 0 3px var(--paper), inset 0 0 0 6px var(--line); }
+  .tile.coin {
+    background: var(--paper) radial-gradient(circle, #ffd700 0 30%, #b8860b 31% 36%, transparent 37%);
+  }
+}
 .hero-actions { display: flex; flex-wrap: wrap; gap: 8px; }
 .hero-actions .btn { font-size: 16px; padding: 9px 18px; }
 .hero .btn.primary.hero-play {
@@ -1486,8 +1528,9 @@ h1, h2, h3, .brand, .screen-brand {
   padding: 0;
   font-size: 22px;
   line-height: 1;
-  color: #9db8aa;
-  background: none;
+  color: #cfe2d6;
+  // A plate of the card's green, so it reads over the board behind it.
+  background: rgba(30, 53, 47, 0.8);
   border: 1.5px solid transparent;
   border-radius: 10px;
   cursor: pointer;
@@ -2280,6 +2323,18 @@ a.btn {
 
   .screen { padding: 20px 14px 32px; }
   .screen-brand { font-size: 24px; }
+
+  // On a phone the board is a band across the top of the card, fading down
+  // into it, and the words take the whole width under it.
+  .hero { padding-top: 104px; }
+  .hero > :not(.hero-art, .hero-gear) { max-width: none; }
+  .hero .screen-brand { font-size: 48px; }
+  .hero-tag { font-size: 19px; }
+  .hero-art {
+    -webkit-mask-image: linear-gradient(180deg, #000 30px, transparent 100px);
+    mask-image: linear-gradient(180deg, #000 30px, transparent 100px);
+  }
+  .hero-board { top: -290px; right: -90px; }
 
   // Three columns of slider have nowhere to go at this width, so the label
   // takes its own line and the slider keeps its number beside it.

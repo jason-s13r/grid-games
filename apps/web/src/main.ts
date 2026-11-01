@@ -34,6 +34,7 @@ import { PeoplePanel } from "./view/People";
 import { ChatPanel } from "./view/Chat";
 import { GamesPanel } from "./view/Games";
 import { Marks } from "./view/Marks";
+import { drawHeroBoard } from "./view/HeroBoard";
 import { offerTip } from "./view/tip";
 import { GameSettingsDialog } from "./view/GameSettings";
 import { KeysDialog } from "./view/Keys";
@@ -179,6 +180,7 @@ const playNow = (): void =>
 const menuEl = pick<HTMLElement>("[data-menu]");
 const startEl = pick<HTMLElement>("[data-start]");
 const createEl = pick<HTMLElement>("[data-create-page]");
+drawHeroBoard(pick<HTMLElement>("[data-hero-board]"));
 
 /** Set once the lists exist: the start page reloads them each time it shows. */
 let refreshLists: (() => void) | undefined;
