@@ -1,0 +1,5 @@
+User-agent: *
+Disallow: /api/
+Disallow: /game/
+
+Sitemap: https://tessera.qot.nz/sitemap.xml

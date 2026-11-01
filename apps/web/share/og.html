@@ -1,0 +1,94 @@
+<!doctype html>
+<html><head><meta charset="utf-8">
+<style>
+@font-face { font-family: Fredoka; font-weight: 600; src: url(../node_modules/@fontsource/fredoka/files/fredoka-latin-600-normal.woff2); }
+@font-face { font-family: Nunito; font-weight: 700; src: url(../node_modules/@fontsource/nunito/files/nunito-latin-700-normal.woff2); }
+html, body { margin: 0; }
+body { width: 1200px; height: 630px; overflow: hidden; background: #1e352f; position: relative; font-family: Nunito; }
+.board {
+  position: absolute; right: -40px; top: -30px;
+  display: grid; grid-template-columns: repeat(14, 48px); grid-auto-rows: 48px; gap: 2px;
+  background: #e2ded0; padding: 2px; border-radius: 10px;
+  transform: rotate(-8deg); transform-origin: center;
+  box-shadow: 0 30px 80px rgba(0,0,0,.45);
+}
+.tile { --s: 48px; width: 48px; height: 48px; background: #fffbe8; }
+.p-star {
+  --d: calc(var(--s) / 10);
+  --_g: var(--c1) 36deg, #0000 0;
+  background:
+    conic-gradient(from 162deg at calc(var(--s) * 0.5) calc(var(--s) * 0.68), var(--_g)),
+    conic-gradient(from 18deg at calc(var(--s) * 0.19) calc(var(--s) * 0.59), var(--_g)),
+    conic-gradient(from 306deg at calc(var(--s) * 0.81) calc(var(--s) * 0.59), var(--_g)),
+    var(--c2);
+  background-position: 0 calc(var(--s) * 0.35);
+  background-size: calc(var(--s) + var(--d)) calc(var(--s) + var(--d));
+}
+.p-spiral {
+  --_c: var(--c1) 25%, #0000 0;
+  --_g1: conic-gradient(at 62.5% 12.5%, var(--_c));
+  --_g2: conic-gradient(at 87.5% 62.5%, var(--_c));
+  --_g3: conic-gradient(at 25% 12.5%, var(--_c));
+  background:
+    var(--_g1) calc(var(--s) / -8) calc(var(--s) / 2),
+    var(--_g1) calc(-3 * var(--s) / 8) calc(var(--s) / 4),
+    var(--_g2) calc(3 * var(--s) / 8) calc(var(--s) / 4),
+    var(--_g2) calc(var(--s) / -8) 0,
+    var(--_g3) 0 calc(var(--s) / -4),
+    var(--_g3) calc(var(--s) / -4) 0,
+    conic-gradient(at 87.5% 87.5%, var(--_c)) calc(var(--s) / 8) 0 var(--c2);
+  background-size: var(--s) var(--s);
+}
+.lake { background: #2f6b8f; }
+.mtn { background: #6b6255 linear-gradient(135deg, #8a7f6d 25%, transparent 25%); }
+.coin { background: #fffbe8 radial-gradient(circle, #ffd700 0 30%, #b8860b 31% 36%, transparent 37%); }
+.cap { box-shadow: inset 0 0 0 4px #fffbe8, inset 0 0 0 7px #1f2033; }
+.fade {
+  position: absolute; inset: 0;
+  background: linear-gradient(90deg, #1e352f 0 40%, rgba(30,53,47,.92) 50%, rgba(30,53,47,0) 72%);
+}
+.text { position: absolute; left: 80px; top: 0; bottom: 0; width: 600px; display: flex; flex-direction: column; justify-content: center; }
+h1 { font-family: Fredoka; font-weight: 600; font-size: 132px; line-height: 1; margin: 0; color: #fffbe8; letter-spacing: -1px; }
+.tag { font-size: 37px; white-space: nowrap; line-height: 1.25; color: #8fdcb2; margin: 22px 0 0; }
+.sub { font-size: 25px; line-height: 1.4; color: #c9d8cf; margin: 26px 0 0; max-width: 470px; }
+.url { position: absolute; left: 80px; bottom: 52px; font-size: 24px; color: #d9a85b; letter-spacing: .5px; }
+</style></head>
+<body>
+<div class="board" id="b"></div>
+<div class="fade"></div>
+<div class="text">
+  <h1>Tessera</h1>
+  <p class="tag">Claim the map, one tile at a time.</p>
+  <p class="sub">A free territory game in your browser. Play bots solo, or online in games that run for days.</p>
+</div>
+<div class="url">tessera.qot.nz</div>
+<script>
+const W = 14, H = 14;
+const E = [
+  { c1: "#ff2600", c2: "#1a0400", p: "star",   cap: [10, 3] },
+  { c1: "#3d8bff", c2: "#04173f", p: "star",   cap: [6, 9] },
+  { c1: "#ffb300", c2: "#3d2400", p: "spiral", cap: [12, 11] },
+  { c1: "#72e21f", c2: "#044012", p: "spiral", cap: [8, 0] },
+];
+let seed = 7; const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+const lake = new Set(["11,7","12,7","11,8","13,7"]), mtn = new Set(["8,6","9,6","9,7","4,4","5,12"]);
+const coins = new Set(["7,4","13,13","4,7","10,13"]);
+const b = document.getElementById("b");
+for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+  const t = document.createElement("div"); t.className = "tile";
+  const k = x + "," + y;
+  if (lake.has(k)) t.classList.add("lake");
+  else if (mtn.has(k)) t.classList.add("mtn");
+  else {
+    let best = -1, bd = 1e9;
+    E.forEach((e, i) => { const d = Math.hypot(x - e.cap[0], y - e.cap[1]) + rnd() * 1.6; if (d < bd) { bd = d; best = i; } });
+    if (bd < 3.4) {
+      const e = E[best]; t.classList.add("p-" + e.p);
+      t.style.setProperty("--c1", e.c1); t.style.setProperty("--c2", e.c2);
+      if (e.cap[0] === x && e.cap[1] === y) t.classList.add("cap");
+    } else if (coins.has(k)) t.classList.add("coin");
+  }
+  b.appendChild(t);
+}
+</script>
+</body></html>
