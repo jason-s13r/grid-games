@@ -1,5 +1,16 @@
 # Changelog
 
+## web@1.7.1 (2026-11-02)
+
+### Fixes
+
+- favicon of a capital under siege
+  The four-square mark read too much like another company's logo. The new one
+  is a red capital with a blue and an amber tile pressing on it, the same
+  idea as the qot.nz art. It replaces the SVG favicon, favicon.ico, the touch
+  icon and the manifest icons.
+
+
 ## web@1.7.0 (2026-11-01)
 
 ### Features
