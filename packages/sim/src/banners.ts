@@ -52,7 +52,14 @@ export type Pattern =
   | "ring"
   | "dots"
   | "diamond"
-  | "rays";
+  | "rays"
+  | "bend"
+  | "frame"
+  | "quarters"
+  | "pales"
+  | "fess"
+  | "tierce"
+  | "gyronny";
 
 export const PATTERNS: readonly Pattern[] = [
   "star",
@@ -67,6 +74,13 @@ export const PATTERNS: readonly Pattern[] = [
   "dots",
   "diamond",
   "rays",
+  "bend",
+  "frame",
+  "quarters",
+  "pales",
+  "fess",
+  "tierce",
+  "gyronny",
 ];
 
 /** The houses, **append-only and never reordered**.
@@ -108,6 +122,15 @@ export const BANNERS: readonly Banner[] = [
   // A red star on black: the flag Vermilion flew until it turned inside out
   // (a black star on red), kept as a house of its own.
   { id: "sping", name: "Sping", c1: "#ff2600", c2: "#1a0400", pattern: "star" },
+  // From the maritime signal flags, each kept to two colours. Oscar is also
+  // the semaphore flag.
+  { id: "oscar", name: "Oscar", c1: "#e3242b", c2: "#ffd100", pattern: "bend" },
+  { id: "papa", name: "Papa", c1: "#173f8f", c2: "#f4f1e6", pattern: "frame" },
+  { id: "uniform", name: "Uniform", c1: "#d7262f", c2: "#f4f1e6", pattern: "quarters" },
+  { id: "golf", name: "Golf", c1: "#ffd100", c2: "#0d1a3a", pattern: "pales" },
+  { id: "echo", name: "Echo", c1: "#ef3340", c2: "#2a5bd7", pattern: "fess" },
+  { id: "tango", name: "Tango", c1: "#c8102e", c2: "#f4f1e6", pattern: "tierce" },
+  { id: "zulu", name: "Zulu", c1: "#111111", c2: "#4fb3ff", pattern: "gyronny" },
 ];
 
 /** How many empires a game may have, which is how many banners there are.
@@ -193,6 +216,13 @@ const FIRST_SHARE: Record<Pattern, number> = {
   dots: 0.6,
   diamond: 0.62,
   rays: 0.62,
+  bend: 0.5,
+  frame: 0.79,
+  quarters: 0.5,
+  pales: 0.5,
+  fess: 0.5,
+  tierce: 0.67,
+  gyronny: 0.5,
 };
 
 /** The one colour a house is drawn in where its pattern is too small to see:
