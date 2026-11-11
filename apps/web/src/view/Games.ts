@@ -13,7 +13,6 @@
 // here polls.
 
 import { flag } from "./Houses";
-import { mapColour } from "./palette";
 import { drawMaps, houseIn, mapCanvas, parseMap } from "./Thumb";
 import type { ListedMap } from "./Thumb";
 import { escape } from "./escape";
@@ -215,7 +214,7 @@ export class GamesPanel {
       <span class="game-what">
         <span><strong>${escape(game.id)}</strong> · ${escape(this.status(game, mine))}</span>
         <span class="hint">${size}, ${game.empires} ${game.empires === 1 ? "empire" : "empires"} + ${bots}, ${people}</span>
-        ${theme ? `<span class="game-you"><span class="swatch" style="background:${mapColour(theme)}"></span>${escape(theme.name)}</span>` : ""}
+        ${theme ? `<span class="game-you">${flag(theme, 16)}${escape(theme.name)}</span>` : ""}
         ${age}
       </span>
       <button class="btn btn-small${action === "join" || action === "resume" ? " go" : ""}" type="button"
