@@ -202,6 +202,9 @@ export interface Leader {
   /** The ranked number: a count of wins, or tiles, population or cascade
    *  tiles, either the best single game or summed over every game. */
   value: number;
+  /** The game the value came from, when it is one game's: a best single game
+   *  other than wins. */
+  gameId?: string;
 }
 
 /** The column each stat reads. Area is the most an empire held at once. */
@@ -217,10 +220,14 @@ const COLUMN: Record<LeaderStat, string> = {
  *  Wins are always a total. */
 export async function leaderboard(db: D1Database, stat: LeaderStat, scope: LeaderScope): Promise<Leader[]> {
   const column = COLUMN[stat];
-  const value = scope === "game" && stat !== "won" ? `MAX(${column})` : `SUM(${column})`;
+  const single = scope === "game" && stat !== "won";
+  const value = single ? `MAX(${column})` : `SUM(${column})`;
+  // With one MAX() in the select, SQLite takes the other bare columns from the
+  // row that holds the maximum, so this is the game the best came from.
+  const game = single ? ", r.game_id AS gameId" : "";
   const { results } = await db
     .prepare(
-      `SELECT r.key, p.name, COUNT(*) AS played, ${value} AS value
+      `SELECT r.key, p.name, COUNT(*) AS played, ${value} AS value${game}
        FROM results r JOIN players p ON p.key = r.key
        WHERE r.bot = 0
        GROUP BY r.key

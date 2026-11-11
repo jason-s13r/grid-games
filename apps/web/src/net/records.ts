@@ -43,6 +43,8 @@ export interface Leader {
   name: string;
   played: number;
   value: number;
+  /** The game a best single game came from. */
+  gameId?: string;
 }
 
 export type Listing = "open" | "running" | "ended";

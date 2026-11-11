@@ -2597,6 +2597,8 @@ a.btn {
   li { padding: 1px 0; }
   li > span, li > b { vertical-align: baseline; }
   b { float: right; font-variant-numeric: tabular-nums; }
+  // A best single game links to that game.
+  b a { color: inherit; text-decoration: underline dotted; text-underline-offset: 2px; }
   .hint { margin: 2px 0 0; }
 }
 .leader-name { .hint { font-size: 10px; } }

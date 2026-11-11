@@ -51,6 +51,9 @@ export class GamesPanel {
       }
       const game = target.closest<HTMLElement>("[data-games-open]");
       if (!game) return;
+      // A leaderboard link is a real link, for opening in a new tab; a plain
+      // click stays in this one.
+      event.preventDefault();
       if (game.dataset.gamesEnded) handlers.replay(game.dataset.gamesOpen!);
       else handlers.open(game.dataset.gamesOpen!);
     });
@@ -155,13 +158,17 @@ export class GamesPanel {
     }
   }
 
-  private leaders(title: string, unit: string, rows: Array<{ key: string; name: string; value: number }>): string {
+  private leaders(title: string, unit: string, rows: Array<{ key: string; name: string; value: number; gameId?: string }>): string {
     return `<div class="leader-list"><h3>${title}</h3>${
       rows.length
         ? `<ol>${rows
             .map(
               (r) => `<li><span class="leader-name">${escape(r.name)} <span class="hint">#${escape(r.key.slice(0, 6))}</span></span>
-                <b>${r.value.toLocaleString()}</b></li>`,
+                <b>${
+                  r.gameId
+                    ? `<a href="/g/${escape(r.gameId)}" data-games-open="${escape(r.gameId)}" title="Watch game ${escape(r.gameId)}">${r.value.toLocaleString()}</a>`
+                    : r.value.toLocaleString()
+                }</b></li>`,
             )
             .join("")}</ol><p class="hint">${unit}</p>`
         : `<p class="hint">Nobody yet.</p>`
