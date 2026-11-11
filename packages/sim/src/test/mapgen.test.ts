@@ -166,7 +166,7 @@ describe("landscape terrain", () => {
       river += count(sim, TERRAIN.RIVER);
     }
     expect(bridges).toBeGreaterThan(0);
-    // About one a river tile in thirty, and no more.
+    // One or two a river, so far fewer than one a river tile in twenty.
     expect(bridges).toBeLessThan(river / 20);
   });
 

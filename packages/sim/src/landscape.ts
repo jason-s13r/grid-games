@@ -357,7 +357,7 @@ function rivers(state: State, h: Int32Array, down: Int32Array, spill: Int32Array
   }
 }
 
-/** Bridges built into the map along a long river, a tile each at even
+/** Bridges built into the map along a long river, one or two, at even
  *  spacing with a jitter: a crossing that costs nothing, far enough apart that
  *  a bridge of your own is still the short way over. Clear of the last few
  *  tiles before a confluence, so rivers still meet, and of the first few, so a
@@ -365,7 +365,8 @@ function rivers(state: State, h: Int32Array, down: Int32Array, spill: Int32Array
 function ford(state: State, path: number[]): void {
   if (state.genesis.map.riverGaps <= 0 || path.length < 24) return;
   const { rng, terrain } = state;
-  const crossings = Math.floor(path.length / 32) || 1;
+  // One on a river of 24 tiles or more, a second from 64, and no more.
+  const crossings = path.length >= 64 ? 2 : 1;
   const spacing = Math.floor(path.length / (crossings + 1));
   for (let c = 1; c <= crossings; c++) {
     const p = c * spacing + rng.range(-3, 3);
