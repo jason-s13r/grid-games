@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { durationRules } from "@tessera/sim";
+import { configFrom } from "./create.js";
 import { SERIES, configFor, joinMs, roomIdOf, scheduleCreator, slotsAt, wanted } from "./schedule.js";
 
 const HOUR = 3_600_000;
@@ -50,6 +51,13 @@ describe("scheduled games", () => {
       expect(config.roomId).toMatch(/^[A-Za-z0-9_-]{4,64}$/);
     }
     expect(wanted(now, () => false).map((w) => w.series.id)).toEqual(["6h", "1d", "3d", "10d"]);
+    // A valid request, as the create form's would be: bots and empires within the limits.
+    for (const series of SERIES) {
+      const config = configFor(series, 1, 0);
+      expect(configFrom({ ...config, creator: "B".repeat(87), startAt: undefined, hours: series.hours, map: series.map }, config.roomId, 1, 0)).toEqual(
+        expect.objectContaining({ bots: config.bots, empires: config.empires, duration: config.duration }),
+      );
+    }
   });
 
   it("belong to the key in SCHEDULE_CREATOR, or to nobody", () => {

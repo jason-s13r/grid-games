@@ -34,11 +34,13 @@ export interface Series {
   bots: BotChoice[];
 }
 
+// One bot of each difficulty: the shorter games an easy and a steady one, the
+// longer ones a hard one as well.
 export const SERIES: readonly Series[] = [
-  { id: "6h", hours: 6, map: "medium", empires: 6, seatsPerEmpire: 2, bots: ["steady", "steady"] },
-  { id: "1d", hours: 24, map: "large", empires: 6, seatsPerEmpire: 2, bots: ["steady", "steady"] },
-  { id: "3d", hours: 72, map: "large", empires: 8, seatsPerEmpire: 2, bots: ["steady", "hard"] },
-  { id: "10d", hours: 240, map: "huge", empires: 8, seatsPerEmpire: 3, bots: ["steady", "hard"] },
+  { id: "6h", hours: 6, map: "medium", empires: 6, seatsPerEmpire: 2, bots: ["easy", "steady"] },
+  { id: "1d", hours: 24, map: "large", empires: 6, seatsPerEmpire: 2, bots: ["easy", "steady"] },
+  { id: "3d", hours: 72, map: "large", empires: 8, seatsPerEmpire: 2, bots: ["easy", "steady", "hard"] },
+  { id: "10d", hours: 240, map: "huge", empires: 8, seatsPerEmpire: 3, bots: ["easy", "steady", "hard"] },
 ];
 
 /** The share of a game late joiners may arrive in: the same as any game's. */
