@@ -30,6 +30,55 @@ const ITEM_CLASS: Record<number, string> = {
   [ITEM.DIAMOND]: "i-diamond",
 };
 
+/** What a terrain joins up with, for drawing: water runs into water, walls
+ *  into walls, mountains into mountains. Zero for ground that joins nothing. */
+const KIND: Record<number, number> = {
+  [TERRAIN.RIVER]: 1,
+  [TERRAIN.RIVER_BRIDGED]: 1,
+  [TERRAIN.LAKE]: 1,
+  [TERRAIN.WALL]: 2,
+  [TERRAIN.WALL_LADDERED]: 2,
+  [TERRAIN.MOUNTAIN]: 3,
+};
+
+/** The classes that join a terrain tile up with its neighbours: a `j-` for
+ *  each side the same kind of ground goes on from, `x-turn` for a crossing
+ *  over ground that runs east and west rather than north and south, and a
+ *  variant for a mountain. Off the map counts as going on, so a river runs off
+ *  the edge rather than stopping short of it.
+ *
+ *  Only terrain and nothing else, so it never changes in a game: a bridge or a
+ *  ladder is the same kind as what it was placed on. */
+export function edges(state: State, i: number): string {
+  const kind = KIND[state.terrain[i]!];
+  if (!kind) return "";
+  const { width, height, terrain } = state;
+  const x = i % width;
+  const y = (i - x) / width;
+  const same = (nx: number, ny: number) =>
+    nx < 0 || ny < 0 || nx >= width || ny >= height || KIND[terrain[idx(nx, ny, width)]!] === kind;
+  const n = same(x, y - 1);
+  const e = same(x + 1, y);
+  const s = same(x, y + 1);
+  const w = same(x - 1, y);
+  let cls = "";
+  if (n) cls += " j-n";
+  if (e) cls += " j-e";
+  if (s) cls += " j-s";
+  if (w) cls += " j-w";
+  // A crossing goes across: a bridge across the flow, a ladder over the wall.
+  // Turned where the ground runs only east and west, for a bridge, or only
+  // north and south, for a ladder.
+  const t = terrain[i]!;
+  if (t === TERRAIN.RIVER_BRIDGED && (e || w) && !(n || s)) cls += " x-turn";
+  if (t === TERRAIN.WALL_LADDERED && (n || s) && !(e || w)) cls += " x-turn";
+  if (t === TERRAIN.MOUNTAIN) {
+    const v = (Math.imul(i, 0x9e3779b1) >>> 29) % 3;
+    if (v) cls += ` v${v}`;
+  }
+  return cls;
+}
+
 /** Below this, tile numbers are dropped — they are unreadable anyway and the
  *  text writes dominate the frame. */
 const LABEL_MIN_ZOOM = 17;
@@ -182,7 +231,7 @@ export class Renderer {
     let cls = "tile";
     if (owner > 0) cls += ` p-${empireTheme(owner).pattern}`;
     const t = TERRAIN_CLASS[terrain];
-    if (t) cls += ` ${t}`;
+    if (t) cls += ` ${t}${edges(state, i)}`;
     const it = ITEM_CLASS[item];
     if (it) cls += ` ${it}`;
     // A mine: giving, or idle. See sim/src/v5.ts.
