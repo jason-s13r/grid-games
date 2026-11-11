@@ -50,6 +50,11 @@ export interface RoomClientOptions {
   now?: () => number;
   /** A program rather than a person: seated as a bot seat. */
   bot?: boolean;
+  /** The most steps one `advance()` simulates. A browser sets this so that
+   *  arriving at a game far ahead of its last snapshot catches up over many
+   *  frames, with the board showing, rather than freezing the tab in one.
+   *  Absent: all the way to now. */
+  maxAdvance?: number;
 }
 
 /** A hash report every minute of game time. They double as the seat's
@@ -63,6 +68,8 @@ const REPORT_AFTER = 24;
 /** Rewind points: one a second, for the last ten seconds. */
 const REWIND_EVERY = 12;
 const REWIND_KEEP = 10;
+/** Steps behind now that still count as keeping up: a couple of seconds. */
+const CATCHING_UP_SLACK = 24;
 /** Clock samples kept for estimating the room's clock. */
 const CLOCK_SAMPLES = 32;
 
@@ -130,7 +137,8 @@ export class RoomClient {
   advance(): Set<number> {
     const sim = this.sim;
     if (!sim || !this.genesis) return new Set();
-    const target = stepAt(this.genesis.startedAt, this.roomNow());
+    const now = stepAt(this.genesis.startedAt, this.roomNow());
+    const target = Math.min(now, sim.step + (this.options.maxAdvance ?? Infinity));
     const dirty = new Set<number>();
     while (sim.step < target && !sim.ended) {
       // One rewind interval at a time, keeping a rewind point at each.
@@ -149,6 +157,13 @@ export class RoomClient {
       this.send({ t: "hash", step, hash });
     }
     return dirty;
+  }
+
+  /** Still simulating towards now, a frame at a time (see maxAdvance). */
+  get catchingUp(): boolean {
+    const sim = this.sim;
+    if (!sim || !this.genesis || sim.ended) return false;
+    return stepAt(this.genesis.startedAt, this.roomNow()) - sim.step > CATCHING_UP_SLACK;
   }
 
   /** This client's hash at a recent checkpoint step (every CHECKPOINT_EVERY),

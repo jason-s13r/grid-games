@@ -7,8 +7,8 @@
 // simulation up when it needs to, and sends. Between messages nothing runs, so
 // the object can hibernate and costs nothing, and clients keep their own
 // clocks. The alarm wakes the object for a scheduled start, for the end of a
-// running game, and twice a day while one runs to see whether it has ended on
-// its own.
+// running game, hourly while one runs to see whether it has ended on its own,
+// and straight away again while it is still catching up (see MAX_ADVANCE).
 //
 // What the room reports (a listing row, a player, a result) goes to D1. The
 // writes are collected while a handler runs and waited for before it returns.
@@ -81,6 +81,10 @@ export class GameRoom extends DurableObject<Env> {
   async info(): Promise<RoomInfo | null> {
     const room = this.load();
     if (!room) return null;
+    // Make sure an alarm is set. One the host gave up on (a wake that ran out
+    // of CPU, before catch-up was done in parts) leaves a room that nobody
+    // wakes; asking after the game is enough to start it again.
+    await this.schedule();
     return { roomId: room.id, phase: room.phase, step: room.step, ended: room.ended,
       archived: this.store.get("archivedAt") !== undefined,
       storage: this.store.usage,

@@ -10,6 +10,7 @@ import type { RoomClient } from "../client.js";
 import type { RoomConfig } from "../messages.js";
 import { SNAPSHOT_EVERY, advanceTo } from "../advance.js";
 import { Harness, identities } from "./harness.js";
+import { MAX_ADVANCE } from "../room.js";
 import type { Linked } from "./harness.js";
 
 let alice: Identity;
@@ -329,6 +330,11 @@ describe("catching up", () => {
     h.clock.advance(6 * 60 * 60 * 1000); // six hours with the room asleep
     a.reconnect();
     await h.settle();
+    // The room goes an hour at a time (MAX_ADVANCE), woken again by its host
+    // until it is done; the client simulates the rest from what it was sent.
+    for (let wakes = 0; wakes < 10 && h.room.behind; wakes++) await h.room.tick();
+    expect(h.room.behind).toBe(false);
+    a.client.advance();
     // Six hours is long enough for a bot to finish off two absent empires, so
     // the room either reached now or stopped where the game ended.
     const now = (6 * 60 * 60 + 2) * STEPS_PER_SECOND;
@@ -726,6 +732,49 @@ describe("records", () => {
     h.restart();
     await h.room.tick();
     expect(h.results).toHaveLength(1);
+  });
+});
+
+describe("catching up after a long sleep", () => {
+  it("goes an hour at a time, asks to be woken again, and finishes", async () => {
+    const hour = 3600_000;
+    // No bot, so nothing ends the game early and every wake has a full hour.
+    const h = new Harness({ creator: alice.key, bots: [], duration: (4 * hour * STEPS_PER_SECOND) / 1000 });
+    const a = await h.join(alice, "alice");
+    const b = await h.join(bob, "bob");
+    a.client.pickEmpire(0);
+    b.client.pickEmpire(1);
+    await h.settle();
+    a.client.start();
+    await h.settle();
+    a.drop();
+    b.drop();
+    await h.settle();
+    h.clock.advance(5 * hour);
+
+    await h.room.tick();
+    expect(h.room.step).toBeLessThanOrEqual(MAX_ADVANCE + 1000);
+    expect(h.room.behind).toBe(true);
+    expect(h.room.wakeAt()).toBe(h.clock.time);
+    expect(h.results).toHaveLength(0);
+
+    for (let wakes = 0; wakes < 10 && h.room.wakeAt() !== undefined; wakes++) await h.room.tick();
+    expect(h.room.behind).toBe(false);
+    expect(h.results).toHaveLength(1);
+    expect(h.room.wakeAt()).toBeUndefined();
+  });
+
+  it("lets a client catch up over several calls", async () => {
+    const { h, a } = await started(4 * 3600 * STEPS_PER_SECOND);
+    h.clock.advance(60_000);
+    const sim = a.client.sim!;
+    const from = sim.step;
+    (a.client as unknown as { options: { maxAdvance?: number } }).options.maxAdvance = 100;
+    a.client.advance();
+    expect(sim.step).toBe(from + 100);
+    expect(a.client.catchingUp).toBe(true);
+    while (a.client.catchingUp) a.client.advance();
+    expect(sim.step).toBeGreaterThan(from + 60 * STEPS_PER_SECOND - 30);
   });
 });
 

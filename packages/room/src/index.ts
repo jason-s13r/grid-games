@@ -1,4 +1,4 @@
-export { Room, LEAD_STEPS } from "./room.js";
+export { Room, LEAD_STEPS, MAX_ADVANCE } from "./room.js";
 export type { Connection, RoomOptions } from "./room.js";
 export { RoomClient } from "./client.js";
 export { places, placesOf, resultOf, timeOf } from "./record.js";

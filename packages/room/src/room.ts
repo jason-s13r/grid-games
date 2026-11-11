@@ -29,6 +29,7 @@ import {
   makeGenesis,
   minutes,
   simbot,
+  STEPS_PER_SECOND,
 } from "@tessera/sim";
 import type { EmpireSpec, Genesis, Move } from "@tessera/sim";
 import { isVacant } from "@tessera/sim";
@@ -86,8 +87,18 @@ export interface RoomOptions {
 
 /** How often a running game with nobody in it wakes to see whether it has
  *  ended: an abandoned table ends on the sim's own clock, and nobody would
- *  otherwise be there to notice. */
-const CHECK_EVERY_MS = 12 * 3600_000;
+ *  otherwise be there to notice. Hourly, so that a wake never has much to
+ *  simulate and a snapshot is never far behind for somebody arriving. */
+const CHECK_EVERY_MS = 3600_000;
+
+/** The most the room simulates in one go: an hour of game. A host gives each
+ *  call a fixed allowance of CPU (a Durable Object, thirty seconds), and on a
+ *  large map with bots late in a game twelve hours took most of that on a
+ *  fast machine. Going over gets the room thrown away mid-way, so it never
+ *  gets any further: its alarm fails until the host gives up on it, and every
+ *  hello fails the same way. Anything left over is done on the next wake,
+ *  which `wakeAt` asks for straight away. */
+export const MAX_ADVANCE = STEPS_PER_SECOND * 3600;
 
 interface Peer {
   conn: Connection;
@@ -146,6 +157,8 @@ export class Room {
   private readonly peers = new Map<string, Peer>();
 
   private _phase: Phase;
+  /** See `behind`. */
+  private cutShort = false;
   private players: StoredPlayer[];
   private startsAt: number | undefined;
   private starting = false;
@@ -242,21 +255,28 @@ export class Room {
     return this.sim?.ended ?? false;
   }
 
-  /** Bring the room's own simulation up to now. The room does this itself
-   *  whenever it needs an answer; it is public for tools and tests. */
+  /** Bring the room's own simulation up to now, or as far towards it as one
+   *  call may go (MAX_ADVANCE). The room does this itself whenever it needs
+   *  an answer; it is public for tools and tests. */
   catchUp(): number {
     if (this.genesis) this.advance(stepAt(this.genesis.startedAt, this.now()));
     return this.next;
   }
 
+  /** The last advance stopped at MAX_ADVANCE short of where it was going. */
+  get behind(): boolean {
+    return this.cutShort;
+  }
+
   /** When the room next needs a `tick()`: the scheduled start, if there is
-   *  one, and while a game runs, its end and a check every twelve hours for
-   *  a table that has ended on its own. On a fixed grid from the start, so
-   *  the answer does not move between calls and the host need not reset an
-   *  alarm on every message. */
+   *  one, and while a game runs, its end and an hourly check for a table that
+   *  has ended on its own. On a fixed grid from the start, so the answer does
+   *  not move between calls and the host need not reset an alarm on every
+   *  message. A room still catching up wants waking again now. */
   wakeAt(): number | undefined {
     if (this._phase === "lobby") return this.startsAt;
     if (this.finished || !this.genesis) return undefined;
+    if (this.cutShort) return this.now();
     const start = this.genesis.startedAt;
     const next = start + (Math.floor((this.now() - start) / CHECK_EVERY_MS) + 1) * CHECK_EVERY_MS;
     const end = this.endsAt();
@@ -713,7 +733,12 @@ export class Room {
   private advance(to: number): void {
     const sim = this.sim;
     if (!sim || !this.genesis) return;
-    const bound = Math.min(to, this.openStep());
+    const wanted = Math.min(to, this.openStep());
+    const bound = Math.min(wanted, sim.step + MAX_ADVANCE);
+    // Behind until an advance reaches now. A short one (to answer a client's
+    // hash report, say) neither starts nor ends that.
+    if (bound < wanted) this.cutShort = true;
+    else if (bound >= stepAt(this.genesis.startedAt, this.now())) this.cutShort = false;
     if (bound <= sim.step || sim.ended) return;
 
     const from = sim.step;
@@ -730,6 +755,7 @@ export class Room {
     }
 
     this.next = sim.step;
+    if (sim.ended) this.cutShort = false;
     if (Math.floor(this.next / SNAPSHOT_EVERY) > Math.floor(from / SNAPSHOT_EVERY) || sim.ended) {
       this.keepSnapshot();
     }

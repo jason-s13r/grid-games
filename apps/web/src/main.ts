@@ -711,10 +711,13 @@ async function openReplay(roomId: string): Promise<void> {
  *  replay. */
 async function enterRoom(roomId: string): Promise<void> {
   const known = await fetch(`/api/games/${roomId}`)
-    .then((r) => (r.ok ? (r.json() as Promise<{ archived?: boolean; phase?: string }>) : null))
+    .then((r) => (r.ok ? (r.json() as Promise<{ archived?: boolean; ended?: boolean }>) : null))
     .catch(() => undefined);
   if (known === null) return online.home(`There is no game "${roomId}".`);
-  if (known?.archived && known.phase === "ended") return openReplay(roomId);
+  // A live room reports its phase as "playing" to the end, so it is `ended`
+  // that says the game is over, and once it is archived the replay is the
+  // cheap way to look at it.
+  if (known?.archived && known.ended) return openReplay(roomId);
   leaveRoom();
   if (location.pathname !== `/g/${roomId}`) history.pushState(null, "", `/g/${roomId}`);
   online.connecting(roomId);

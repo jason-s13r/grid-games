@@ -35,6 +35,9 @@ export class RoomLink {
       roomId: options.roomId,
       name: options.name,
       send: () => {},
+      // A few hundred milliseconds of simulating a frame at most, late in a
+      // game on a large map.
+      maxAdvance: 2_400,
     });
   }
 

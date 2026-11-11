@@ -76,6 +76,7 @@ export class OnlineGame implements Driver {
   }
 
   status(): string {
+    if (this.client.catchingUp) return "Catching up…";
     if (this.sim.ended) return "Game over";
     return this.empire ? "" : "Spectating";
   }
