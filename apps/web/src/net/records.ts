@@ -25,6 +25,8 @@ export interface ListedGame {
   map?: string | null;
   /** When the room took it, ms since the epoch. */
   mapAt?: number | null;
+  /** How long the game runs once started, ms. Absent from older listings. */
+  durationMs?: number | null;
 }
 
 export interface PlayerGame extends ListedGame {

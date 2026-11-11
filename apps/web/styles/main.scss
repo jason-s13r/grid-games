@@ -2889,6 +2889,35 @@ a.btn {
   height: 56px;
   aspect-ratio: auto;
 }
+// The picture and the game's length over its corner.
+.game-pic {
+  flex: none;
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 84px;
+}
+// The made-up map a game shows until it is dealt its own: faded, so it does
+// not pass for this game's.
+.game-map-sample {
+  display: block;
+  overflow: hidden;
+  svg { display: block; width: 100%; height: auto; opacity: 0.6; }
+}
+.game-length {
+  position: absolute;
+  right: 3px;
+  bottom: 3px;
+  padding: 1px 5px;
+  border-radius: 999px;
+  background: var(--forest-ink);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1.35;
+  font-variant-numeric: tabular-nums;
+  box-shadow: 0 0 0 1.5px var(--paper);
+}
 .game-you {
   display: inline-flex;
   align-items: center;

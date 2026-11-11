@@ -38,6 +38,8 @@ export interface GameSummary {
   endedAt?: number;
   /** The sim release the game was sealed with. */
   simVersion?: string;
+  /** How long the game runs once started, ms. */
+  durationMs: number;
 }
 
 /** Somebody arrived, picked, or was seated. `empire` is null while undecided

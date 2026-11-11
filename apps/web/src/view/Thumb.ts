@@ -1,7 +1,7 @@
 // A game's map in the listings: the small grid the room sends, drawn a pixel
 // a cell in the colours the zoomed-out board uses.
 
-import { bannerAt } from "@tessera/sim";
+import { TERRAIN, bannerAt } from "@tessera/sim";
 import { bannerById, mapColour, NEUTRAL, TERRAIN_COLORS, rgb } from "./palette";
 
 /** The map as the listings carry it. See `ListedMap` in the Worker. */
@@ -77,4 +77,80 @@ export function drawMaps(root: HTMLElement, maps: ReadonlyMap<string, ListedMap>
     const map = maps.get(canvas.dataset.gameMap!);
     if (map) void drawMap(canvas, map).catch(() => undefined);
   }
+}
+
+// --- before the start --------------------------------------------------------
+
+/** A made-up map, the same for every game, for one that has none to show yet:
+ *  a game is not dealt its map until it starts. Drawn in the board's colours so
+ *  it reads as a map, and dimmed in the stylesheet so it does not read as this
+ *  game's. One letter a cell. */
+const SAMPLE = [
+  "..............RR........",
+  "..MMM..........R........",
+  ".MMMMM.........R...LLL..",
+  "MMMMMMM........RR.LLLLL.",
+  ".MMMMM..........R.LLLLL.",
+  "..MM............B..LLL..",
+  "................R.......",
+  "WWWWWWHWWWW.....RR......",
+  ".................R......",
+  "....LL...........R..MM..",
+  "...LLLL..........B.MMMM.",
+  "..LLLLLL.........RMMMMMM",
+  "...LLLL.........RR.MMMM.",
+  "....LL..........R.......",
+  "..........WWWWWHRWWWWW..",
+  "...............RR.......",
+];
+
+const SAMPLE_TERRAIN: Record<string, number> = {
+  M: TERRAIN.MOUNTAIN,
+  L: TERRAIN.LAKE,
+  R: TERRAIN.RIVER,
+  B: TERRAIN.RIVER_BRIDGED,
+  W: TERRAIN.WALL,
+  H: TERRAIN.WALL_LADDERED,
+};
+
+let sample: string | undefined;
+
+/** The made-up map as an SVG, a rect a cell, built once. */
+function sampleSvg(): string {
+  if (sample) return sample;
+  const w = SAMPLE[0]!.length;
+  const h = SAMPLE.length;
+  const cells = SAMPLE.flatMap((row, y) =>
+    [...row].flatMap((ch, x) => {
+      const terrain = SAMPLE_TERRAIN[ch];
+      return terrain === undefined
+        ? []
+        : [`<rect x="${x}" y="${y}" width="1" height="1" fill="${TERRAIN_COLORS[terrain]}"/>`];
+    }),
+  ).join("");
+  sample = `<svg viewBox="0 0 ${w} ${h}" shape-rendering="crispEdges" aria-hidden="true">
+    <rect width="${w}" height="${h}" fill="${NEUTRAL}"/>${cells}</svg>`;
+  return sample;
+}
+
+/** The picture for a game with no map yet. */
+export function samplePicture(): string {
+  return `<span class="game-map game-map-sample">${sampleSvg()}</span>`;
+}
+
+/** A game's length, as short as it goes: 6h, 1d, 10d, 90m. */
+export function lengthLabel(ms: number | null | undefined): string | undefined {
+  if (!ms || !(ms > 0)) return undefined;
+  const minutes = Math.round(ms / 60_000);
+  if (minutes % 1440 === 0) return `${minutes / 1440}d`;
+  if (minutes % 60 === 0) return `${minutes / 60}h`;
+  return `${minutes}m`;
+}
+
+/** A game's length in words, for whoever cannot see the badge. */
+export function lengthWords(ms: number): string {
+  const label = lengthLabel(ms)!;
+  const n = Number(label.slice(0, -1));
+  const unit = { d: "day", h: "hour", m: "minute" }[label.slice(-1)]!;
+  return `${n} ${unit}${n === 1 ? "" : "s"}`;
 }

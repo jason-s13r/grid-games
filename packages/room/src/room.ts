@@ -345,6 +345,7 @@ export class Room {
       empires: config.empires,
       seatsPerEmpire: this.seatsPerEmpire(),
       bots: config.bots.length,
+      durationMs: Math.round((config.duration / STEPS_PER_SECOND) * 1000),
       // Seats taken: in the lobby, those who have picked a house, not
       // everybody who has looked in.
       players: this.roster

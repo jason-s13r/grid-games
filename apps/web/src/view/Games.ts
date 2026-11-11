@@ -13,7 +13,7 @@
 // here polls.
 
 import { flag } from "./Houses";
-import { drawMaps, houseIn, mapCanvas, parseMap } from "./Thumb";
+import { drawMaps, houseIn, lengthLabel, lengthWords, mapCanvas, parseMap, samplePicture } from "./Thumb";
 import type { ListedMap } from "./Thumb";
 import { escape } from "./escape";
 import { leaderboard, listGames, playerStats } from "../net/records";
@@ -201,16 +201,27 @@ export class GamesPanel {
     const people = game.phase === "lobby" && game.lobby ? `${seats}, ${game.lobby} in lobby` : seats;
     const bots = `${game.bots} ${game.bots === 1 ? "bot" : "bots"}`;
     const label = { resume: game.phase === "lobby" ? "Open lobby" : "Resume", join: "Join", watch: "Watch", view: "View" }[action];
+    // Before the start there is no map to show, so a made-up one stands in.
     const picture = map
       ? mapCanvas(game.id, map)
-      : `<span class="game-map game-map-none">${theme ? flag(theme) : ""}</span>`;
+      : theme
+        ? `<span class="game-map game-map-none">${flag(theme)}</span>`
+        : samplePicture();
+    // How long it runs: from the listing, or for a row written before the
+    // listing said, from its start and end.
+    const length =
+      game.durationMs ?? (game.startedAt && game.endsAt ? game.endsAt - game.startedAt : undefined);
+    const short = lengthLabel(length);
+    const badge = short
+      ? `<span class="game-length" title="${lengthWords(length!)} long">${short}</span>`
+      : "";
     const old = game.mapAt ? Date.now() - game.mapAt : 0;
     const age =
       map && game.mapAt && game.phase === "playing"
         ? `<span class="hint">map as of ${old < 60_000 ? "just now" : `${span(old)} ago`}</span>`
         : "";
     return `<li class="game-row">
-      ${picture}
+      <span class="game-pic">${picture}${badge}</span>
       <span class="game-what">
         <span><strong>${escape(game.id)}</strong> · ${escape(this.status(game, mine))}</span>
         <span class="hint">${size}, ${game.empires} ${game.empires === 1 ? "empire" : "empires"} + ${bots}, ${people}</span>
