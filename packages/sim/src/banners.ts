@@ -131,6 +131,22 @@ export const BANNERS: readonly Banner[] = [
   { id: "echo", name: "Echo", c1: "#ef3340", c2: "#2a5bd7", pattern: "fess" },
   { id: "tango", name: "Tango", c1: "#c8102e", c2: "#f4f1e6", pattern: "tierce" },
   { id: "zulu", name: "Zulu", c1: "#111111", c2: "#4fb3ff", pattern: "gyronny" },
+  // The signal flags again in other colours, named for more of the alphabet.
+  { id: "romeo", name: "Romeo", c1: "#7b3fe4", c2: "#f4f1e6", pattern: "bend" },
+  { id: "quebec", name: "Quebec", c1: "#9ccc1c", c2: "#f4f1e6", pattern: "bend" },
+  { id: "bravo", name: "Bravo", c1: "#00b8d4", c2: "#f4f1e6", pattern: "bend" },
+  { id: "sierra", name: "Sierra", c1: "#ffd100", c2: "#f4f1e6", pattern: "frame" },
+  { id: "whiskey", name: "Whiskey", c1: "#a3122a", c2: "#f4f1e6", pattern: "frame" },
+  { id: "november", name: "November", c1: "#138a4a", c2: "#f4f1e6", pattern: "quarters" },
+  { id: "lima", name: "Lima", c1: "#1d4fa8", c2: "#f4f1e6", pattern: "quarters" },
+  { id: "alpha", name: "Alpha", c1: "#ffb000", c2: "#f4f1e6", pattern: "pales" },
+  { id: "charlie", name: "Charlie", c1: "#6d3b1e", c2: "#f4f1e6", pattern: "pales" },
+  { id: "delta", name: "Delta", c1: "#3a2c91", c2: "#111111", pattern: "fess" },
+  { id: "hotel", name: "Hotel", c1: "#ec4899", c2: "#ffd100", pattern: "fess" },
+  { id: "juliet", name: "Juliet", c1: "#2f6bff", c2: "#f4f1e6", pattern: "tierce" },
+  { id: "foxtrot", name: "Foxtrot", c1: "#6a2c91", c2: "#f4f1e6", pattern: "tierce" },
+  { id: "mike", name: "Mike", c1: "#00897b", c2: "#ffd100", pattern: "gyronny" },
+  { id: "xray", name: "X-ray", c1: "#f57c00", c2: "#ffd100", pattern: "gyronny" },
 ];
 
 /** How many empires a game may have, which is how many banners there are.

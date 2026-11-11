@@ -49,6 +49,21 @@ const COMMITTED = [
   "echo",
   "tango",
   "zulu",
+  "romeo",
+  "quebec",
+  "bravo",
+  "sierra",
+  "whiskey",
+  "november",
+  "lima",
+  "alpha",
+  "charlie",
+  "delta",
+  "hotel",
+  "juliet",
+  "foxtrot",
+  "mike",
+  "xray",
 ];
 
 describe("the banner table", () => {
