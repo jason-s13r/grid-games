@@ -1,5 +1,67 @@
 # Changelog
 
+## web@1.14.0 (2026-11-11)
+
+### Features
+
+- mountains as peaks on open ground
+  A mountain tile draws peaks on the plain rather than on a grey fill. In
+  the thick of a range a tile is a cluster of three peaks; on its edge a
+  tile's peak is set in from each side the range ends on, and runs out to
+  each side it goes on from, like a river or a wall.
+
+- rivers curve round their bends, ranges end jagged
+  A river turning a corner is an arc of water about that corner instead of
+  a square L. A mountain range ends in teeth along each side it stops on,
+  where it used to round off; lakes still round off, and walls keep their
+  hard corners.
+
+- terrain joins up with its neighbours
+  Terrain is drawn like the tiles of a tile-laying game: a river is a
+  channel out of the sides where the river goes on, a wall a line of brick
+  to the next wall, and lakes and mountain ranges fill out and round off
+  where they end. A river runs into a lake, and off the edge of the map.
+  Mountains stand three ways, picked by place, so a range is not one peak
+  stamped over and over.
+
+  Bridges and ladders now go across what they cross: a bridge over a river
+  running east and west turns to run north and south, and a ladder over a
+  wall running north and south turns to lie east and west.
+
+  The renderer works out which sides join from the terrain alone, which
+  does not change in a game, so it costs nothing on a repaint.
+
+- a stand-in map and a length badge in the game lists
+  A game has no map to show until it starts, so the scheduled games sat in
+  the public list as blank boxes. Those now show a made-up map, faded so it
+  does not pass for the game's own, and every listed game carries its
+  length (6h, 1d, 3d, 10d) over the corner of its picture.
+
+  The length comes from the room's summary as durationMs and is kept in D1
+  (migration 0005). A row written before that falls back to its start and
+  end, and a lobby picks it up the next time its room reports.
+
+- drawn terrain tiles
+  Mountains are snow-capped peaks, lakes are deep water with a glint, rivers
+  ripple, and walls are brick. Bridges and ladders are drawn over the ground
+  they cross, so one somebody holds shows their flag under the deck or rungs,
+  as the zoomed-out map shows their colour.
+
+- your house's flag in the game lists
+
+### Fixes
+
+- the Map tab's map on a phone is letterboxed clear of the browser's toolbar
+  No taller than about a quarter of the screen, centred, with room under it
+  for a phone browser's toolbar. The width is what is capped, so the map
+  keeps its shape and a tap still lands where it was aimed.
+
+### Dependencies
+
+- sim: 5.4.0 -> 6.0.0
+- room: 1.7.0 -> 1.8.0
+
+
 ## web@1.13.0 (2026-11-11)
 
 ### Features

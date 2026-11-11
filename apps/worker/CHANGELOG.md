@@ -1,5 +1,26 @@
 # Changelog
 
+## worker@0.8.0 (2026-11-11)
+
+### Features
+
+- a stand-in map and a length badge in the game lists
+  A game has no map to show until it starts, so the scheduled games sat in
+  the public list as blank boxes. Those now show a made-up map, faded so it
+  does not pass for the game's own, and every listed game carries its
+  length (6h, 1d, 3d, 10d) over the corner of its picture.
+
+  The length comes from the room's summary as durationMs and is kept in D1
+  (migration 0005). A row written before that falls back to its start and
+  end, and a lobby picks it up the next time its room reports.
+
+### Dependencies
+
+- sim: 5.4.0 -> 6.0.0
+- room: 1.7.0 -> 1.8.0
+- web: 1.13.0 -> 1.14.0
+
+
 ## worker@0.7.0 (2026-11-11)
 
 ### Features

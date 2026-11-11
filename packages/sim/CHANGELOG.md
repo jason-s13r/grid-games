@@ -1,5 +1,57 @@
 # Changelog
 
+## sim@6.0.0 (2026-11-11)
+
+### Features
+
+- protocol 6, for the landscape
+  The landscape draws a different map from the same genesis, so a sim from
+  before it would take a new game, leave out the terrain it asks for, and
+  fall out of step without a word. Protocol 6 makes that a refusal at the
+  door: new games are stamped v6, and the landscape is drawn for a v6 game
+  whose map asks for `terrain: 2`.
+
+  The build plays v6 and v5. v5 is retired on 26 December 2026, today plus
+  the 31-day cap plus two weeks. v4 is dropped with its fixture: it is two
+  back now, and no v4 game is still running.
+
+  v6 has a recorded game of its own. A landscape game's moves cannot be
+  played on a v5 map, so the fixtures can no longer be one game under
+  every version; instead the v5 game must replay to its own hash under
+  v6's number, which is what shows everything v6 adds is gated. The v5
+  tests lose their v4 comparisons; the coins test keeps its v5 half
+  against fixed bounds.
+
+- one or two built bridges a river at most
+  A landscape river of 24 tiles or more gets one bridge built into the
+  map, and one of 64 or more a second, however long it runs. Shorter
+  rivers get none.
+
+- maps drawn as a landscape
+  New games draw a landscape instead of scattered features and rivers ruled
+  edge to edge. Mountains stand in ranges that wander, with the odd spur.
+  Lakes fill hollows in the low ground. Rivers rise at the foot of the
+  ranges and in the hills, meander downhill, join one another, and end in
+  a lake or run off the edge; some lakes spill on to the edge in turn.
+  Walls are ruins: corners, short runs and rings with their gates fallen
+  in.
+
+  The ground has a height from seeded value noise, and every tile drains
+  to a neighbour by a flood in from the edge and the lakes, so a river is
+  a walk downhill and a confluence is where one walk meets another.
+
+  A long river is crossed by the odd bridge built into the map, about one
+  in thirty tiles, where the old rivers had gaps cut through them: a way
+  over that costs nothing, far enough apart that a bridge of your own is
+  still the short way. Capitals are still placed on the mainland. Integer
+  arithmetic throughout, and the heap breaks ties on the tile index, so
+  every peer draws the same land.
+
+  Chosen by `terrain: 2` in the genesis map, which new games get by
+  default. A genesis without it draws the map it always did, so games
+  already composed and recorded keep their land and their hash.
+
+
 ## sim@5.4.0 (2026-11-11)
 
 ### Features
