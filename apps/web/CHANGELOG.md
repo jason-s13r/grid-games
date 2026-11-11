@@ -1,5 +1,28 @@
 # Changelog
 
+## web@1.8.0 (2026-11-11)
+
+### Features
+
+- mine diamonds from the population on a mine
+  A mine is now claimed like any other tile, with no 800 dig. The
+  population standing on it is what gets mined: while the capital reaches
+  it, each upkeep pass takes minePopCost / mineEvery off the tile (20 of
+  300 over 15 passes), and each full 300 becomes a diamond. It keeps
+  going while the tile holds enough to finish the diamond it is on, so
+  dumping a big population on a mine gives floor(pop / 300) diamonds over
+  time and leaves the remainder as a garrison. Growth skips mine tiles,
+  and a mine that changes hands starts its diamond again.
+
+  Gated on minePopCost in the game's rules, so games composed before it
+  keep digging. Bots aim for idle mines with a diamond's worth banked;
+  the hover line, tile and minimap show whether a mine is working.
+
+### Dependencies
+
+- sim: 5.2.0 -> 5.3.0
+
+
 ## web@1.7.1 (2026-11-02)
 
 ### Fixes
