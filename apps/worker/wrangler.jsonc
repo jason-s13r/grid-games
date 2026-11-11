@@ -21,12 +21,15 @@
     "bindings": [
       { "name": "GAMES", "class_name": "GameRoom" },
       // Two devices meeting to move a player across. Keeps nothing.
-      { "name": "PAIRS", "class_name": "Pairing" }
+      { "name": "PAIRS", "class_name": "Pairing" },
+      // Gives old archives their timeline, once, then idles. See backfill.ts.
+      { "name": "BACKFILL", "class_name": "Backfill" }
     ]
   },
   "migrations": [
     { "tag": "v1", "new_sqlite_classes": ["GameRoom"] },
-    { "tag": "v2", "new_sqlite_classes": ["Pairing"] }
+    { "tag": "v2", "new_sqlite_classes": ["Pairing"] },
+    { "tag": "v3", "new_sqlite_classes": ["Backfill"] }
   ],
 
   // Listings, players and results. No database_id: `wrangler deploy` creates

@@ -21,6 +21,14 @@ export async function writeArchive(bucket: R2Bucket, archive: GameArchive): Prom
   });
 }
 
+/** A finished game's archive, unpacked, or null if it has none. */
+export async function readArchive(bucket: R2Bucket, roomId: string): Promise<GameArchive | null> {
+  const object = await bucket.get(key(roomId));
+  if (!object) return null;
+  const text = await new Response(object.body.pipeThrough(new DecompressionStream("gzip"))).text();
+  return JSON.parse(text) as GameArchive;
+}
+
 export function hasArchive(bucket: R2Bucket, roomId: string): Promise<boolean> {
   return bucket.head(key(roomId)).then((object) => object !== null);
 }

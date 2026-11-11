@@ -107,6 +107,44 @@ export function decodeFrame(bytes: Uint8Array, size: number, previous?: Uint8Arr
 
 export const isKeyFrame = (bytes: Uint8Array): boolean => bytes[0] === KEY;
 
+/** Where a chain of frames has got to: the last frame's cells, for the next
+ *  to be a delta of, and how many deltas since a key frame. */
+export interface FrameChain {
+  cells: Uint8Array;
+  sinceKey: number;
+}
+
+/** The next frame of a chain: a delta of the last, or a key frame every
+ *  KEY_EVERY. As a room records them. */
+export function chainFrame(cells: Uint8Array, last: FrameChain | undefined): { bytes: Uint8Array; chain: FrameChain } {
+  const previous = last && last.sinceKey + 1 < KEY_EVERY ? last : undefined;
+  return {
+    bytes: encodeFrame(cells, previous?.cells),
+    chain: { cells, sinceKey: previous ? previous.sinceKey + 1 : 0 },
+  };
+}
+
+/** Whether a frame falls at this step of a game: on the pace, and at its end. */
+export const frameDue = (step: number, every: number, end: number, ended: boolean): boolean =>
+  step % every === 0 || step >= end || ended;
+
+/** A timeline's frames and its houses, put together. */
+export function timelineFrom(
+  genesis: Genesis,
+  frames: Array<[number, string]>,
+  flags: ReadonlyArray<{ empire: number; banner: BannerId }> | undefined,
+  size: { width: number; height: number },
+): Timeline {
+  const claimed = new Map((flags ?? []).map((f) => [f.empire, f.banner] as const));
+  return {
+    width: size.width,
+    height: size.height,
+    every: frameEvery(genesis),
+    banners: flyBanners(genesis.empires, claimed).map((b) => b.id),
+    frames,
+  };
+}
+
 /** The timeline a room would have kept for a finished game, made again from
  *  its archive: the game replayed from its record, a frame taken at the same
  *  pace and in the same encoding as a room takes them. For games archived
@@ -120,27 +158,17 @@ export function timelineOf(archive: GameArchive): Timeline {
   for (const { move } of archive.moveLog) byStep.set(move.step, [...(byStep.get(move.step) ?? []), move]);
 
   const frames: Array<[number, string]> = [];
-  let last: { cells: Uint8Array; sinceKey: number } | undefined;
+  let chain: FrameChain | undefined;
   const take = () => {
-    const cells = thumbnail(sim.state, [], sim.step, FRAME_WIDTH).cells;
-    const previous = last && last.sinceKey + 1 < KEY_EVERY ? last : undefined;
-    frames.push([sim.step, toBase64Url(encodeFrame(cells, previous?.cells))]);
-    last = { cells, sinceKey: previous ? previous.sinceKey + 1 : 0 };
+    const next = chainFrame(thumbnail(sim.state, [], sim.step, FRAME_WIDTH).cells, chain);
+    frames.push([sim.step, toBase64Url(next.bytes)]);
+    chain = next.chain;
   };
 
   take();
   while (sim.step < archive.steps && !sim.ended) {
     sim.advance(byStep.get(sim.step) ?? []);
-    if (sim.step % every === 0 || sim.step >= archive.steps || sim.ended) take();
+    if (frameDue(sim.step, every, archive.steps, sim.ended)) take();
   }
-
-  const size = thumbnail(sim.state, [], 0, FRAME_WIDTH);
-  const claimed = new Map((archive.flags ?? []).map((f) => [f.empire, f.banner] as const));
-  return {
-    width: size.width,
-    height: size.height,
-    every,
-    banners: flyBanners(genesis.empires, claimed).map((b) => b.id),
-    frames,
-  };
+  return timelineFrom(genesis, frames, archive.flags, thumbnail(sim.state, [], 0, FRAME_WIDTH));
 }

@@ -11,6 +11,7 @@
 //   GET  /api/pair/:code/ws    two devices meeting to move a player across
 //   GET  /api/leaderboard?scope=total|game  the top ten for each stat: games
 //                              won, area, population, coin cascade
+//   GET  /api/backfill         how giving old archives their timelines is going
 //   GET  /api/config           settings the page needs: the default length
 //                              and the tip link
 //   GET  /game/:id/ws      the game's WebSocket, handed to its Durable Object
@@ -29,8 +30,11 @@ import { forgetPayload, verify } from "@tessera/protocol";
 
 export { GameRoom } from "./game-room.js";
 export { Pairing } from "./pairing.js";
+export { Backfill } from "./backfill.js";
 
 const ROOM_ID = "([A-Za-z0-9_-]{1,64})";
+
+const backfill = (env: Env) => env.BACKFILL.get(env.BACKFILL.idFromName("timelines"));
 
 export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
@@ -47,8 +51,13 @@ export default {
       if (!env.DB) return json({ games: [] }, 200, 15);
       // Whoever looks for a game to join finds one of each scheduled length.
       if (which === "open") await ensureScheduled(env, Date.now()).catch((e: unknown) => console.error("schedule failed", e));
+      // And old archives get their timelines, in the background, once.
+      if (which === "open" && env.BACKFILL) ctx.waitUntil(backfill(env).kick().catch((e: unknown) => console.error("backfill failed", e)));
       return json({ games: await listGames(env.DB, which as Listing, Date.now()) }, 200, 15);
     }
+
+    // How the timeline backfill is getting on. See backfill.ts.
+    if (path === "/api/backfill" && env.BACKFILL) return json(await backfill(env).report());
 
     const player = path.match(/^\/api\/players\/([A-Za-z0-9_-]{16,128})$/);
     if (player) {

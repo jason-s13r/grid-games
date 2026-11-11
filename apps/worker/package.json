@@ -12,8 +12,7 @@
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "test": "vitest run --passWithNoTests",
     "watch": "wrangler d1 migrations apply tessera --local && wrangler dev --port 8787",
-    "smoke": "node scripts/smoke.mjs",
-    "backfill-timelines": "node scripts/backfill-timelines.mjs"
+    "smoke": "node scripts/smoke.mjs"
   },
   "dependencies": {
     "@tessera/protocol": "workspace:*",

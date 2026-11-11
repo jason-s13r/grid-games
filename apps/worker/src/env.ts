@@ -1,11 +1,15 @@
 import type { GameRoom } from "./game-room.js";
 import type { Pairing } from "./pairing.js";
+import type { Backfill } from "./backfill.js";
 
 export interface Env {
   ASSETS: Fetcher;
   GAMES: DurableObjectNamespace<GameRoom>;
   /** Where two devices meet to move a player from one to the other. */
   PAIRS: DurableObjectNamespace<Pairing>;
+  /** Gives games archived before rooms kept timelines their timeline: one
+   *  object, by name. See backfill.ts. */
+  BACKFILL: DurableObjectNamespace<Backfill>;
   /** Listings, players and results. Optional so a Worker without the
    *  database still runs games; it just lists nothing. */
   DB?: D1Database;
