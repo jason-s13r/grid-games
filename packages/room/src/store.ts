@@ -5,6 +5,7 @@
 // every await. The in-memory store here backs the tests and a host tab.
 
 import type { Stamped } from "./messages.js";
+import type { StoredFrame } from "./frames.js";
 
 export interface StoredSnapshot {
   step: number;
@@ -25,12 +26,32 @@ export interface RoomStore {
   /** Keep a snapshot, replacing any older one. */
   putSnapshot(snapshot: StoredSnapshot): void;
   latestSnapshot(): StoredSnapshot | undefined;
+  /** Keep a frame of the map, replacing one at the same step. Optional: a
+   *  store without frames makes a game without a timeline, which plays back
+   *  as it always did. */
+  putFrame?(frame: StoredFrame): void;
+  /** Every frame, in step order. */
+  frames?(): StoredFrame[];
 }
 
 export class MemoryStore implements RoomStore {
   private readonly values = new Map<string, string>();
   private readonly log: Stamped[] = [];
   private snapshot: StoredSnapshot | undefined;
+  private readonly kept: StoredFrame[] = [];
+
+  putFrame(frame: StoredFrame): void {
+    // Replacing one at the same step, as the SQLite store's primary key does.
+    const at = this.kept.findIndex((kept) => kept.step >= frame.step);
+    const copy = { step: frame.step, bytes: frame.bytes.slice() };
+    if (at < 0) this.kept.push(copy);
+    else if (this.kept[at]!.step === frame.step) this.kept[at] = copy;
+    else this.kept.splice(at, 0, copy);
+  }
+
+  frames(): StoredFrame[] {
+    return this.kept.map((frame) => ({ step: frame.step, bytes: frame.bytes.slice() }));
+  }
 
   get<T>(key: string): T | undefined {
     const text = this.values.get(key);

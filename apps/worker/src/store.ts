@@ -10,13 +10,14 @@
 // one read of the small values, one of the snapshot, and the moves since it.
 //
 //   kv     small values, read once per wake and cached
+//   frames one row per frame of the map, for a replay's timeline
 //   moves  one row per stamp (every move the room stamped at one step), keyed
 //          by (step, n) so a range of steps is a range of the primary key
 //
 // Both are WITHOUT ROWID: the key is the table, so a write is one row rather
 // than a row and an index entry.
 
-import type { RoomStore, Stamped, StoredSnapshot } from "@tessera/room";
+import type { RoomStore, Stamped, StoredFrame, StoredSnapshot } from "@tessera/room";
 
 const SCHEMA = 2;
 
@@ -107,6 +108,29 @@ export class SqlStore implements RoomStore {
       snapshot.hash,
       snapshot.bytes.slice().buffer,
     );
+  }
+
+  /** The map's frames, one row each. Made on first use rather than in the
+   *  schema, so rooms from before it need no migration. */
+  private framesReady = false;
+
+  private framesTable(): void {
+    if (this.framesReady) return;
+    this.exec(`CREATE TABLE IF NOT EXISTS frames (step INTEGER PRIMARY KEY, bytes BLOB NOT NULL)`);
+    this.framesReady = true;
+  }
+
+  putFrame(frame: StoredFrame): void {
+    this.framesTable();
+    this.exec(`INSERT OR REPLACE INTO frames (step, bytes) VALUES (?, ?)`, frame.step, frame.bytes.slice().buffer);
+  }
+
+  frames(): StoredFrame[] {
+    this.framesTable();
+    return this.exec<{ step: number; bytes: ArrayBuffer }>(`SELECT step, bytes FROM frames ORDER BY step`).map((row) => ({
+      step: row.step,
+      bytes: new Uint8Array(row.bytes),
+    }));
   }
 
   latestSnapshot(): StoredSnapshot | undefined {

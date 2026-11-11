@@ -10,6 +10,7 @@ import { STEPS_PER_SECOND, summarise } from "@tessera/sim";
 import type { Genesis, Sim, State } from "@tessera/sim";
 import type { ClaimedFlag, Stamped } from "./messages.js";
 import type { MapThumb } from "./thumb.js";
+import type { Timeline } from "./frames.js";
 
 export type GamePhase = "lobby" | "playing" | "ended";
 
@@ -184,6 +185,8 @@ export interface GameArchive {
   /** Houses brought to vacancies, in the order they were claimed. Absent in
    *  archives of games where nobody brought one. */
   flags?: ClaimedFlag[];
+  /** The map over time, when the room kept it. */
+  timeline?: Timeline;
   /** The step it ended at, and the state hash there. */
   steps: number;
   hash: string;

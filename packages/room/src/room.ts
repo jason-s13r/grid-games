@@ -34,6 +34,8 @@ import {
 import type { BannerId, EmpireSpec, Genesis, Move } from "@tessera/sim";
 import { BANNERS, bannerAt, bannerById, flyBanners, isVacant } from "@tessera/sim";
 import { thumbnail } from "./thumb.js";
+import { FRAME_WIDTH, KEY_EVERY, encodeFrame, frameEvery } from "./frames.js";
+import type { Timeline } from "./frames.js";
 import type { SignedInvite } from "@tessera/protocol";
 import {
   NONCE_BYTES,
@@ -622,6 +624,7 @@ export class Room {
       this._phase = "playing";
       this.load(genesis);
       this.keepSnapshot();
+      if (this.framing()) this.recordFrame();
 
       for (const peer of this.peers.values()) {
         if (peer.key) {
@@ -733,6 +736,41 @@ export class Room {
     this.sendMap();
   }
 
+  /** Whether this room keeps a timeline: a store that can hold one. */
+  private framing(): boolean {
+    return typeof this.store.putFrame === "function";
+  }
+
+  /** The last frame recorded, for the next to be a delta of. Held in memory
+   *  only: a rebuilt room starts again with a key frame, and re-simulating
+   *  from its snapshot rewrites frames it already had with the same cells,
+   *  so the chain of deltas stays whole. One row written per frame. */
+  private lastFrame: { step: number; cells: Uint8Array; sinceKey: number } | undefined;
+
+  private recordFrame(): void {
+    const sim = this.sim!;
+    if (this.lastFrame?.step === sim.step) return;
+    const cells = thumbnail(sim.state, [], sim.step, FRAME_WIDTH).cells;
+    const last = this.lastFrame && this.lastFrame.sinceKey + 1 < KEY_EVERY ? this.lastFrame : undefined;
+    this.store.putFrame!({ step: sim.step, bytes: encodeFrame(cells, last?.cells) });
+    this.lastFrame = { step: sim.step, cells, sinceKey: last ? last.sinceKey + 1 : 0 };
+  }
+
+  /** The frames as an archive carries them. */
+  private timeline(): Timeline | undefined {
+    const frames = this.store.frames?.() ?? [];
+    if (!frames.length || !this.sim || !this.genesis) return undefined;
+    const size = thumbnail(this.sim.state, [], 0, FRAME_WIDTH);
+    const claimed = new Map(this.claimedFlags().map((f) => [f.empire, f.banner] as const));
+    return {
+      width: size.width,
+      height: size.height,
+      every: frameEvery(this.genesis),
+      banners: flyBanners(this.genesis.empires, claimed).map((b) => b.id),
+      frames: frames.map((frame) => [frame.step, toBase64Url(frame.bytes)]),
+    };
+  }
+
   /** The map for the listings, if it is due: at the start and the end, and
    *  otherwise once `MAP_EVERY_MS` has passed since the last. */
   private sendMap(): void {
@@ -829,11 +867,17 @@ export class Room {
     if (bound <= sim.step || sim.ended) return;
 
     const from = sim.step;
-    const { checkpoints } = advanceTo(
-      sim,
-      bound,
-      this.future.map((s) => s.move),
-    );
+    // In pieces that stop at each frame, so the map is recorded on its own
+    // steady pace however the room is woken: an hour's catch-up records its
+    // thirty-odd frames as surely as a busy room records each as it passes.
+    const moves = this.future.map((s) => s.move);
+    const every = this.framing() ? frameEvery(this.genesis) : 0;
+    const checkpoints: Array<{ step: number; hash: number }> = [];
+    while (sim.step < bound && !sim.ended) {
+      const next = every ? Math.min(bound, (Math.floor(sim.step / every) + 1) * every) : bound;
+      checkpoints.push(...advanceTo(sim, next, moves).checkpoints);
+      if (every && (sim.step % every === 0 || sim.ended)) this.recordFrame();
+    }
     this.future = this.future.filter((s) => s.move.step >= sim.step);
     for (const { step, hash } of checkpoints) this.checkpoints.set(step, hash);
     for (const step of this.checkpoints.keys()) {
@@ -886,6 +930,7 @@ export class Room {
       players,
       moveLog: this.store.movesFrom(0).filter((s) => s.move.step < this.sim!.step),
       ...(this.claimedFlags().length ? { flags: this.claimedFlags() } : {}),
+      ...(this.timeline() ? { timeline: this.timeline()! } : {}),
       steps: this.sim.step,
       hash: hex(this.sim.hash()),
       result: this.result(),

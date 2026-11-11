@@ -34,8 +34,8 @@ function code(state: State, i: number): number {
   return terrain === TERRAIN.PLAIN ? 0 : TERRAIN_BASE + terrain;
 }
 
-export function thumbnail(state: State, banners: BannerId[], step: number): MapThumb {
-  const scale = Math.max(1, Math.ceil(state.width / THUMB_WIDTH));
+export function thumbnail(state: State, banners: BannerId[], step: number, across = THUMB_WIDTH): MapThumb {
+  const scale = Math.max(1, Math.ceil(state.width / across));
   const width = Math.ceil(state.width / scale);
   const height = Math.ceil(state.height / scale);
   const cells = new Uint8Array(width * height);
