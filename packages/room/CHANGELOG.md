@@ -1,5 +1,34 @@
 # Changelog
 
+## room@1.6.0 (2026-11-11)
+
+### Features
+
+- pick the house you play as, and eleven new flags
+  A player now picks a house (banner) rather than a seat. In the lobby,
+  picking a house somebody already has joins their empire; each house
+  picked becomes one empire, sealed into the genesis with its banner.
+  A newcomer taking an open empire picks any house nobody is flying, and
+  the claim's house reaches every client, survives a rebuild and is kept
+  in the archive. Solo games fly the house chosen on the create page.
+
+  Unclaimed empires wear a free house (flyBanners), so a sealed choice
+  never collides with an index colour, and records from before banners
+  still paint exactly as they did.
+
+  New houses: Alp, Ink, Plum, Tide, Zest, Kestrel, Lagoon, Orchid, Mint
+  and Lumen, each with a pattern of its own, and Sping, a black star on
+  red, as its own house beside Vermilion.
+
+  The zoomed-out map, minimap and swatches draw a house in its two
+  colours mixed by how much of a tile each pattern paints, and a test
+  keeps every house's mix apart from every other's.
+
+### Dependencies
+
+- sim: 5.3.0 -> 5.4.0
+
+
 ## room@1.5.0 (2026-11-11)
 
 ### Features

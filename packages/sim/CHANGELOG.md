@@ -1,5 +1,47 @@
 # Changelog
 
+## sim@5.4.0 (2026-11-11)
+
+### Features
+
+- fifteen more houses, the signal flags in other colours
+  Romeo, Quebec, Bravo, Sierra, Whiskey, November, Lima, Alpha, Charlie,
+  Delta, Hotel, Juliet, Foxtrot, Mike and X-ray: the signal-flag patterns
+  in new colour pairs, each with a map colour of its own. Forty-five
+  houses in all.
+
+- seven houses from the maritime signal flags
+  Oscar (also the semaphore flag), Papa, Uniform, Golf, Echo, Tango and
+  Zulu, each kept to two colours and drawn with a pattern of its own.
+  Thirty houses in all, so a game may hold up to thirty empires.
+
+- Peony, a pink chevron on its side, in place of Alp
+  Alp was never released, so its place in the table is free to take.
+
+- Sping is the red star on black, Vermilion the black star on red
+  The start page's hero keeps its red stars by flying Sping.
+
+- pick the house you play as, and eleven new flags
+  A player now picks a house (banner) rather than a seat. In the lobby,
+  picking a house somebody already has joins their empire; each house
+  picked becomes one empire, sealed into the genesis with its banner.
+  A newcomer taking an open empire picks any house nobody is flying, and
+  the claim's house reaches every client, survives a rebuild and is kept
+  in the archive. Solo games fly the house chosen on the create page.
+
+  Unclaimed empires wear a free house (flyBanners), so a sealed choice
+  never collides with an index colour, and records from before banners
+  still paint exactly as they did.
+
+  New houses: Alp, Ink, Plum, Tide, Zest, Kestrel, Lagoon, Orchid, Mint
+  and Lumen, each with a pattern of its own, and Sping, a black star on
+  red, as its own house beside Vermilion.
+
+  The zoomed-out map, minimap and swatches draw a house in its two
+  colours mixed by how much of a tile each pattern paints, and a test
+  keeps every house's mix apart from every other's.
+
+
 ## sim@5.3.0 (2026-11-11)
 
 ### Features
