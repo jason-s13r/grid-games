@@ -657,46 +657,64 @@ h1, h2, h3, .brand, .screen-brand {
     radial-gradient(#26597a, #2f6b8f 70%);
 }
 
-// A range: rock, jagged along each side it ends on, and peaks with a shaded
-// face, a lit face and snow. Three ways of standing (`v1`, `v2` from the
-// tile's place), so a range is not one peak stamped over and over. A peak's
-// apex is given in lengths, not percentages, so the snow's shorter box puts it
-// in the same place.
+// A range: peaks on open ground, no fill behind them. A tile on the range's
+// edge draws its peaks in a box set in from each side the range ends on, and
+// out to each side it goes on from, like a river or a wall; a tile in the
+// thick of it is all peaks. Edge peaks stand three ways (`v1`, `v2` from the
+// tile's place), so a ridge is not one peak stamped over and over. A peak's
+// apex is given in lengths, not percentages, so its snow, in a shorter box,
+// puts it in the same place.
 .tile.t-mountain {
-  --_t: calc(var(--s) / 4);
-  // Teeth of land along each side that ends.
-  --_edge:
-    linear-gradient(135deg, var(--kn) 25%, #0000 0) 0 0 / var(--_t) var(--_t) repeat-x,
-    linear-gradient(225deg, var(--kn) 25%, #0000 0) 0 0 / var(--_t) var(--_t) repeat-x,
-    linear-gradient(45deg, var(--ks) 25%, #0000 0) 0 100% / var(--_t) var(--_t) repeat-x,
-    linear-gradient(315deg, var(--ks) 25%, #0000 0) 0 100% / var(--_t) var(--_t) repeat-x,
-    linear-gradient(135deg, var(--kw) 25%, #0000 0) 0 0 / var(--_t) var(--_t) repeat-y,
-    linear-gradient(45deg, var(--kw) 25%, #0000 0) 0 0 / var(--_t) var(--_t) repeat-y,
-    linear-gradient(225deg, var(--ke) 25%, #0000 0) 100% 0 / var(--_t) var(--_t) repeat-y,
-    linear-gradient(315deg, var(--ke) 25%, #0000 0) 100% 0 / var(--_t) var(--_t) repeat-y;
-  --_p: from 148deg at 50% calc(var(--s) * 0.14);
-  --_snow: conic-gradient(var(--_p), #d9d3c6 32deg, #f6f3ec 0 64deg, #0000 0) 0 0 / 100% 40% no-repeat;
-  --_rock: conic-gradient(var(--_p), #544c41 32deg, #8c8170 0 64deg, #0000 0);
-  background: var(--_edge), var(--_snow), var(--_rock), linear-gradient(#6b6255, #5f574b);
+  --in: calc(var(--s) * 0.14);
+  --iw: var(--in);
+  --ie: var(--in);
+  --in-n: var(--in);
+  --is: var(--in);
+  --_bw: calc(var(--s) - var(--iw) - var(--ie));
+  --_bh: calc(var(--s) - var(--in-n) - var(--is));
+  --_at: var(--iw) var(--in-n);
+  --_box: var(--_at) / var(--_bw) var(--_bh) no-repeat;
+  --_p: from 144deg at 50% calc(var(--s) * 0.04);
+  background:
+    conic-gradient(var(--_p), #d9d3c6 36deg, #f6f3ec 0 72deg, #0000 0) var(--_at) / var(--_bw) calc(var(--s) * 0.24) no-repeat,
+    conic-gradient(var(--_p), #544c41 36deg, #8c8170 0 72deg, #0000 0) var(--_box),
+    var(--land);
 }
+.tile.t-mountain.j-n { --in-n: 0px; }
+.tile.t-mountain.j-e { --ie: 0px; }
+.tile.t-mountain.j-s { --is: 0px; }
+.tile.t-mountain.j-w { --iw: 0px; }
+
 // Two peaks, the nearer one lower and to the right.
 .tile.t-mountain.v1 {
-  --_q: from 146deg at 70% calc(var(--s) * 0.42);
+  --_q: from 150deg at 34% calc(var(--s) * 0.02);
   background:
-    var(--_edge),
-    conic-gradient(var(--_q), #544c41 34deg, #8c8170 0 68deg, #0000 0),
-    conic-gradient(from 150deg at 32% calc(var(--s) * 0.1), #d9d3c6 30deg, #f6f3ec 0 60deg, #0000 0) 0 0 / 100% 34% no-repeat,
-    conic-gradient(from 150deg at 32% calc(var(--s) * 0.1), #544c41 30deg, #8c8170 0 60deg, #0000 0),
-    linear-gradient(#6b6255, #5f574b);
+    conic-gradient(from 144deg at 68% calc(var(--s) * 0.3), #544c41 36deg, #8c8170 0 72deg, #0000 0) var(--_box),
+    conic-gradient(var(--_q), #d9d3c6 30deg, #f6f3ec 0 60deg, #0000 0) var(--_at) / var(--_bw) calc(var(--s) * 0.2) no-repeat,
+    conic-gradient(var(--_q), #544c41 30deg, #8c8170 0 60deg, #0000 0) var(--_box),
+    var(--land);
 }
 // A lower, broader one, bare.
 .tile.t-mountain.v2 {
-  --_q: from 135deg at 46% calc(var(--s) * 0.3);
   background:
-    var(--_edge),
-    conic-gradient(var(--_q), #544c41 45deg, #8c8170 0 90deg, #0000 0),
-    linear-gradient(#6b6255, #5f574b);
+    conic-gradient(from 130deg at 50% calc(var(--s) * 0.2), #544c41 50deg, #8c8170 0 100deg, #0000 0) var(--_box),
+    var(--land);
 }
+
+// In the thick of a range: three peaks, two behind with snow and one in
+// front, filling the tile. Mirrored on every other tile.
+.tile.t-mountain.j-n.j-e.j-s.j-w {
+  --_a: 26%;
+  --_b: 76%;
+  background:
+    conic-gradient(from 140deg at 50% calc(var(--s) * 0.46), #544c41 40deg, #8c8170 0 80deg, #0000 0),
+    conic-gradient(from 148deg at var(--_a) calc(var(--s) * 0.04), #d9d3c6 32deg, #f6f3ec 0 64deg, #0000 0) 0 0 / 100% 22% no-repeat,
+    conic-gradient(from 148deg at var(--_b) calc(var(--s) * 0.12), #d9d3c6 32deg, #f6f3ec 0 64deg, #0000 0) 0 0 / 100% 28% no-repeat,
+    conic-gradient(from 148deg at var(--_a) calc(var(--s) * 0.04), #544c41 32deg, #8c8170 0 64deg, #0000 0),
+    conic-gradient(from 148deg at var(--_b) calc(var(--s) * 0.12), #4c453b 32deg, #7d7364 0 64deg, #0000 0),
+    var(--land);
+}
+.tile.t-mountain.j-n.j-e.j-s.j-w.v1 { --_a: 74%; --_b: 24%; }
 
 // Items sit on top of whatever holds them.
 .tile.i-bronze,
