@@ -13,7 +13,7 @@
 // whatever arrives, and calls `connected()` when a (re)connection opens.
 
 import { Sim } from "@tessera/sim";
-import type { Genesis, Move, MoveType } from "@tessera/sim";
+import type { BannerId, Genesis, Move, MoveType } from "@tessera/sim";
 import {
   Identity,
   NONCE_BYTES,
@@ -242,9 +242,9 @@ export class RoomClient {
     this.send({ t: "say", channel, text });
   }
 
-  /** Take an empire nobody holds. */
-  claim(empire: number): void {
-    this.send({ t: "claim", empire });
+  /** Take an empire nobody holds, flying `banner` if nobody else is. */
+  claim(empire: number, banner?: BannerId): void {
+    this.send(banner ? { t: "claim", empire, banner } : { t: "claim", empire });
   }
 
   /** Ask an empire for a seat; its members decide. */
@@ -281,8 +281,10 @@ export class RoomClient {
     this.send({ t: "redeem", invite });
   }
 
-  pickEmpire(empire: number | null): void {
-    this.send({ t: "lobby", empire });
+  /** Pick the house to fly, or null to stand back. Picking a house somebody
+   *  has already picked joins their empire. */
+  pickBanner(banner: BannerId | null): void {
+    this.send({ t: "lobby", banner });
   }
 
   start(): void {

@@ -266,7 +266,7 @@ describe("banners in a sealed record", () => {
   });
 
   it("refuses a banner that is not in the table", async () => {
-    expect(await inspectGenesis(game(two("sping", "amber")))).toContain("duplicate-banner");
+    expect(await inspectGenesis(game(two("nonesuch", "amber")))).toContain("duplicate-banner");
   });
 
   // `canonicalJson` drops `undefined` and keeps `null`, so a record spelling an

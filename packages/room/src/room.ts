@@ -31,8 +31,8 @@ import {
   simbot,
   STEPS_PER_SECOND,
 } from "@tessera/sim";
-import type { EmpireSpec, Genesis, Move } from "@tessera/sim";
-import { isVacant } from "@tessera/sim";
+import type { BannerId, EmpireSpec, Genesis, Move } from "@tessera/sim";
+import { BANNERS, bannerAt, bannerById, isVacant } from "@tessera/sim";
 import type { SignedInvite } from "@tessera/protocol";
 import {
   NONCE_BYTES,
@@ -53,6 +53,7 @@ import { resultOf, timeOf } from "./record.js";
 import type { GameArchive, GameResult, GameSummary, RoomEvents } from "./record.js";
 import type {
   Catchup,
+  ClaimedFlag,
   GameSettings,
   ChatMode,
   ClientMessage,
@@ -116,14 +117,26 @@ interface StoredSeating {
   step: number;
   /** A program playing the seat. Absent in seatings stored before bots. */
   bot?: boolean;
+  /** The house a claimant brought to a vacancy, when it was free to fly. */
+  banner?: BannerId;
 }
 
 interface StoredPlayer {
   key: string;
   name: string;
-  empire: number | null;
+  /** The house picked in the lobby. */
+  banner: BannerId | null;
   /** Said so in its hello: a program, not a person. */
   bot?: boolean;
+}
+
+/** A player stored before houses were picked had an empire index instead,
+ *  and picked the house at that index, which is the one it was shown. */
+function housed(player: StoredPlayer & { empire?: number | null }): StoredPlayer {
+  if (player.banner !== undefined) return player;
+  const { empire, ...rest } = player;
+  const banner = typeof empire === "number" ? (bannerAt(empire + 1)?.id ?? null) : null;
+  return { ...rest, banner };
 }
 
 /** Chat lines kept, for whoever arrives later. */
@@ -205,7 +218,7 @@ export class Room {
     if (!config) throw new Error("no room in this store");
     this.config = config;
     this._phase = store.get<Phase>("phase") ?? "lobby";
-    this.players = store.get<StoredPlayer[]>("players") ?? [];
+    this.players = (store.get<Array<StoredPlayer & { empire?: number | null }>>("players") ?? []).map(housed);
     this.startsAt = store.get<number | null>("startsAt") ?? undefined;
     this.seqs = store.get<Record<string, number>>("seqs") ?? {};
     this.seatings = store.get<StoredSeating[]>("seatings") ?? [];
@@ -304,7 +317,7 @@ export class Room {
     const now = this.now();
     if (this._phase === "lobby") {
       const at = this.config.startAt;
-      return at !== undefined && now >= at && !this.players.some((p) => p.empire !== null && !p.bot);
+      return at !== undefined && now >= at && !this.players.some((p) => p.banner !== null && !p.bot);
     }
     const joins = this.joinUntil();
     if (joins === undefined || now < joins || !this.roster) return false;
@@ -324,11 +337,11 @@ export class Room {
       empires: config.empires,
       seatsPerEmpire: this.seatsPerEmpire(),
       bots: config.bots.length,
-      // Seats taken: in the lobby, those who have picked an empire, not
+      // Seats taken: in the lobby, those who have picked a house, not
       // everybody who has looked in.
       players: this.roster
         ? this.players.filter((p) => this.roster!.has(p.key)).length
-        : this.players.filter((p) => p.empire !== null).length,
+        : this.players.filter((p) => p.banner !== null).length,
     };
     if (this.startsAt !== undefined && this._phase === "lobby") summary.startsAt = this.startsAt;
     if (this._phase === "lobby") summary.lobby = this.players.length;
@@ -412,7 +425,7 @@ export class Room {
         if (this.genesis) this.sendTo(peer.conn, { t: "resync", game: this.catchup(message.have) });
         return;
       case "claim":
-        return this.claim(peer, message.empire);
+        return this.claim(peer, message.empire, message.banner);
       case "ask":
         return this.ask(peer, message.empire);
       case "withdraw":
@@ -452,7 +465,7 @@ export class Room {
         if (name) known.name = name;
         Object.assign(known, bot);
       } else {
-        this.players.push({ key: message.key, name, empire: null, ...bot });
+        this.players.push({ key: message.key, name, banner: null, ...bot });
         this.recordPlayer(message.key);
         this.events.game?.(this.summary());
       }
@@ -474,7 +487,7 @@ export class Room {
     peer.key = message.key;
     const name = cleanName(message.name);
     const known = this.players.find((p) => p.key === message.key);
-    if (!known) this.players.push({ key: message.key, name, empire: null, ...bot });
+    if (!known) this.players.push({ key: message.key, name, banner: null, ...bot });
     else {
       if (name) known.name = name;
       Object.assign(known, bot);
@@ -497,28 +510,44 @@ export class Room {
     const player = this.players.find((p) => p.key === key);
     if (!player) return;
     if (message.name !== undefined) player.name = cleanName(message.name);
-    const before = player.empire;
-    if (message.empire !== undefined) {
-      const wanted = message.empire;
-      if (wanted === null) {
-        player.empire = null;
-      } else if (
-        Number.isInteger(wanted) &&
-        wanted >= 0 &&
-        wanted < this.config.empires &&
-        this.players.filter((p) => p.empire === wanted && p.key !== key).length <
-          this.seatsPerEmpire()
-      ) {
-        player.empire = wanted;
-      }
-    }
+    const before = player.banner;
+    const wanted =
+      message.banner !== undefined
+        ? message.banner
+        : message.empire === null
+          ? null
+          : Number.isInteger(message.empire)
+            ? bannerAt((message.empire as number) + 1)?.id
+            : undefined;
+    if (wanted === null) player.banner = null;
+    else if (wanted !== undefined && this.canFly(key, wanted)) player.banner = wanted;
     this.store.put("players", this.players);
-    if (player.empire !== before) {
+    if (player.banner !== before) {
       // The listing counts seats taken, and the player's own record says which.
       this.recordPlayer(key);
       this.events.game?.(this.summary());
     }
     this.broadcastLobby();
+  }
+
+  /** Whether `key` may pick `banner`: a house that exists, with a seat left in
+   *  it, and — if nobody has picked it yet — a human empire left on the map to
+   *  be. Moving from a house you have to yourself frees its empire first. */
+  private canFly(key: string, banner: unknown): banner is BannerId {
+    if (typeof banner !== "string" || !bannerById(banner)) return false;
+    const others = this.players.filter((p) => p.key !== key && p.banner !== null);
+    const here = others.filter((p) => p.banner === banner).length;
+    if (here >= this.seatsPerEmpire()) return false;
+    if (here > 0) return true;
+    return new Set(others.map((p) => p.banner)).size < this.config.empires;
+  }
+
+  /** The houses picked, in the order their players arrived. Each is one
+   *  empire, numbered in this order at the start. */
+  private picked(): BannerId[] {
+    const order: BannerId[] = [];
+    for (const p of this.players) if (p.banner !== null && !order.includes(p.banner)) order.push(p.banner);
+    return order;
   }
 
   /** Out of a game that has not started, altogether: its lobby, its count and
@@ -604,18 +633,25 @@ export class Room {
   private async compose(): Promise<Genesis | string> {
     const { config } = this;
     const empires: EmpireSpec[] = [];
-    for (let i = 0; i < config.empires; i++) {
-      // Empires nobody picked are left open: placed by the map generator like any
-      // other, and claimable during the join window.
+    // One empire per house picked, flying it. The players' choice is sealed
+    // into the record; the empire number is only where on the map it sits.
+    const houses = this.picked().slice(0, config.empires);
+    for (const banner of houses) {
       const members = this.players
-        .filter((p) => p.empire === i)
+        .filter((p) => p.banner === banner)
         .map((p) => ({ kind: MEMBER.HUMAN, key: p.key }));
-      empires.push({ control: CONTROL.HUMAN, members });
+      empires.push({ control: CONTROL.HUMAN, members, banner });
     }
-    const claimed = empires.filter((e) => e.members.length > 0).length;
-    if (claimed < 1) return "nobody has picked an empire";
-    if (claimed + config.bots.length < 2) return "a game needs at least two empires playing";
-    for (const level of config.bots) empires.push(simbot(level));
+    if (houses.length < 1) return "nobody has picked a house";
+    if (houses.length + config.bots.length < 2) return "a game needs at least two empires playing";
+    // The rest are left open: placed by the map generator like any other, and
+    // claimable during the join window. A vacancy is not given a house; its
+    // claimant brings one, and until then it wears whatever is free.
+    for (let i = houses.length; i < config.empires; i++) empires.push({ control: CONTROL.HUMAN, members: [] });
+    // Bots fly houses nobody picked, from the far end of the table, so the
+    // houses a newcomer is likeliest to want are still free to claim.
+    const spare = BANNERS.filter((b) => !houses.includes(b.id)).reverse();
+    config.bots.forEach((level, at) => empires.push(simbot(level, spare[at]?.id)));
 
     const seed = new DataView(randomBytes(4).buffer).getUint32(0);
     const genesis = await sealGenesis(
@@ -827,6 +863,7 @@ export class Room {
       genesis: this.genesis,
       players,
       moveLog: this.store.movesFrom(0).filter((s) => s.move.step < this.sim!.step),
+      ...(this.claimedFlags().length ? { flags: this.claimedFlags() } : {}),
       steps: this.sim.step,
       hash: hex(this.sim.hash()),
       result: this.result(),
@@ -838,7 +875,12 @@ export class Room {
     if (!this.events.player) return;
     const player = this.players.find((p) => p.key === key);
     if (!player) return;
-    const empire = this.roster ? (this.roster.seatOf(key)?.empire ?? null) : player.empire === null ? null : player.empire + 1;
+    // In the lobby, the empire a house would be if the game started now.
+    const empire = this.roster
+      ? (this.roster.seatOf(key)?.empire ?? null)
+      : player.banner === null
+        ? null
+        : this.picked().indexOf(player.banner) + 1;
     this.events.player({
       roomId: this.config.roomId,
       key,
@@ -871,7 +913,13 @@ export class Room {
    *  empire are all its rules. The amendment gets a step of its own, and the
    *  room catches up to it first, so it is judged against the state it will
    *  land in. */
-  private seatNow(peer: Peer | undefined, empire: number, key: string, by: number): boolean {
+  private seatNow(
+    peer: Peer | undefined,
+    empire: number,
+    key: string,
+    by: number,
+    flying: { banner?: BannerId } = {},
+  ): boolean {
     const sim = this.sim!;
     const roster = this.roster!;
     if (roster.has(key)) return false;
@@ -890,7 +938,7 @@ export class Room {
       return false;
     }
     roster.amend(empire, key, kind, step);
-    this.seatings.push({ empire, key, step, ...(bot ? { bot } : {}) });
+    this.seatings.push({ empire, key, step, ...(bot ? { bot } : {}), ...flying });
     this.requests = this.requests.filter((r) => r.key !== key);
     this.store.put("seatings", this.seatings);
     this.store.put("requests", this.requests);
@@ -918,7 +966,7 @@ export class Room {
     return this.players.find((p) => p.key === key)?.bot === true;
   }
 
-  private claim(peer: Peer, empireId: unknown): void {
+  private claim(peer: Peer, empireId: unknown, banner: unknown): void {
     if (!this.canJoin(peer) || !Number.isInteger(empireId)) return;
     // An empire with nobody in it is a player's to take. A bot is cover for
     // people who are already there, so it comes in by invite or approval.
@@ -927,7 +975,23 @@ export class Room {
     if (!empire || !isVacant(empire) || empire.control !== CONTROL.HUMAN) {
       return this.error(peer, "that empire cannot be taken");
     }
-    this.seatNow(peer, empireId as number, peer.key!, 0);
+    // A house somebody already flies is not refused, only not flown: refusing
+    // a whole claim over a colour would let a squatter deny somebody a seat.
+    const flying = this.flies(banner) ? { banner: banner as BannerId } : {};
+    this.seatNow(peer, empireId as number, peer.key!, 0, flying);
+  }
+
+  /** Whether a claimant may bring `banner`: a house no empire has sealed or
+   *  claimed. One a vacancy is only wearing is free. */
+  private flies(banner: unknown): boolean {
+    if (typeof banner !== "string" || !bannerById(banner)) return false;
+    if (this.genesis!.empires.some((e) => e.banner === banner)) return false;
+    return !this.seatings.some((s) => s.banner === banner);
+  }
+
+  /** Houses brought to vacancies, in the order they were claimed. */
+  private claimedFlags(): ClaimedFlag[] {
+    return this.seatings.flatMap((s) => (s.banner ? [{ empire: s.empire, banner: s.banner }] : []));
   }
 
   private ask(peer: Peer, empireId: unknown): void {
@@ -1138,7 +1202,8 @@ export class Room {
       if (!seen.has(key)) people.push({ key, name: names.get(key) ?? "", connected: true });
     }
     const requests = this.requests.map((r) => ({ ...r, name: names.get(r.key) ?? "" }));
-    return { people, requests };
+    const flags = this.claimedFlags();
+    return { people, requests, ...(flags.length ? { flags } : {}) };
   }
 
   private broadcastPeople(): void {

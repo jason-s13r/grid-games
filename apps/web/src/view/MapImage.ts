@@ -7,7 +7,7 @@
 
 import type { State } from "@tessera/sim";
 import { ITEM, isMine, mineWorking } from "@tessera/sim";
-import { MAX_EMPIRES, TERRAIN_COLORS, ITEM_COLORS, MINE_DUG, empireTheme, rgb } from "./palette";
+import { MAX_EMPIRES, TERRAIN_COLORS, ITEM_COLORS, MINE_DUG, empireTheme, mapColour, rgb } from "./palette";
 
 export class MapImage {
   readonly canvas: HTMLCanvasElement;
@@ -49,7 +49,7 @@ export class MapImage {
    *  table rather than from a hard-coded 8. */
   recolour(): void {
     this.empireRgb = [];
-    for (let id = 1; id <= MAX_EMPIRES; id++) this.empireRgb[id] = rgb(empireTheme(id).c1);
+    for (let id = 1; id <= MAX_EMPIRES; id++) this.empireRgb[id] = rgb(mapColour(empireTheme(id)));
   }
 
   paintAll(state: State): void {

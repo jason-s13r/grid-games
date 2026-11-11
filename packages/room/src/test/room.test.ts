@@ -40,8 +40,8 @@ async function started(duration?: number): Promise<{ h: Harness; a: Linked; b: L
   const h = new Harness({ creator: alice.key, bots: ["easy"], ...(duration ? { duration } : {}) });
   const a = await h.join(alice, "alice");
   const b = await h.join(bob, "bob");
-  a.client.pickEmpire(0);
-  b.client.pickEmpire(1);
+  a.client.pickBanner("vermilion");
+  b.client.pickBanner("verdant");
   await h.settle();
   a.client.start();
   await h.settle();
@@ -56,33 +56,90 @@ describe("the lobby", () => {
     const h = new Harness({ creator: alice.key });
     const a = await h.join(alice, "alice");
     const b = await h.join(bob, "bob");
-    b.client.pickEmpire(1);
+    b.client.pickBanner("verdant");
     await h.settle();
 
     const lobby = a.client.lobby!;
     expect(lobby.creator).toBe(alice.key);
-    expect(lobby.players.map((p) => [p.name, p.empire, p.connected])).toEqual([
+    expect(lobby.players.map((p) => [p.name, p.banner, p.connected])).toEqual([
       ["alice", null, true],
-      ["bob", 1, true],
+      ["bob", "verdant", true],
     ]);
   });
 
-  it("refuses an empire that is already full", async () => {
+  it("refuses a house that is already full", async () => {
     const h = new Harness({ creator: alice.key, seatsPerEmpire: 1 });
     const a = await h.join(alice);
     const b = await h.join(bob);
-    a.client.pickEmpire(0);
+    a.client.pickBanner("vermilion");
     await h.settle();
-    b.client.pickEmpire(0);
+    b.client.pickBanner("vermilion");
     await h.settle();
-    expect(b.client.lobby!.players.find((p) => p.key === bob.key)!.empire).toBeNull();
+    expect(b.client.lobby!.players.find((p) => p.key === bob.key)!.banner).toBeNull();
+  });
+
+  it("refuses a new house once every empire on the map has one", async () => {
+    const h = new Harness({ creator: alice.key, empires: 2 });
+    const [a, b, c] = [await h.join(alice), await h.join(bob), await h.join(carol)];
+    a.client.pickBanner("alp");
+    b.client.pickBanner("lumen");
+    await h.settle();
+    c.client.pickBanner("cobalt");
+    await h.settle();
+    expect(c.client.lobby!.players.find((p) => p.key === carol.key)!.banner).toBeNull();
+    // A house already picked still has room, and moving off one you have to
+    // yourself frees its empire for another.
+    c.client.pickBanner("lumen");
+    await h.settle();
+    expect(c.client.lobby!.players.find((p) => p.key === carol.key)!.banner).toBe("lumen");
+    a.client.pickBanner("cobalt");
+    await h.settle();
+    expect(a.client.lobby!.players.find((p) => p.key === alice.key)!.banner).toBe("cobalt");
+  });
+
+  it("reads an empire index from an older client as the house it was shown", async () => {
+    const h = new Harness({ creator: alice.key });
+    const a = await h.join(alice);
+    (a.client as unknown as { send(message: unknown): void }).send({ t: "lobby", empire: 2 });
+    await h.settle();
+    expect(a.client.lobby!.players[0]!.banner).toBe("cobalt");
+  });
+
+  it("reads a lobby stored before houses as the houses its players were shown", async () => {
+    const h = new Harness({ creator: alice.key });
+    h.store.put("players", [{ key: alice.key, name: "alice", empire: 1 }]);
+    h.restart();
+    const a = await h.join(alice);
+    expect(a.client.lobby!.players[0]!.banner).toBe("verdant");
+  });
+
+  it("makes one empire of each house picked, flying it", async () => {
+    const h = new Harness({ creator: alice.key, empires: 3, bots: ["easy", "hard"] });
+    const [a, b, c] = [await h.join(alice), await h.join(bob), await h.join(carol)];
+    b.client.pickBanner("lumen");
+    await h.settle();
+    a.client.pickBanner("alp");
+    c.client.pickBanner("lumen");
+    await h.settle();
+    a.client.start();
+    await h.settle();
+
+    const empires = a.client.genesis!.empires;
+    // Numbered by who arrived first: the number is only where on the map.
+    expect(a.client.you!.seat).toEqual({ empire: 1, member: 0 });
+    expect(b.client.you!.seat).toEqual({ empire: 2, member: 0 });
+    expect(c.client.you!.seat).toEqual({ empire: 2, member: 1 });
+    expect(empires.map((e) => e.banner)).toEqual(["alp", "lumen", undefined, expect.any(String), expect.any(String)]);
+    // Bots fly houses of their own, nobody else's.
+    const flown = empires.flatMap((e) => (e.banner ? [e.banner] : []));
+    expect(new Set(flown).size).toBe(flown.length);
   });
 
   it("lets only the creator start", async () => {
     const h = new Harness({ creator: alice.key, bots: ["easy"] });
     await h.join(alice);
     const b = await h.join(bob);
-    b.client.pickEmpire(0);
+    b.client.pickBanner("vermilion");
     await h.settle();
     b.client.start();
     await h.settle();
@@ -96,7 +153,7 @@ describe("the lobby", () => {
     a.client.start();
     await h.settle();
     expect(a.client.phase).toBe("lobby");
-    expect(a.errors).toContain("nobody has picked an empire");
+    expect(a.errors).toContain("nobody has picked a house");
   });
 
   it("starts with a sealed genesis and a seat for each player", async () => {
@@ -113,7 +170,7 @@ describe("the lobby", () => {
   it("leaves an empire nobody picked open", async () => {
     const h = new Harness({ creator: alice.key, empires: 3, bots: ["easy"] });
     const a = await h.join(alice);
-    a.client.pickEmpire(0);
+    a.client.pickBanner("vermilion");
     await h.settle();
     a.client.start();
     await h.settle();
@@ -127,7 +184,7 @@ describe("the lobby", () => {
     const scheduled = new Harness({ creator: alice.key, bots: ["easy"], startAt });
     scheduled.restart(); // the schedule is read back from the store, as after a wake
     const b = await scheduled.join(bob);
-    b.client.pickEmpire(1);
+    b.client.pickBanner("verdant");
     await scheduled.settle();
     expect(scheduled.room.wakeAt()).toBe(startAt);
 
@@ -135,7 +192,9 @@ describe("the lobby", () => {
     expect(b.client.phase).toBe("lobby");
     await scheduled.run(31_000, 1000);
     expect(b.client.phase).toBe("playing");
-    expect(b.client.you!.seat).toEqual({ empire: 2, member: 0 });
+    // The only house picked is the first empire, whichever house it is.
+    expect(b.client.you!.seat).toEqual({ empire: 1, member: 0 });
+    expect(b.client.genesis!.empires[0]!.banner).toBe("verdant");
   });
 });
 
@@ -404,7 +463,7 @@ describe("joining a game that has started", () => {
       ...(joinShare !== undefined ? { joinShare } : {}),
     });
     const a = await h.join(alice, "alice");
-    a.client.pickEmpire(0);
+    a.client.pickBanner("vermilion");
     await h.settle();
     a.client.start();
     await h.settle();
@@ -430,6 +489,41 @@ describe("joining a game that has started", () => {
     await h.run(1_000);
     expect(c.errors).toEqual([]);
     expect(a.client.sim!.state.owner[at.y * a.client.sim!.state.width + at.x]).toBe(2);
+  });
+
+  it("flies the house a claimant brings, for everybody and after a rebuild", async () => {
+    const { h, a } = await withOpenEmpire();
+    const c = await h.join(carol, "carol");
+    c.client.claim(2, "tide");
+    await h.settle();
+    await h.run(1_000);
+    expect(c.client.you!.seat).toEqual({ empire: 2, member: 0 });
+    expect(a.client.people.flags).toEqual([{ empire: 2, banner: "tide" }]);
+
+    a.drop();
+    c.drop();
+    h.restart();
+    c.reconnect();
+    await h.settle();
+    expect(c.client.people.flags).toEqual([{ empire: 2, banner: "tide" }]);
+  });
+
+  it("seats a claimant bringing a house somebody flies, without flying it twice", async () => {
+    const { h } = await withOpenEmpire();
+    const c = await h.join(carol, "carol");
+    // Alice picked it in the lobby; it is sealed to empire 1.
+    c.client.claim(2, "vermilion");
+    await h.settle();
+    await h.run(1_000);
+    expect(c.client.you!.seat).toEqual({ empire: 2, member: 0 });
+    expect(c.client.people.flags ?? []).toEqual([]);
+
+    const d = await h.join(dave, "dave");
+    d.client.claim(3, "nonsense");
+    await h.settle();
+    await h.run(1_000);
+    expect(d.client.you!.seat).toEqual({ empire: 3, member: 0 });
+    expect(d.client.people.flags ?? []).toEqual([]);
   });
 
   it("refuses an empire somebody already holds", async () => {
@@ -545,9 +639,9 @@ describe("chat", () => {
     const a = await h.join(alice, "alice");
     const b = await h.join(bob, "bob");
     const c = await h.join(carol, "carol");
-    a.client.pickEmpire(0);
-    b.client.pickEmpire(0);
-    c.client.pickEmpire(1);
+    a.client.pickBanner("vermilion");
+    b.client.pickBanner("vermilion");
+    c.client.pickBanner("verdant");
     await h.settle();
     a.client.start();
     await h.settle();
@@ -574,8 +668,8 @@ describe("chat moderation", () => {
     const h = new Harness({ creator: alice.key, bots: ["easy"], ...config });
     const a = await h.join(alice, "alice");
     const b = await h.join(bob, "bob");
-    a.client.pickEmpire(0);
-    b.client.pickEmpire(1);
+    a.client.pickBanner("vermilion");
+    b.client.pickBanner("verdant");
     await h.settle();
     a.client.start();
     await h.settle();
@@ -648,7 +742,7 @@ describe("bots", () => {
   it("are seated as bot seats, by invite, even after the join window", async () => {
     const h = new Harness({ creator: alice.key, empires: 2, bots: ["easy"], joinShare: 0 });
     const a = await h.join(alice, "alice");
-    a.client.pickEmpire(0);
+    a.client.pickBanner("vermilion");
     await h.settle();
     a.client.start();
     await h.settle();
@@ -667,7 +761,7 @@ describe("bots", () => {
   it("cannot take an empire nobody holds", async () => {
     const h = new Harness({ creator: alice.key, empires: 3, bots: ["easy"] });
     const a = await h.join(alice);
-    a.client.pickEmpire(0);
+    a.client.pickBanner("vermilion");
     await h.settle();
     a.client.start();
     await h.settle();
@@ -737,18 +831,18 @@ describe("records", () => {
 });
 
 describe("seats in the lobby", () => {
-  it("count those who picked an empire, and let a player leave altogether", async () => {
+  it("count those who picked a house, and let a player leave altogether", async () => {
     const h = new Harness({ creator: alice.key });
     const a = await h.join(alice, "alice");
     const b = await h.join(bob, "bob");
     expect(h.games.at(-1)!.players).toBe(0);
     expect(h.games.at(-1)!.lobby).toBe(2);
 
-    b.client.pickEmpire(1);
+    b.client.pickBanner("verdant");
     await h.settle();
     expect(h.games.at(-1)!.players).toBe(1);
-    // Records count empires from 1.
-    expect(h.players.at(-1)).toEqual(expect.objectContaining({ key: bob.key, empire: 2 }));
+    // Records count empires from 1, and the first house picked is the first.
+    expect(h.players.at(-1)).toEqual(expect.objectContaining({ key: bob.key, empire: 1 }));
 
     b.client.leave();
     await h.settle();
@@ -757,7 +851,7 @@ describe("seats in the lobby", () => {
     expect(h.games.at(-1)!.lobby).toBe(1);
     expect(a.client.lobby!.players.map((p) => p.name)).toEqual(["alice"]);
     // Gone for good: a pick after leaving does nothing.
-    b.client.pickEmpire(1);
+    b.client.pickBanner("verdant");
     await h.settle();
     expect(a.client.lobby!.players.map((p) => p.name)).toEqual(["alice"]);
   });
@@ -770,8 +864,8 @@ describe("catching up after a long sleep", () => {
     const h = new Harness({ creator: alice.key, bots: [], duration: (4 * hour * STEPS_PER_SECOND) / 1000 });
     const a = await h.join(alice, "alice");
     const b = await h.join(bob, "bob");
-    a.client.pickEmpire(0);
-    b.client.pickEmpire(1);
+    a.client.pickBanner("vermilion");
+    b.client.pickBanner("verdant");
     await h.settle();
     a.client.start();
     await h.settle();
@@ -892,7 +986,7 @@ describe("a game nobody came to", () => {
     const h = new Harness({ creator: alice.key, empires: 2, bots: ["easy"] });
     const a = await h.join(alice, "alice"); // starts it, takes no seat
     const bot = await h.join(dave, "night watch", { bot: true });
-    bot.client.pickEmpire(0);
+    bot.client.pickBanner("vermilion");
     await h.settle();
     a.client.start();
     await h.settle();

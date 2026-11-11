@@ -8,8 +8,9 @@
 // It holds its own state and renders it; main.ts reads what it asks for when
 // the button is pressed. Pure view state: nothing here is sent until then.
 
-import { hours, minutes } from "@tessera/sim";
-import type { Difficulty } from "@tessera/sim";
+import { BANNERS, bannerById, hours, minutes } from "@tessera/sim";
+import type { BannerId, Difficulty } from "@tessera/sim";
+import { flag } from "./Houses";
 import type { Rivals } from "./Rivals";
 import { escape } from "./escape";
 
@@ -31,6 +32,8 @@ export interface CreateState {
   public: boolean;
   /** Who may chat. Absent: open, or team only for a public game. */
   chat?: "open" | "team" | "off";
+  /** The house you fly in a solo game. Online, it is picked in the lobby. */
+  house: BannerId;
 }
 
 export interface CreateHandlers {
@@ -98,6 +101,7 @@ export class CreatePage {
       seats: 2,
       start: "lobby",
       public: false,
+      house: BANNERS[0]!.id,
     };
 
     root.addEventListener("click", (event) => {
@@ -168,11 +172,12 @@ export class CreatePage {
       case "bots": this.rivals.fill(clamp(Number(value), 0, 6), this.rivals.level ?? "steady"); break;
       case "level": this.rivals.fill(this.rivals.count, value as Difficulty); break;
       case "start": s.start = value as StartWhen; break;
+      case "house": if (bannerById(value)) s.house = value; break;
       case "back": return this.handlers.back();
       case "submit": return this.submit();
       default: return;
     }
-    if (what !== "mode") this.preset = null;
+    if (what !== "mode" && what !== "house") this.preset = null;
     this.render();
   }
 
@@ -250,6 +255,17 @@ export class CreatePage {
       }
 
       <div class="create-rows">
+        ${
+          solo
+            ? `<div class="create-row"><span class="create-label">You fly</span>
+                 <span class="house-strip" role="group" aria-label="Your house">${BANNERS.map(
+                   (b) => `<button type="button" class="house-chip${b.id === s.house ? " on" : ""}" aria-pressed="${
+                     b.id === s.house
+                   }" title="${escape(b.name)}" aria-label="${escape(b.name)}" data-create="house:${b.id}">${flag(b)}</button>`,
+                 ).join("")}</span>
+                 <b class="house-strip-name">${escape(bannerById(s.house)?.name ?? "")}</b></div>`
+            : ""
+        }
         <div class="create-row"><span class="create-label">Map</span>
           ${seg("map", (Object.keys(MAPS) as MapName[]).map((m) => [m, MAPS[m].label]), s.map)}</div>
         <div class="create-row"><span class="create-label">Length</span>

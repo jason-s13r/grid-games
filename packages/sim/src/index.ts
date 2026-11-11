@@ -51,10 +51,10 @@ export {
   tileCeiling,
   growthCeiling,
 } from "./v5.js";
-export { BANNERS, MAX_EMPIRES, bannerAt, bannerById } from "./banners.js";
+export { BANNERS, MAX_EMPIRES, PATTERNS, bannerAt, bannerById, flyBanners, mapColour } from "./banners.js";
 export { tally, journal, isUpkeepStep } from "./journal.js";
 export type { Tally, WorldEvent, WorldEventKind } from "./journal.js";
-export type { Banner, BannerId } from "./banners.js";
+export type { Banner, BannerId, Pattern } from "./banners.js";
 export { DIFFICULTY, TUNING, checkProfile, humans, simbot, tuneBot } from "./specs.js";
 export type { BotChoice, BotTuning, Difficulty } from "./specs.js";
 export type { GenesisInit } from "./sim.js";

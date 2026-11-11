@@ -11,6 +11,7 @@ export { CHAT_MODES, decode, encode } from "./messages.js";
 export type {
   Catchup,
   ChatLine,
+  ClaimedFlag,
   ChatMode,
   GameSettings,
   ClientMessage,

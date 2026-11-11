@@ -4,7 +4,7 @@
 // drive it: moves in, dirty tiles out, camera and DOM strictly outside the
 // simulation. Online play comes back through the Cloudflare room.
 
-import { seedFrom, durationRules, minutes, PROTOCOL_VERSION } from "@tessera/sim";
+import { seedFrom, durationRules, minutes, PROTOCOL_VERSION, BANNERS, bannerById } from "@tessera/sim";
 import type { BotChoice } from "@tessera/sim";
 import { displayName, fingerprint } from "@tessera/protocol";
 import "@fontsource/fredoka/500.css";
@@ -16,7 +16,7 @@ import pkg from "../package.json";
 import { LocalGame } from "./game/Local";
 import { boardClick } from "./game/input";
 import type { Driver } from "./game/Driver";
-import { myIdentity, myName, setMyName } from "./net/identity";
+import { myBanner, myIdentity, myName, setMyBanner, setMyName } from "./net/identity";
 import { Rivals } from "./view/Rivals";
 import { CreatePage, MAPS } from "./view/Create";
 import type { CreateState } from "./view/Create";
@@ -27,7 +27,10 @@ import { Minimap } from "./view/Minimap";
 import { Tabs } from "./view/Tabs";
 import { Controls } from "./view/Controls";
 import { Shell } from "./view/Shell";
-import { Flags, injectThemeCss, setFlags } from "./view/palette";
+import { Flags, flags, injectThemeCss, setFlags } from "./view/palette";
+import { housesHtml } from "./view/Houses";
+import { escape } from "./view/escape";
+import type { House } from "./view/Houses";
 import { OnlineGame } from "./game/Online";
 import { OnlinePanel } from "./view/Online";
 import { PeoplePanel } from "./view/People";
@@ -160,10 +163,12 @@ shell.onScreen = (screen) => {
  *  bots, the default length); the create page passes its own choices. */
 function startSolo(options: { map: { width: number; height: number }; length: number; bots: BotChoice[] }): void {
   leaveRoom();
+  const house = myBanner();
   mount(
     new LocalGame({
       seed: seedFrom(String(Date.now())),
       bots: options.bots,
+      ...(bannerById(house) ? { banner: house } : {}),
       duration: durationRules(options.length),
       width: options.map.width,
       height: options.map.height,
@@ -193,10 +198,11 @@ function showPage(page: "start" | "create"): void {
   menuEl.scrollTop = 0;
 }
 
-const createPage = new CreatePage(createEl, rivals, pick<HTMLElement>("[data-rivals]"), {
+const createPage: CreatePage = new CreatePage(createEl, rivals, pick<HTMLElement>("[data-rivals]"), {
   back: () => showPage("start"),
   submit: (state) => {
     if (state.mode === "solo") {
+      setMyBanner(state.house);
       startSolo({ ...createPage.solo, bots: rivals.list });
       showPage("start");
     } else {
@@ -206,6 +212,10 @@ const createPage = new CreatePage(createEl, rivals, pick<HTMLElement>("[data-riv
   },
 });
 pick<HTMLElement>("[data-rivals]").hidden = false;
+if (bannerById(myBanner())) {
+  createPage.state.house = myBanner();
+  createPage.render();
+}
 
 const joinEl = pick<HTMLInputElement>("[data-join-code]");
 function joinFromBox(): void {
@@ -630,9 +640,68 @@ pick<HTMLElement>("[data-standings]").addEventListener("click", (event) => {
   event.preventDefault();
   if (button.dataset.find) return centreOnCapital(Number(button.dataset.find));
   if (!link) return;
-  if (button.dataset.claim) link.client.claim(Number(button.dataset.claim));
+  if (button.dataset.claim) openClaim(Number(button.dataset.claim));
   else link.client.ask(Number(button.dataset.ask));
 });
+
+/** Taking an empire nobody holds is also picking the house it will fly: any
+ *  house no other empire is flying, including the one it is wearing for now. */
+const claimDialog = pick<HTMLDialogElement>("[data-claim-dialog]");
+const claimBody = pick<HTMLElement>("[data-claim-body]");
+let claiming = 0;
+function openClaim(empire: number): void {
+  claiming = empire;
+  const flown = flags();
+  const wearing = flown.of(empire).id;
+  const others = new Map<string, number>();
+  for (let id = 1; id <= game.sim.state.empires.length; id++) if (id !== empire) others.set(flown.of(id).id, id);
+  const preferred = bannerById(myBanner()) && !others.has(myBanner()) ? myBanner() : wearing;
+  const houses: House[] = BANNERS.map((banner) => ({
+    banner,
+    who: [],
+    mine: banner.id === preferred,
+    open: !others.has(banner.id),
+    ...(others.has(banner.id) ? { note: "flying" } : banner.id === wearing ? { note: "worn now" } : {}),
+  }));
+  claimBody.innerHTML = `<p class="hint">Every empire flies a different house. Pick yours, then take the empire.</p>
+    ${housesHtml(houses, "claim-house")}
+    <button class="btn primary" type="button" data-claim-take>Take it as <span data-claim-name>${escape(
+      bannerById(preferred)!.name,
+    )}</span></button>`;
+  claimBody.dataset.house = preferred;
+  claimDialog.showModal();
+}
+claimDialog.addEventListener("click", (event) => {
+  const target = event.target as HTMLElement;
+  if (target === claimDialog || target.closest("[data-claim-close]")) return claimDialog.close();
+  const house = target.closest<HTMLButtonElement>("[data-claim-house]");
+  if (house && !house.disabled) {
+    claimBody.dataset.house = house.dataset.claimHouse!;
+    for (const other of claimBody.querySelectorAll<HTMLElement>("[data-claim-house]")) {
+      const on = other === house;
+      other.classList.toggle("mine", on);
+      other.setAttribute("aria-pressed", String(on));
+    }
+    claimBody.querySelector("[data-claim-name]")!.textContent = bannerById(house.dataset.claimHouse)!.name;
+    return;
+  }
+  if (target.closest("[data-claim-take]") && link) {
+    const banner = claimBody.dataset.house!;
+    setMyBanner(banner);
+    link.client.claim(claiming, banner);
+    claimDialog.close();
+  }
+});
+
+/** Fly the houses claimants brought, and repaint if that changed anything. */
+function flyClaimed(claimed: ReadonlyArray<{ empire: number; banner: string }> | undefined): void {
+  let changed = false;
+  for (const { empire, banner } of claimed ?? []) changed = flags().fly(empire, banner) || changed;
+  if (!changed) return;
+  mapImage.recolour();
+  mapImage.paintAll(game.sim.state);
+  camera.changed = true;
+}
 /** What to do once we are in the lobby of a game we just created. */
 let afterCreate: { start: boolean } | undefined;
 
@@ -651,7 +720,11 @@ const online = new OnlinePanel(
       if (!id) return online.home(`"${input.trim()}" is not a game link or code.`);
       void enterRoom(id);
     },
-    pick: (empire) => link?.client.pickEmpire(empire),
+    pick: (banner) => {
+      // Remembered, so the next game picks it for you when it is free.
+      if (banner) setMyBanner(banner);
+      link?.client.pickBanner(banner);
+    },
     start: () => link?.client.start(),
     leave: () => {
       // Out of a lobby for good, not just away from it.
@@ -701,6 +774,7 @@ async function openReplay(roomId: string): Promise<void> {
     const archive = (await response.json()) as Archive;
     if (location.pathname !== `/g/${roomId}`) history.pushState(null, "", `/g/${roomId}`);
     mount(new ReplayGame(archive));
+    flyClaimed(archive.flags);
     online.home();
     shell.show("game");
   } catch (error) {
@@ -753,7 +827,7 @@ async function enterRoom(roomId: string): Promise<void> {
     online.lobby(roomId, lobby, identity.key);
     if (afterCreate && lobby.creator === identity.key) {
       const me = lobby.players.find((p) => p.key === identity.key);
-      if (me && me.empire === null) client.pickEmpire(0);
+      if (me && me.banner === null) client.pickBanner(bannerById(myBanner()) ? myBanner() : BANNERS[0]!.id);
       else if (me && afterCreate.start) {
         afterCreate = undefined;
         client.start();
@@ -774,6 +848,7 @@ async function enterRoom(roomId: string): Promise<void> {
   };
   const showPeople = (): void => {
     if (link !== opened) return;
+    flyClaimed(client.people.flags);
     people.set(client.people, identity.key, client.you?.seat?.empire ?? 0);
     controls?.setPeople(client.people.people);
   };

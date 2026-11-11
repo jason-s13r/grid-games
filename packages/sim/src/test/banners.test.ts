@@ -9,7 +9,7 @@
 // Appending passes; reordering, renaming an id, or removing one fails.
 
 import { describe, expect, it } from "vitest";
-import { BANNERS, MAX_EMPIRES, bannerAt, bannerById } from "../banners.js";
+import { BANNERS, MAX_EMPIRES, PATTERNS, bannerAt, bannerById, flyBanners, mapColour } from "../banners.js";
 import { Sim, makeGenesis } from "../sim.js";
 import { humans, simbot } from "../specs.js";
 
@@ -31,6 +31,17 @@ const COMMITTED = [
   "moss",
   "indigo",
   "sand",
+  "alp",
+  "ink",
+  "plum",
+  "tide",
+  "zest",
+  "kestrel",
+  "lagoon",
+  "orchid",
+  "mint",
+  "lumen",
+  "sping",
 ];
 
 describe("the banner table", () => {
@@ -47,6 +58,29 @@ describe("the banner table", () => {
   it("has unique colours, because two houses that look alike are one house", () => {
     const colours = BANNERS.map((banner) => `${banner.c1}/${banner.c2}`);
     expect(new Set(colours).size).toBe(colours.length);
+  });
+
+  it("mixes each house's map colour from both of its colours", () => {
+    const sping = bannerById("sping")!;
+    expect(mapColour(sping)).not.toBe(sping.c1);
+    expect(mapColour(sping)).not.toBe(sping.c2);
+  });
+
+  it("keeps every house's map colour apart from every other's", () => {
+    // The zoomed-out map and the minimap draw a house in this one colour, so
+    // two that land close together are one house there.
+    const rgb = (hex: string) => [1, 3, 5].map((at) => parseInt(hex.slice(at, at + 2), 16));
+    const colours = BANNERS.map((banner) => rgb(mapColour(banner)));
+    for (let i = 0; i < colours.length; i++) {
+      for (let j = i + 1; j < colours.length; j++) {
+        const apart = Math.hypot(...colours[i]!.map((v, k) => v - colours[j]![k]!));
+        expect(apart, `${BANNERS[i]!.id} and ${BANNERS[j]!.id}`).toBeGreaterThan(30);
+      }
+    }
+  });
+
+  it("draws every house with a pattern the client knows", () => {
+    for (const banner of BANNERS) expect(PATTERNS).toContain(banner.pattern);
   });
 
   it("stores ids, never display names", () => {
@@ -83,7 +117,8 @@ describe("the fallback", () => {
 
   it("looks a banner up by id, and says no to one that is not there", () => {
     expect(bannerById("cobalt")!.name).toBe("Cobalt");
-    expect(bannerById("sping")).toBeUndefined();
+    expect(bannerById("sping")!.name).toBe("Sping");
+    expect(bannerById("nonesuch")).toBeUndefined();
     expect(bannerById(undefined)).toBeUndefined();
   });
 });
@@ -122,5 +157,43 @@ describe("a banner is inert", () => {
     expect("banner" in simbot("easy")).toBe(false);
     expect(humans(1, "cobalt").banner).toBe("cobalt");
     expect(simbot("easy", "rose").banner).toBe("rose");
+  });
+});
+
+describe("flying banners", () => {
+  const ids = (banners: Array<{ id: string }>) => banners.map((banner) => banner.id);
+
+  it("paints a record with no banners exactly as the index always did", () => {
+    expect(ids(flyBanners([{}, {}, {}]))).toEqual(COMMITTED.slice(0, 3));
+  });
+
+  it("keeps a sealed house and lends a vacancy one nobody is flying", () => {
+    // Empire 1 picked Verdant, which empire 2 would have worn by index.
+    const flown = ids(flyBanners([{ banner: "verdant" }, {}, { banner: "alp" }]));
+    expect(flown[0]).toBe("verdant");
+    expect(flown[2]).toBe("alp");
+    expect(flown[1]).not.toBe("verdant");
+    expect(new Set(flown).size).toBe(3);
+  });
+
+  it("gives a claimant the house it brought, and moves the vacancy that wore it", () => {
+    const before = ids(flyBanners([{ banner: "cobalt" }, {}, {}]));
+    const lent = before[1]!;
+    const after = ids(flyBanners([{ banner: "cobalt" }, {}, {}], new Map([[3, lent]])));
+    expect(after[2]).toBe(lent);
+    expect(after[1]).not.toBe(lent);
+    expect(new Set(after).size).toBe(3);
+  });
+
+  it("refuses a claimed house somebody is already flying, and keeps the seat's colours apart", () => {
+    const flown = ids(flyBanners([{ banner: "cobalt" }, {}], new Map([[2, "cobalt"]])));
+    expect(flown[0]).toBe("cobalt");
+    expect(flown[1]).not.toBe("cobalt");
+  });
+
+  it("the first claim of a house wins", () => {
+    const flown = ids(flyBanners([{}, {}, {}], new Map([[2, "lumen"], [3, "lumen"]])));
+    expect(flown[1]).toBe("lumen");
+    expect(flown[2]).not.toBe("lumen");
   });
 });

@@ -4,13 +4,16 @@
 // a click does. Creating a game is the create page's (view/Create.ts).
 
 import type { LobbyView } from "@tessera/room";
-import { empireTheme } from "./palette";
+import type { BannerId } from "@tessera/sim";
+import { bannerById } from "./palette";
+import { flag, housesHtml, lobbyHouses } from "./Houses";
 import { escape } from "./escape";
 
 export interface OnlineHandlers {
   create: () => void;
   join: (input: string) => void;
-  pick: (empire: number | null) => void;
+  /** A house to fly, or null to stand back. */
+  pick: (banner: BannerId | null) => void;
   start: () => void;
   leave: () => void;
 }
@@ -35,6 +38,12 @@ export class OnlinePanel {
     private readonly handlers: OnlineHandlers,
   ) {
     els.root.addEventListener("click", (event) => {
+      const house = (event.target as HTMLElement).closest<HTMLButtonElement>("[data-house]");
+      if (house && !house.disabled) {
+        event.preventDefault();
+        // Pressing your own house again is standing back from it.
+        return handlers.pick(house.getAttribute("aria-pressed") === "true" ? null : house.dataset.house!);
+      }
       const button = (event.target as HTMLElement).closest<HTMLElement>("[data-online-action]");
       if (!button) return;
       event.preventDefault();
@@ -46,8 +55,8 @@ export class OnlinePanel {
           if (input?.value.trim()) handlers.join(input.value);
           return;
         }
-        case "pick":
-          return handlers.pick(button.dataset.empire === "" ? null : Number(button.dataset.empire));
+        case "stand-back":
+          return handlers.pick(null);
         case "start":
           return handlers.start();
         case "leave":
@@ -130,28 +139,17 @@ export class OnlinePanel {
     const creator = lobby.creator === me;
     const name = (p: { name: string; key: string }): string => escape(p.name || `player ${p.key.slice(0, 6)}`);
 
-    const empires = Array.from({ length: lobby.empires }, (_, i) => {
-      const theme = empireTheme(i + 1);
-      const here = lobby.players.filter((p) => p.empire === i);
-      const full = here.length >= lobby.seatsPerEmpire;
-      const action =
-        mine?.empire === i
-          ? `<button class="btn btn-small" type="button" data-online-action="pick" data-empire="">Leave empire</button>`
-          : full
-            ? `<span class="hint">full</span>`
-            : `<button class="btn btn-small" type="button" data-online-action="pick" data-empire="${i}">Join</button>`;
-      return `
-        <li class="lobby-seat">
-          <span class="swatch" style="background:${theme.c1}"></span>
-          <span class="lobby-who"><strong>${escape(theme.name)}</strong>
-            ${here.length ? `· ${here.map((p) => `${name(p)}${p.connected ? "" : " (away)"}`).join(", ")}` : `· <span class="hint">open</span>`}
-          </span>
-          ${action}
-        </li>`;
-    }).join("");
+    const players = lobby.players.map((p) => ({
+      key: p.key,
+      banner: p.banner,
+      html: `${name(p)}${p.key === me ? " (you)" : ""}${p.connected ? "" : " (away)"}`,
+    }));
+    const houses = lobbyHouses(players, me, lobby.empires, lobby.seatsPerEmpire);
+    const taken = new Set(lobby.players.flatMap((p) => (p.banner ? [p.banner] : []))).size;
+    const myHouse = bannerById(mine?.banner ?? undefined);
 
-    const undecided = lobby.players.filter((p) => p.empire === null);
-    const picked = lobby.players.some((p) => p.empire !== null);
+    const undecided = lobby.players.filter((p) => p.banner === null);
+    const picked = taken > 0;
     const startsAt = lobby.startsAt
       ? `<p class="hint">Starts on its own at ${escape(new Date(lobby.startsAt).toLocaleString())}.</p>`
       : "";
@@ -163,10 +161,19 @@ export class OnlinePanel {
         <input class="lobby-code" data-online-link readonly value="${escape(link)}" />
         <button class="btn" type="button" data-online-action="copy">Copy</button>
       </div>
-      <ul class="lobby-teams">${empires}</ul>
-      <p class="hint">${lobby.bots} bot ${lobby.bots === 1 ? "empire" : "empires"} as well. Up to
-        ${lobby.seatsPerEmpire} ${lobby.seatsPerEmpire === 1 ? "player" : "players"} per empire; empires nobody
-        picks stay open for people to claim after the start.</p>
+      <div class="lobby-you">
+        ${
+          myHouse
+            ? `${flag(myHouse)}<span>You fly <strong>${escape(myHouse.name)}</strong>.</span>
+               <button class="btn btn-small" type="button" data-online-action="stand-back">Stand back</button>`
+            : `<span>Pick the house you will play as. Pick one somebody already has to join their empire.</span>`
+        }
+      </div>
+      <p class="hint lobby-tally">${taken} of ${lobby.empires} ${lobby.empires === 1 ? "empire" : "empires"} taken · up to
+        ${lobby.seatsPerEmpire} ${lobby.seatsPerEmpire === 1 ? "player" : "players"} each · ${lobby.bots} bot
+        ${lobby.bots === 1 ? "empire" : "empires"} as well. Empires nobody picks stay open for people to claim
+        after the start.</p>
+      ${housesHtml(houses, "house")}
       ${undecided.length ? `<p class="hint">Not picked yet: ${undecided.map(name).join(", ")}</p>` : ""}
       ${startsAt}
       ${
@@ -175,7 +182,7 @@ export class OnlinePanel {
               picked ? "" : " disabled"
             }>Start game</button></div>`
           : lobby.startsAt
-            ? `<p class="hint">Pick an empire before then to play: a game nobody has picked one in by the start is called off.</p>`
+            ? `<p class="hint">Pick a house before then to play: a game nobody has picked one in by the start is called off.</p>`
             : `<p class="hint">Waiting for the game's creator to start it.</p>`
       }`;
   }

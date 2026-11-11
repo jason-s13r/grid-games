@@ -10,13 +10,13 @@
 // half of that is not a client concern. What is left here is the client's half:
 // how a banner is painted, and the CSS that paints it.
 
-import { BANNERS, MAX_EMPIRES, TERRAIN, ITEM, bannerAt, bannerById } from "@tessera/sim";
-import type { Banner, BannerId } from "@tessera/sim";
+import { BANNERS, MAX_EMPIRES, TERRAIN, ITEM, bannerAt, bannerById, flyBanners, mapColour } from "@tessera/sim";
+import type { Banner, BannerId, Pattern } from "@tessera/sim";
 
-export type Pattern = "star" | "spiral";
+export type { Pattern };
 export type EmpireTheme = Banner;
 
-export { BANNERS, MAX_EMPIRES };
+export { BANNERS, MAX_EMPIRES, bannerById, mapColour };
 
 /** The banner an empire is flying in *this* game.
  *
@@ -26,39 +26,41 @@ export { BANNERS, MAX_EMPIRES };
  *  reason `empireTheme(id)`, a pure function of a number, could not survive.
  */
 export class Flags {
-  private readonly flown = new Map<number, Banner>();
+  private readonly claimed = new Map<number, BannerId>();
+  private flown: Banner[];
 
-  constructor(empires: ReadonlyArray<{ banner?: BannerId }> = []) {
-    empires.forEach((empire, at) => {
-      const banner = bannerById(empire.banner) ?? bannerAt(at + 1);
-      if (banner) this.flown.set(at + 1, banner);
-    });
+  constructor(private readonly empires: ReadonlyArray<{ banner?: BannerId }> = []) {
+    this.flown = flyBanners(empires);
   }
 
   /** Bind a banner arriving after step 0 — a vacancy's claimant brings its own.
-   *  Ignored when the house is already flown, which is how a race resolves: the
-   *  earlier record in log order keeps it and the later empire keeps its index
-   *  colours. It changes a picture rather than a world. */
+   *  Ignored when the house is already sealed or claimed, which is how a race
+   *  resolves: the earlier record in log order keeps it. A vacancy merely
+   *  wearing it moves to another. It changes a picture rather than a world.
+   *  True when anything about the picture changed. */
   fly(empire: number, banner: BannerId | undefined): boolean {
-    const wanted = bannerById(banner);
-    if (!wanted) return false;
-    for (const [at, held] of this.flown) {
-      if (held.id === wanted.id && at !== empire) return false;
-    }
-    this.flown.set(empire, wanted);
-    return true;
+    if (!bannerById(banner) || this.claimed.get(empire) === banner) return false;
+    this.claimed.set(empire, banner!);
+    const before = this.flown.map((b) => b.id).join();
+    this.flown = flyBanners(this.empires, this.claimed);
+    return this.flown.map((b) => b.id).join() !== before;
   }
 
   of(empire: number): Banner {
     // Past the end is a game that should have been refused at composition. The
     // first banner is a last resort so a view cannot crash on a record it
     // should never have been handed.
-    return this.flown.get(empire) ?? bannerAt(empire) ?? BANNERS[0]!;
+    return this.flown[empire - 1] ?? bannerAt(empire) ?? BANNERS[0]!;
   }
 
   /** What to call an empire, for a sentence a player reads. */
   nameOf(empire: number): string {
     return this.of(empire).name;
+  }
+
+  /** Houses flown in this game, by any empire. */
+  inUse(): Set<BannerId> {
+    return new Set(this.flown.map((b) => b.id));
   }
 }
 
@@ -138,7 +140,7 @@ export function injectThemeCss(): void {
   const rules = BANNERS.map(
     (banner) => `
 .tile[data-banner="${banner.id}"] { --c1: ${banner.c1}; --c2: ${banner.c2}; }
-.swatch[data-banner="${banner.id}"] { background: ${banner.c1}; }`,
+.swatch[data-banner="${banner.id}"] { background: ${mapColour(banner)}; }`,
   ).join("");
 
   const style = document.createElement("style");

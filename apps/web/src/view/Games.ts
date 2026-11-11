@@ -12,7 +12,7 @@
 // Read from the Worker's records whenever the start page is shown. Nothing
 // here polls.
 
-import { empireTheme } from "./palette";
+import { empireTheme, mapColour } from "./palette";
 import { escape } from "./escape";
 import { leaderboard, listGames, playerStats } from "../net/records";
 import type { LeaderScope, LeaderStat, ListedGame, PlayerGame } from "../net/records";
@@ -189,7 +189,7 @@ export class GamesPanel {
     const bots = `${game.bots} ${game.bots === 1 ? "bot" : "bots"}`;
     const label = { resume: game.phase === "lobby" ? "Open lobby" : "Resume", join: "Join", watch: "Watch", view: "View" }[action];
     return `<li class="game-row">
-      ${theme ? `<span class="swatch" style="background:${theme.c1}"></span>` : ""}
+      ${theme ? `<span class="swatch" style="background:${mapColour(theme)}"></span>` : ""}
       <span class="game-what">
         <span><strong>${escape(game.id)}</strong> · ${escape(this.status(game, mine))}</span>
         <span class="hint">${size}, ${game.empires} ${game.empires === 1 ? "empire" : "empires"} + ${bots}, ${people}</span>

@@ -4,7 +4,7 @@
 // that need to be believed (moves, the hello proof) carry their own signatures,
 // and the rest is the room telling a client what it decided.
 
-import type { BotChoice, Genesis, Move, MoveType } from "@tessera/sim";
+import type { BannerId, BotChoice, Genesis, Move, MoveType } from "@tessera/sim";
 import type { SignedInvite } from "@tessera/protocol";
 
 /** A move as it sits in the log: stamped with its step by the room, and signed
@@ -20,13 +20,16 @@ export interface Stamped {
 export interface LobbyPlayer {
   key: string;
   name: string;
-  /** Index into the human empires, or null while undecided. */
-  empire: number | null;
+  /** The house this player will fly, or null while undecided. Players who pick
+   *  the same house are one empire; which empire number that becomes is the
+   *  room's business at the start, and nobody else's. */
+  banner: BannerId | null;
   connected: boolean;
 }
 
 export interface LobbyView {
   creator: string;
+  /** Human empires on the map: how many different houses can be picked. */
   empires: number;
   seatsPerEmpire: number;
   bots: number;
@@ -99,6 +102,15 @@ export interface ChatLine {
 export interface People {
   people: Person[];
   requests: SeatRequest[];
+  /** Houses brought by whoever claimed a vacancy, in the order they were
+   *  claimed. Sealed houses are in the genesis; these are the rest. */
+  flags?: ClaimedFlag[];
+}
+
+/** The house a claimant brought to a vacancy. */
+export interface ClaimedFlag {
+  empire: number;
+  banner: BannerId;
 }
 
 export type ServerMessage =
@@ -142,15 +154,23 @@ export type ClientMessage =
       /** A program rather than a person. Seated as a bot seat. */
       bot?: boolean;
     }
-  | { t: "lobby"; name?: string; empire?: number | null }
+  | {
+      t: "lobby";
+      name?: string;
+      /** The house to fly, or null to stand back. */
+      banner?: BannerId | null;
+      /** An index into the human empires, from clients made before houses
+       *  were picked. Read as the house at that index. */
+      empire?: number | null;
+    }
   /** Leave a game that has not started: out of its lobby and its records. */
   | { t: "leave" }
   | { t: "start" }
   | { t: "move"; move: { seq: number; type: MoveType; x: number; y: number }; sig: string }
   | { t: "hash"; step: number; hash: number }
   | { t: "resume"; have?: { step: number; hash: number } }
-  /** Take an empire nobody holds. */
-  | { t: "claim"; empire: number }
+  /** Take an empire nobody holds, flying `banner` if nobody else is. */
+  | { t: "claim"; empire: number; banner?: BannerId }
   /** Ask an empire for a seat. */
   | { t: "ask"; empire: number }
   | { t: "withdraw" }

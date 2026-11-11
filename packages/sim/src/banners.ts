@@ -35,8 +35,39 @@ export interface Banner {
    *  conic gradients parameterised on exactly two. */
   c1: string;
   c2: string;
-  pattern: "star" | "spiral";
+  pattern: Pattern;
 }
+
+/** How a tile of the empire's ground is drawn. Each is a CSS gradient on the
+ *  same two colours; `star` and `spiral` are the prototype's. */
+export type Pattern =
+  | "star"
+  | "spiral"
+  | "cross"
+  | "saltire"
+  | "stripes"
+  | "bars"
+  | "checker"
+  | "chevron"
+  | "ring"
+  | "dots"
+  | "diamond"
+  | "rays";
+
+export const PATTERNS: readonly Pattern[] = [
+  "star",
+  "spiral",
+  "cross",
+  "saltire",
+  "stripes",
+  "bars",
+  "checker",
+  "chevron",
+  "ring",
+  "dots",
+  "diamond",
+  "rays",
+];
 
 /** The houses, **append-only and never reordered**.
  *
@@ -63,6 +94,20 @@ export const BANNERS: readonly Banner[] = [
   { id: "moss", name: "Moss", c1: "#4e9d6b", c2: "#0a2416", pattern: "spiral" },
   { id: "indigo", name: "Indigo", c1: "#6f6bff", c2: "#101041", pattern: "star" },
   { id: "sand", name: "Sand", c1: "#e0cfa0", c2: "#3a3122", pattern: "spiral" },
+  // The first houses with flags of their own rather than the prototype's two.
+  { id: "alp", name: "Alp", c1: "#e3202f", c2: "#ffffff", pattern: "cross" },
+  { id: "ink", name: "Ink", c1: "#1c1b24", c2: "#e8c547", pattern: "saltire" },
+  { id: "plum", name: "Plum", c1: "#a23b7e", c2: "#22051a", pattern: "stripes" },
+  { id: "tide", name: "Tide", c1: "#5ec8ff", c2: "#062a40", pattern: "bars" },
+  { id: "zest", name: "Zest", c1: "#c6f000", c2: "#263000", pattern: "checker" },
+  { id: "kestrel", name: "Kestrel", c1: "#7a2e12", c2: "#f1d9a6", pattern: "chevron" },
+  { id: "lagoon", name: "Lagoon", c1: "#0a5c4f", c2: "#9fe8d0", pattern: "ring" },
+  { id: "orchid", name: "Orchid", c1: "#e83ad6", c2: "#3a0636", pattern: "dots" },
+  { id: "mint", name: "Mint", c1: "#7ff0b0", c2: "#053320", pattern: "diamond" },
+  { id: "lumen", name: "Lumen", c1: "#ffe14d", c2: "#3a3000", pattern: "rays" },
+  // A black star on red: Vermilion's flag turned inside out, as a house of its
+  // own rather than a rename, so every game that flew Vermilion still does.
+  { id: "sping", name: "Sping", c1: "#0d0606", c2: "#ff1f3d", pattern: "star" },
 ];
 
 /** How many empires a game may have, which is how many banners there are.
@@ -88,3 +133,80 @@ export const bannerById = (id: BannerId | undefined): Banner | undefined =>
  *  Undefined past the end, which is a game that should have been refused at
  *  composition. */
 export const bannerAt = (empire: number): Banner | undefined => BANNERS[empire - 1];
+
+/** The banner every empire in a game flies, in empire order.
+ *
+ *  A house is chosen rather than handed out, so an empire's banner comes from
+ *  one of three places, and the order they are settled in is what keeps two
+ *  empires off one flag:
+ *
+ *  1. **Sealed** in the genesis (`EmpireSpec.banner`): what its players picked
+ *     in the lobby, or what a bot was given.
+ *  2. **Claimed** with a vacancy, in log order: `claimed` maps an empire to the
+ *     house its claimant brought. A house already flown is not taken twice;
+ *     that empire falls through to the third rule instead.
+ *  3. **Lent** to everybody else — vacancies nobody has claimed, and every
+ *     empire in a record written before banners existed. Its index banner when
+ *     that is free, which is what keeps every old record painted as it was, and
+ *     otherwise the first house nobody is flying.
+ *
+ *  A lent banner is a picture, not a promise: a claimant may bring the house a
+ *  vacancy was wearing, and the vacancy moves to another. */
+export function flyBanners(
+  empires: ReadonlyArray<{ banner?: BannerId }>,
+  claimed: ReadonlyMap<number, BannerId> = new Map(),
+): Banner[] {
+  const flown: Array<Banner | undefined> = new Array(empires.length);
+  const taken = new Set<BannerId>();
+  const take = (at: number, banner: Banner | undefined): void => {
+    if (!banner || taken.has(banner.id) || flown[at]) return;
+    flown[at] = banner;
+    taken.add(banner.id);
+  };
+
+  empires.forEach((empire, at) => take(at, bannerById(empire.banner)));
+  for (const [empire, banner] of claimed) {
+    if (empire >= 1 && empire <= empires.length) take(empire - 1, bannerById(banner));
+  }
+  for (let at = 0; at < empires.length; at++) {
+    if (flown[at]) continue;
+    take(at, bannerAt(at + 1));
+    take(at, BANNERS.find((banner) => !taken.has(banner.id)));
+    // More empires than houses: a game that should have been refused at
+    // composition, drawn rather than crashed.
+    flown[at] ??= bannerAt(at + 1) ?? BANNERS[0]!;
+  }
+  return flown as Banner[];
+}
+
+/** How much of a tile each pattern paints in its first colour, roughly. */
+const FIRST_SHARE: Record<Pattern, number> = {
+  star: 0.45,
+  spiral: 0.5,
+  cross: 0.78,
+  saltire: 0.78,
+  stripes: 0.62,
+  bars: 0.72,
+  checker: 0.5,
+  chevron: 0.72,
+  ring: 0.7,
+  dots: 0.6,
+  diamond: 0.62,
+  rays: 0.62,
+};
+
+/** The one colour a house is drawn in where its pattern is too small to see:
+ *  the zoomed-out map, the minimap, a swatch. Its two colours mixed as its
+ *  pattern mixes them, so a black star on red reads as a dark red rather than
+ *  as the red alone — and two houses sharing a colour, in different patterns
+ *  or with different partners, still read apart. */
+export function mapColour(banner: Banner): string {
+  const share = FIRST_SHARE[banner.pattern] ?? 0.5;
+  const channel = (hex: string, at: number): number => parseInt(hex.slice(1 + at * 2, 3 + at * 2), 16);
+  let out = "#";
+  for (let at = 0; at < 3; at++) {
+    const mixed = Math.round(channel(banner.c1, at) * share + channel(banner.c2, at) * (1 - share));
+    out += mixed.toString(16).padStart(2, "0");
+  }
+  return out;
+}

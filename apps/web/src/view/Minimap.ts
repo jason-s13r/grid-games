@@ -5,7 +5,7 @@
 import type { State } from "@tessera/sim";
 import { Camera } from "./Camera";
 import { MapImage } from "./MapImage";
-import { empireTheme } from "./palette";
+import { empireTheme, mapColour } from "./palette";
 
 export class Minimap {
   private ctx: CanvasRenderingContext2D;
@@ -104,7 +104,7 @@ export class Minimap {
       if (!empire.alive) continue;
       const cx = empire.capital % this.mapWidth;
       const cy = (empire.capital - cx) / this.mapWidth;
-      ctx.strokeStyle = empireTheme(empire.id).c1;
+      ctx.strokeStyle = mapColour(empireTheme(empire.id));
       ctx.lineWidth = 2;
       ctx.strokeRect(ox + cx * scale - 2, oy + cy * scale - 2, 5, 5);
     }

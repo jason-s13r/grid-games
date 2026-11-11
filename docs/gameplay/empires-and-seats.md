@@ -17,9 +17,11 @@ produces simultaneous battle fronts: each seat accrues
 [independently](population.md), so a team can push in three places at once while a
 solo empire pushes in one.
 
-`composeTeams` in the lobby puts people on the same empire
-number to team them. Putting everyone on empire 3 makes *one* empire, not four —
-the numbers are compacted.
+In the lobby a player picks a **house** (a banner), not a seat: picking a house
+somebody already has is joining their empire. Each house picked becomes one
+empire, sealed into the genesis with that banner and numbered in the order its
+players arrived — the number is only where on the map it sits. A lobby offers as
+many new houses as the game has human empires, and each holds up to `maxSeats`.
 
 ## Vacancies: an empire nobody has claimed
 
@@ -129,6 +131,10 @@ Two ways a banner is bound, and the second is the one worth having:
 
 - **Sealed**, for empires that exist at genesis: `EmpireSpec.banner`, an id the
   simulation ignores exactly as it ignores `MemberSpec.key`.
+- **Lent**, to a vacancy nobody has claimed yet: its index banner if that is
+  free, otherwise the first house nobody is flying (`flyBanners` in
+  [`banners.ts`](../../packages/sim/src/banners.ts)). Every record written
+  before banners existed resolves to exactly its index colours this way.
 - **Claimed**, for [vacancies](#): a vacancy is *not* pre-branded. Its banner
   arrives with whoever claims it, in the signed claim record — the difference
   between "you may play as Sping if the composer happened to seal Sping" and
@@ -153,3 +159,10 @@ refused at composition rather than drawn wrong. The fallback for an empire whose
 record says nothing **indexes rather than wrapping**, which is what makes growing
 the table a pure data change: a modulus would have turned empire 7 from one
 banner into another for every record ever written.
+
+**A house's map colour is its two colours mixed.** Where a tile is too small to
+show its pattern — the zoomed-out map, the minimap, a swatch — a house is drawn
+in `mapColour`: its two colours blended in roughly the share its pattern paints
+each. So a black star on red reads as a dark red rather than the red alone, and
+houses can share a colour so long as the mix differs. `banners.test.ts` keeps
+every mix apart from every other.

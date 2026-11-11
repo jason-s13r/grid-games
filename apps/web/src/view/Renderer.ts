@@ -180,7 +180,7 @@ export class Renderer {
     const pop = state.pop[i]!;
 
     let cls = "tile";
-    if (owner > 0) cls += ` ${empireTheme(owner).pattern === "star" ? "p-star" : "p-spiral"}`;
+    if (owner > 0) cls += ` p-${empireTheme(owner).pattern}`;
     const t = TERRAIN_CLASS[terrain];
     if (t) cls += ` ${t}`;
     const it = ITEM_CLASS[item];

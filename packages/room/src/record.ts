@@ -8,7 +8,7 @@
 
 import { STEPS_PER_SECOND, summarise } from "@tessera/sim";
 import type { Genesis, Sim, State } from "@tessera/sim";
-import type { Stamped } from "./messages.js";
+import type { ClaimedFlag, Stamped } from "./messages.js";
 
 export type GamePhase = "lobby" | "playing" | "ended";
 
@@ -177,6 +177,9 @@ export interface GameArchive {
    *  game is watched back; the earliest archives carried them here too. */
   players: Array<{ key: string; name?: string; empire: number; member: number; bot: boolean }>;
   moveLog: Stamped[];
+  /** Houses brought to vacancies, in the order they were claimed. Absent in
+   *  archives of games where nobody brought one. */
+  flags?: ClaimedFlag[];
   /** The step it ended at, and the state hash there. */
   steps: number;
   hash: string;

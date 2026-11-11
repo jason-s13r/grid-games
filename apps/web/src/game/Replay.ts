@@ -16,6 +16,8 @@ export interface Archive {
   roomId: string;
   genesis: Genesis;
   moveLog: Array<{ move: Move; sig?: string }>;
+  /** Houses brought to vacancies, in the order they were claimed. */
+  flags?: Array<{ empire: number; banner: string }>;
   /** Where the game ended. */
   steps: number;
   hash?: string;

@@ -6,7 +6,7 @@
 // moves come from, not how the game runs.
 
 import { Sim, makeGenesis, simbot, CLAIM, MOVE, MEMBER, CONTROL, STEPS_PER_SECOND } from "@tessera/sim";
-import type { BotChoice, DurationRules, Move, EmpireSpec } from "@tessera/sim";
+import type { BannerId, BotChoice, DurationRules, Move, EmpireSpec } from "@tessera/sim";
 import type { Driver } from "./Driver";
 
 /** Never simulate more than this in one frame: a backgrounded tab must catch up
@@ -22,6 +22,8 @@ export interface LocalOptions {
    *  record like every other rule, so a replay of this game plays the same
    *  opponents. */
   bots: readonly BotChoice[];
+  /** The house the player flies. The bots wear whatever is left. */
+  banner?: BannerId;
   width: number;
   height: number;
   /** When the game ends, and the two windows that scale with it. The same three
@@ -48,7 +50,7 @@ export class LocalGame implements Driver {
 
   constructor(readonly options: LocalOptions) {
     const empires: EmpireSpec[] = [
-      { control: CONTROL.HUMAN, members: [{ kind: MEMBER.HUMAN }] },
+      { control: CONTROL.HUMAN, members: [{ kind: MEMBER.HUMAN }], ...(options.banner ? { banner: options.banner } : {}) },
       ...options.bots.map((level) => simbot(level)),
     ];
 
