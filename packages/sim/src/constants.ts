@@ -15,7 +15,7 @@ export const PROTOCOL_VERSION: number = Number(SIM_VERSION.split(".")[0]);
  *  PROTOCOL_VERSION is always its first entry — written out rather than derived,
  *  so a major release that forgets to list itself here fails a test instead of
  *  silently dropping the version before it. */
-export const SUPPORTED_PROTOCOLS: readonly number[] = [5, 4];
+export const SUPPORTED_PROTOCOLS: readonly number[] = [6, 5];
 
 /** The day each superseded version stops being played, ISO. Written by hand at
  *  the bump — the release date plus the longest duration preset — and checked
@@ -27,8 +27,8 @@ export const PROTOCOL_SUNSET: Readonly<Record<number, string>> = {
   // its successor's release plus MAX_DURATION plus slack, and raising the cap
   // later can never invalidate a date already published.
   //
-  // v5's release (31 October 2026) plus the 31-day cap plus two weeks.
-  4: "2026-12-15",
+  // v6's release (11 November 2026) plus the 31-day cap plus two weeks.
+  5: "2026-12-26",
 };
 
 /** Whether this build will play a game stamped with `version`.

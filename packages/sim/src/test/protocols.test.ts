@@ -124,27 +124,25 @@ describe("the fixture set", () => {
     }
   });
 
-  it("differs between versions only where a rule is gated on one", () => {
-    // record() is deterministic in the seed and draws its hand from
-    // Rng(seed ^ 0x5eed); none of that reads the protocol number. So every
-    // fixture is the same game, and where two versions reach different hashes
-    // it is because a rule reads the version. Replaying the newest fixture's
-    // moves under each older version's number must reach that version's own
-    // recorded hash: the gates are the whole difference, and an ungated
-    // change to the rules would show up here.
-    const [newest, ...older] = [...RECORDED].sort((a, b) => b.genesis.protocol - a.genesis.protocol);
-    for (const recorded of older) {
-      const sim = new Sim({ ...newest!.genesis, protocol: recorded.genesis.protocol });
+  it("plays an older game the same under the newest version", () => {
+    // What each version adds is behind something the genesis asks for (v6's
+    // landscape behind `terrain: 2`), so a game recorded under an older
+    // version, which asks for none of it, replays to its own hash under the
+    // newest version's number too. An ungated change to the rules would show
+    // up here. Each fixture is its own game: v6 draws a different map, so
+    // one log cannot be played on both.
+    for (const recorded of RECORDED) {
+      if (recorded.genesis.protocol === PROTOCOL_VERSION) continue;
+      const sim = new Sim({ ...recorded.genesis, protocol: PROTOCOL_VERSION });
       const byStep = new Map<number, Move[]>();
-      for (const move of newest!.moveLog) byStep.set(move.step, [...(byStep.get(move.step) ?? []), move]);
-      while (sim.step < newest!.steps) sim.advance(byStep.get(sim.step) ?? []);
-      expect(hex(sim.hash()), `v${recorded.genesis.protocol}`).toBe(recorded.hash);
+      for (const move of recorded.moveLog) byStep.set(move.step, [...(byStep.get(move.step) ?? []), move]);
+      while (sim.step < recorded.steps) sim.advance(byStep.get(sim.step) ?? []);
+      expect(hex(sim.hash()), `v${recorded.genesis.protocol} under v${PROTOCOL_VERSION}`).toBe(recorded.hash);
     }
   });
 
-  it("records the same game under every version", () => {
-    const shape = RECORDED.map((r) => `${r.steps}/${r.moveLog.length}`);
-    expect(new Set(shape).size).toBe(1);
+  it("records each game for as long", () => {
+    expect(new Set(RECORDED.map((r) => r.steps)).size).toBe(1);
   });
 
   it("names each fixture by the version it recorded", () => {

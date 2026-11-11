@@ -254,7 +254,7 @@ export interface MapConfig {
   blobMax: number;
   /** From v5: diamond mines placed beside mountains. Absent: one per 1,024
    *  tiles. */
-  mines?: number;  /** How the land is drawn. 2: a landscape, mountain ranges with rivers
+  mines?: number;  /** From v6: how the land is drawn. 2: a landscape, mountain ranges with rivers
    *  running down from them to lakes and the edge (see landscape.ts).
    *  Absent: scattered features, rivers edge to edge, which is every game
    *  composed before it. */

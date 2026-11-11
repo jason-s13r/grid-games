@@ -15,7 +15,8 @@ export function generate(state: State): State {
   const cfg = state.genesis.map;
   state.terrain.fill(TERRAIN.PLAIN);
 
-  if (cfg.terrain === 2) landscape(state);
+  // From v6, and then only for a map that asks for it.
+  if (state.genesis.protocol >= 6 && cfg.terrain === 2) landscape(state);
   else {
     for (let i = 0; i < cfg.mountains; i++) blob(state, TERRAIN.MOUNTAIN);
     for (let i = 0; i < cfg.lakes; i++) blob(state, TERRAIN.LAKE);
