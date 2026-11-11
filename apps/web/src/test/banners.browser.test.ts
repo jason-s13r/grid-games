@@ -47,8 +47,11 @@ describe("every empire is drawn", () => {
       expect(colour, `empire ${at + 1}`).not.toBe("");
       expect(colour, `empire ${at + 1}`).not.toBe("transparent");
     }
-    // And distinguishable, which is the point of having a table at all.
-    expect(new Set(colours).size).toBe(colours.length);
+    // And distinguishable, which is the point of having a table at all. Two
+    // houses may share a first colour (Golf and Sierra are both yellow); it is
+    // the pair a tile is painted in that tells them apart.
+    const pairs = tiles.map((tile) => `${paintedColour(tile)}/${getComputedStyle(tile).getPropertyValue("--c2").trim()}`);
+    expect(new Set(pairs).size).toBe(pairs.length);
   });
 
   // The specific number that was broken, called out because seven friends is
@@ -86,7 +89,7 @@ describe("the control that proves the check has teeth", () => {
     injectThemeCss();
     const tile = document.createElement("div");
     tile.className = "tile";
-    tile.dataset.banner = "sping";
+    tile.dataset.banner = "nonesuch";
     document.body.append(tile);
 
     const colour = getComputedStyle(tile).getPropertyValue("--c1").trim();
