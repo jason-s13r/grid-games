@@ -9,15 +9,19 @@ import { ORTHO, idx, xOf, yOf, inBounds, dist2 } from "./geometry.js";
 import { EVENT } from "./events.js";
 import type { State } from "./state.js";
 import { isV5, placeMines } from "./v5.js";
+import { landscape } from "./landscape.js";
 
 export function generate(state: State): State {
   const cfg = state.genesis.map;
   state.terrain.fill(TERRAIN.PLAIN);
 
-  for (let i = 0; i < cfg.mountains; i++) blob(state, TERRAIN.MOUNTAIN);
-  for (let i = 0; i < cfg.lakes; i++) blob(state, TERRAIN.LAKE);
-  for (let i = 0; i < cfg.rivers; i++) river(state);
-  for (let i = 0; i < cfg.walls; i++) wall(state);
+  if (cfg.terrain === 2) landscape(state);
+  else {
+    for (let i = 0; i < cfg.mountains; i++) blob(state, TERRAIN.MOUNTAIN);
+    for (let i = 0; i < cfg.lakes; i++) blob(state, TERRAIN.LAKE);
+    for (let i = 0; i < cfg.rivers; i++) river(state);
+    for (let i = 0; i < cfg.walls; i++) wall(state);
+  }
 
   placeCapitals(state, mainland(state));
   // After everything a v4 map draws, so a v4 map is unchanged.

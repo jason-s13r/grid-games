@@ -33,7 +33,9 @@ describe("rivers are fordable", () => {
       makeGenesis({
         seed,
         empires: [humans(1), humans(1)],
-        map: { width: 64, height: 48, mountains: 0, lakes: 0, walls: 0, rivers: 1, riverGaps },
+        // The edge-to-edge generator, which games composed without `terrain`
+        // still draw.
+        map: { width: 64, height: 48, mountains: 0, lakes: 0, walls: 0, rivers: 1, riverGaps, terrain: undefined },
       }),
     );
 
@@ -109,5 +111,67 @@ describe("capitals start somewhere worth starting", () => {
     for (const empire of sim.state.empires) {
       expect(home.has(empire.capital)).toBe(true);
     }
+  });
+});
+
+// The landscape generator: ranges, lakes, and rivers that run between them.
+describe("landscape terrain", () => {
+  const world = (seed: number, width = 160, height = 112): Sim =>
+    new Sim(makeGenesis({ seed, empires: [humans(1), humans(1), humans(1), humans(1)], map: { width, height } }));
+
+  const count = (sim: Sim, t: number) => sim.state.terrain.reduce((n, v) => n + (v === t ? 1 : 0), 0);
+  const seeds = [1, 2, 3, 4, 5, 6];
+
+  it("is what new games get", () => {
+    expect(world(1).state.genesis.map.terrain).toBe(2);
+  });
+
+  it.each(seeds)("seed %i: draws the same land every time", (seed) => {
+    expect(Array.from(world(seed).state.terrain)).toEqual(Array.from(world(seed).state.terrain));
+  });
+
+  it.each(seeds)("seed %i: has ranges, lakes and rivers in proportion", (seed) => {
+    const sim = world(seed);
+    const area = sim.state.terrain.length;
+    const share = (t: number) => count(sim, t) / area;
+    expect(share(TERRAIN.MOUNTAIN)).toBeGreaterThan(0.01);
+    expect(share(TERRAIN.MOUNTAIN)).toBeLessThan(0.12);
+    expect(share(TERRAIN.LAKE)).toBeGreaterThan(0.005);
+    expect(share(TERRAIN.LAKE)).toBeLessThan(0.08);
+    expect(share(TERRAIN.RIVER)).toBeGreaterThan(0.005);
+    expect(share(TERRAIN.RIVER)).toBeLessThan(0.06);
+  });
+
+  it("runs rivers into lakes somewhere", () => {
+    let meets = 0;
+    for (const seed of seeds) {
+      const { terrain, width, height } = world(seed).state;
+      for (let i = 0; i < terrain.length; i++) {
+        if (terrain[i] !== TERRAIN.RIVER) continue;
+        const x = i % width;
+        const y = Math.floor(i / width);
+        const beside = [i - width, i + width, x > 0 ? i - 1 : -1, x < width - 1 ? i + 1 : -1];
+        if (beside.some((j) => j >= 0 && j < width * height && terrain[j] === TERRAIN.LAKE)) meets++;
+      }
+    }
+    expect(meets).toBeGreaterThan(seeds.length);
+  });
+
+  it("crosses long rivers with bridges already built, a few of them", () => {
+    let bridges = 0;
+    let river = 0;
+    for (const seed of seeds) {
+      const sim = world(seed);
+      bridges += count(sim, TERRAIN.RIVER_BRIDGED);
+      river += count(sim, TERRAIN.RIVER);
+    }
+    expect(bridges).toBeGreaterThan(0);
+    // About one a river tile in thirty, and no more.
+    expect(bridges).toBeLessThan(river / 20);
+  });
+
+  it.each([[96, 72], [512, 352]])("composes a %ix%i map with every capital placed", (w, h) => {
+    const sim = world(7, w, h);
+    for (const empire of sim.state.empires) expect(sim.state.terrain[empire.capital]).toBe(TERRAIN.PLAIN);
   });
 });

@@ -230,4 +230,5 @@ export const DEFAULT_MAP: MapConfig = {
   walls: 6,
   blobMin: 6,
   blobMax: 40,
+  terrain: 2,
 };

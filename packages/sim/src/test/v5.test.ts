@@ -328,7 +328,9 @@ describe("coin farms", () => {
   // minutes of coins.
   const field = (share?: number) => {
     const rules = share === undefined ? { coinFarmShare: undefined } : { coinFarmShare: share };
-    const genesis = makeGenesis({ seed: 5, empires: [humans(1), humans(1)], rules });
+    // On the scattered terrain the field was laid out for: a landscape can put
+    // a lake inside it, and then there is less of it for coins to fall on.
+    const genesis = makeGenesis({ seed: 5, empires: [humans(1), humans(1)], rules, map: { terrain: undefined } });
     const sim = new Sim(genesis);
     const { width, owner } = sim.state;
     const [x0, y0, size] = [30, 20, 22];
