@@ -6,7 +6,7 @@
 // current costs one pixel write per changed tile.
 
 import type { State } from "@tessera/sim";
-import { ITEM, isMine, mineLeft } from "@tessera/sim";
+import { ITEM, isMine, mineWorking } from "@tessera/sim";
 import { MAX_EMPIRES, TERRAIN_COLORS, ITEM_COLORS, MINE_DUG, empireTheme, rgb } from "./palette";
 
 export class MapImage {
@@ -61,7 +61,7 @@ export class MapImage {
     const item = state.item[i]!;
 
     let colour: [number, number, number];
-    if (isMine(item)) colour = this.itemRgb[mineLeft(item) > 0 ? MINE_DUG : ITEM.MINE]!;
+    if (isMine(item)) colour = this.itemRgb[mineWorking(state, i) ? MINE_DUG : ITEM.MINE]!;
     else if (item !== ITEM.NONE) colour = this.itemRgb[item]!;
     else if (owner > 0) colour = this.empireRgb[owner] ?? this.empireRgb[1]!;
     else colour = this.terrainRgb[state.terrain[i]!] ?? this.terrainRgb[0]!;

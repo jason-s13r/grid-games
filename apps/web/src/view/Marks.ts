@@ -12,7 +12,20 @@
 //
 // Nothing here is in the simulation, and nothing is sent.
 
-import { ITEM, MOVE, TERRAIN, adjacentToOwned, idx, isMine, mineDigCost, mineLeft } from "@tessera/sim";
+import {
+  ITEM,
+  MOVE,
+  TERRAIN,
+  adjacentToOwned,
+  idx,
+  isMine,
+  mineDigCost,
+  mineLeft,
+  mineNeeds,
+  minePopCost,
+  minesByPop,
+  mineWorking,
+} from "@tessera/sim";
 import type { Move, State } from "@tessera/sim";
 import type { Driver } from "../game/Driver";
 import type { Camera } from "./Camera";
@@ -141,11 +154,7 @@ export class Marks {
       TERRAIN_NAME[terrain] ?? "",
       pop > 0 ? `population ${pop}` : "",
       ITEM_NAME[item] ??
-        (isMine(item)
-          ? mineLeft(item) > 0
-            ? `a diamond mine, ${mineLeft(item)} to come`
-            : `a diamond mine to dig (a claim of ${mineDigCost(state)} or more)`
-          : ""),
+        (isMine(item) ? mineSays(state, i) : ""),
       state.shielded[i]! > 0 ? "shielded" : "",
     ].filter(Boolean).join(" · ");
 
@@ -198,4 +207,20 @@ export class Marks {
     }
     this.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   }
+}
+
+/** What a mine is doing, for the hover line. */
+function mineSays(state: State, i: number): string {
+  const item = state.item[i]!;
+  if (!minesByPop(state)) {
+    return mineLeft(item) > 0
+      ? `a diamond mine, ${mineLeft(item)} to come`
+      : `a diamond mine to dig (a claim of ${mineDigCost(state)} or more)`;
+  }
+  const cost = minePopCost(state);
+  if (state.owner[i]! === 0) return `a diamond mine (${cost} population a diamond)`;
+  const pop = state.pop[i]!;
+  if (!mineWorking(state, i)) return `a diamond mine, idle: needs ${mineNeeds(state, i)} to mine`;
+  const more = Math.floor((pop - mineNeeds(state, i)) / cost);
+  return `a diamond mine, ${1 + more} to come`;
 }

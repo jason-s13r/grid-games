@@ -137,10 +137,9 @@ export const DEFAULT_RULES: Rules = {
   // One full bank: growth makes every connected tile worth one click to take,
   // which is a defence, and stops there, which keeps it from being the army.
   growthCeiling: 999,
-  // A diamond every five minutes, three to a dig (a bridge's worth), and a dig
-  // costs most of a full bank.
-  mineDigCost: 800,
-  mineYield: 3,
+  // A diamond every five minutes, 300 population apiece taken off the mine
+  // (twenty a pass), which is about what the old dig cost: 800 for three.
+  minePopCost: 300,
   mineEvery: 15,
   marchTakesCoins: true,
   // On half of spawns, an extra coin goes into a farm: ground walled in by one

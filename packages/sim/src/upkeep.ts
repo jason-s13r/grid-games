@@ -30,7 +30,7 @@ import type { State } from "./state.js";
 import type { Empire } from "./types.js";
 import { STAT } from "./constants.js";
 import { bump } from "./stats.js";
-import { growthCeiling, isAttended, isV5, mineLeft, minesGiveNow } from "./v5.js";
+import { growthCeiling, isAttended, isMine, isV5, mineLeft, minesByPop, minesGiveNow, workMine } from "./v5.js";
 
 /** Flood the empire's own tiles outward from its capital. Returns a mask over
  *  the whole map: 1 where the capital still reaches. */
@@ -71,7 +71,8 @@ export function upkeep(state: State, dirty: DirtySet): void {
   // connected mines give their diamonds. See v5.ts.
   const v5 = isV5(state);
   const ceiling = v5 ? growthCeiling(state) : Infinity;
-  const mining = v5 && minesGiveNow(state);
+  const byPop = minesByPop(state);
+  const mining = v5 && !byPop && minesGiveNow(state);
 
   for (const empire of state.empires) {
     if (!empire.alive) continue;
@@ -84,6 +85,16 @@ export function upkeep(state: State, dirty: DirtySet): void {
       if (state.owner[i] !== empire.id) continue;
 
       if (seen[i]) {
+        // Mining by population: the mine takes its share of what stands on it
+        // and growth leaves it alone, so what is there is what was put there.
+        if (byPop && isMine(state.item[i]!)) {
+          const taken = workMine(state, i, empire);
+          if (taken > 0) {
+            delta -= taken;
+            dirty.add(i);
+          }
+          continue;
+        }
         if (mining && mineLeft(state.item[i]!) > 0) {
           state.item[i] = state.item[i]! - 1;
           if (empire.diamonds < 0xffff) empire.diamonds++;

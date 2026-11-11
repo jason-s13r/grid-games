@@ -39,7 +39,18 @@ export type { Mode, Turn } from "./policy.js";
 export { summarise } from "./stats.js";
 export type { EmpireSummary } from "./stats.js";
 export { Sim, makeGenesis, mapFor, coinsFor, CLAIM, HEARTBEAT } from "./sim.js";
-export { isCoin, isMine, mineLeft, mineDigCost, tileCeiling, growthCeiling } from "./v5.js";
+export {
+  isCoin,
+  isMine,
+  mineLeft,
+  mineDigCost,
+  minesByPop,
+  minePopCost,
+  mineNeeds,
+  mineWorking,
+  tileCeiling,
+  growthCeiling,
+} from "./v5.js";
 export { BANNERS, MAX_EMPIRES, bannerAt, bannerById } from "./banners.js";
 export { tally, journal, isUpkeepStep } from "./journal.js";
 export type { Tally, WorldEvent, WorldEventKind } from "./journal.js";

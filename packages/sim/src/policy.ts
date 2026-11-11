@@ -28,7 +28,7 @@ import { reachable } from "./upkeep.js";
 import { PASSABLE } from "./constants.js";
 import { ORTHO, idx, xOf, yOf, inBounds, dist2 } from "./geometry.js";
 import type { Rng } from "./rng.js";
-import { isMine, mineDigCost, tileCeiling } from "./v5.js";
+import { isMine, mineBank, mineWorking, minesByPop, tileCeiling } from "./v5.js";
 import type { State } from "./state.js";
 
 export const MODES = ["expand", "attack", "defend", "fortify", "heal", "sleep"] as const;
@@ -110,7 +110,9 @@ interface Scan {
   owned: number[];
   frontier: number[];
   coins: number[];
-  /** Mines with nothing left, on this empire's ground or beside it: v5. */
+  /** Mines worth putting a bank on, on this empire's ground or beside it: v5.
+   *  One with nothing left to dig, or (mining by population) one beside it, or
+   *  one of its own without enough on it to keep giving. */
   mines: number[];
   /** Owned tiles with an enemy tile orthogonally beside them — the only tiles
    *  where reinforcement does anything. */
@@ -127,11 +129,13 @@ function scan(state: State, empire: Empire): Scan {
   const mines: number[] = [];
   const threatened: number[] = [];
   const seen = new Set<number>();
+  const byPop = minesByPop(state);
+  const idle = (i: number): boolean => (byPop ? isMine(item[i]!) && !mineWorking(state, i) : item[i] === ITEM.MINE);
 
   for (let i = 0; i < owner.length; i++) {
     if (owner[i] !== empire.id) continue;
     owned.push(i);
-    if (item[i] === ITEM.MINE) mines.push(i);
+    if (idle(i)) mines.push(i);
 
     const x = xOf(i, width);
     const y = yOf(i, width);
@@ -148,7 +152,7 @@ function scan(state: State, empire: Empire): Scan {
       seen.add(ni);
       frontier.push(ni);
       // A mine is not a coin; one with nothing left is worth digging.
-      if (item[ni] === ITEM.MINE) mines.push(ni);
+      if (byPop ? isMine(item[ni]!) : item[ni] === ITEM.MINE) mines.push(ni);
       else if (item[ni] !== ITEM.NONE && !isMine(item[ni]!)) coins.push(ni);
     }
     if (contested) threatened.push(i);
@@ -220,9 +224,10 @@ export function policy(
   // A bot that could dig one but has not banked enough yet sometimes waits for
   // it, the way a person would, rather than spending the bank on something
   // smaller.
-  const digging = !forced && mines.length > 0 && member.popMax >= mineDigCost(state);
-  if (digging && member.popTimer < mineDigCost(state) && rng.int(100) < 40) return null;
-  if (digging && member.popTimer >= mineDigCost(state) && rng.int(100) < 60) {
+  const bank = mineBank(state);
+  const digging = !forced && mines.length > 0 && member.popMax >= bank;
+  if (digging && member.popTimer < bank && rng.int(100) < 40) return null;
+  if (digging && member.popTimer >= bank && rng.int(100) < 60) {
     target = mines[rng.int(mines.length)]!;
   } else if (!forced && coins.length > 0 && rng.int(100) < (profile?.coins ?? DEFAULT_COINS)) {
     target = coins[rng.int(coins.length)]!;

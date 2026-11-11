@@ -125,8 +125,9 @@ describe("diamond mines", () => {
     expect([...old.state.item].some((item) => item >= ITEM.MINE)).toBe(false);
   });
 
+  // A game composed before mining by population: mines are dug.
   const board = () => {
-    const sim = arena([humans(1), humans(1)]);
+    const sim = arena([humans(1), humans(1)], 1, { minePopCost: undefined });
     own(sim, 2, 1, 1, 1);
     sim.state.item[at(sim, 2, 2)] = ITEM.MINE;
     return sim;
@@ -172,6 +173,107 @@ describe("diamond mines", () => {
     sim.state.step = sim.state.genesis.rules.mineEvery! * sim.state.genesis.rules.upkeepInterval;
     upkeep(sim.state, dirty);
     expect(sim.state.empires[0]!.diamonds).toBe(0);
+  });
+});
+
+describe("mining by population", () => {
+  const board = () => {
+    const sim = arena([humans(1), humans(1)]);
+    own(sim, 2, 1, 1, 1);
+    sim.state.item[at(sim, 2, 2)] = ITEM.MINE;
+    return sim;
+  };
+  const claimWith = (sim: Sim, bank: number, x: number, y: number) => {
+    sim.state.empires[0]!.members[0]!.popTimer = bank;
+    const move = CLAIM(sim.state.step, 1, 0, 0, x, y);
+    expect(sim.validate(move)).toBe(true);
+    sim.advance([move]);
+  };
+  const passes = (sim: Sim, n: number, from = 1) => {
+    const { upkeepInterval: interval } = sim.state.genesis.rules;
+    for (let pass = from; pass < from + n; pass++) {
+      sim.state.step = pass * interval;
+      upkeep(sim.state, dirty);
+    }
+  };
+
+  it("is what new games get", () => {
+    expect(DEFAULT_RULES.minePopCost).toBe(300);
+    expect(DEFAULT_RULES.mineDigCost).toBeUndefined();
+  });
+
+  it("claims a mine like any tile, with no dig", () => {
+    const sim = board();
+    claimWith(sim, 50, 2, 2);
+    expect(sim.state.owner[at(sim, 2, 2)]).toBe(1);
+    expect(popAt(sim, 2, 2)).toBe(50);
+    expect(sim.state.item[at(sim, 2, 2)]).toBe(ITEM.MINE);
+  });
+
+  it("turns 300 population into a diamond over a diamond's passes", () => {
+    const sim = board();
+    claimWith(sim, 300, 2, 2);
+    const empire = sim.state.empires[0]!;
+    const every = sim.state.genesis.rules.mineEvery!;
+    const total = empire.popTotal;
+    passes(sim, every - 1);
+    expect(empire.diamonds).toBe(0);
+    expect(popAt(sim, 2, 2)).toBe(300 - Math.floor((300 * (every - 1)) / every));
+    passes(sim, 1, every);
+    expect(empire.diamonds).toBe(1);
+    expect(popAt(sim, 2, 2)).toBe(0);
+    expect(empire.popTotal).toBe(total - 300);
+    expect(sim.state.item[at(sim, 2, 2)]).toBe(ITEM.MINE);
+  });
+
+  it("keeps going while there is enough for another, and leaves the rest", () => {
+    const sim = board();
+    claimWith(sim, 1_000, 2, 2);
+    const every = sim.state.genesis.rules.mineEvery!;
+    passes(sim, every * 6);
+    expect(sim.state.empires[0]!.diamonds).toBe(3);
+    expect(popAt(sim, 2, 2)).toBe(100);
+  });
+
+  it("does not start a diamond it cannot finish", () => {
+    const sim = board();
+    claimWith(sim, 299, 2, 2);
+    passes(sim, 5);
+    expect(popAt(sim, 2, 2)).toBe(299);
+    expect(sim.state.item[at(sim, 2, 2)]).toBe(ITEM.MINE);
+  });
+
+  it("is not grown", () => {
+    const sim = board();
+    const empire = sim.state.empires[0]!;
+    empire.growthUnlocked = 1;
+    claimWith(sim, 100, 2, 2);
+    for (let pass = 1; pass <= 5; pass++) {
+      // Somebody is there, so the rest of the empire grows.
+      sim.state.step = pass * sim.state.genesis.rules.upkeepInterval;
+      empire.members[0]!.lastBeat = sim.state.step;
+      upkeep(sim.state, dirty);
+    }
+    expect(popAt(sim, 2, 2)).toBe(100);
+    expect(popAt(sim, 2, 1)).toBeGreaterThan(1);
+  });
+
+  it("gives nothing cut off from the capital", () => {
+    const sim = board();
+    claimWith(sim, 600, 2, 2);
+    sim.state.owner[at(sim, 2, 1)] = 2;
+    passes(sim, sim.state.genesis.rules.mineEvery! * 2);
+    expect(sim.state.empires[0]!.diamonds).toBe(0);
+  });
+
+  it("starts its diamond again when it changes hands", () => {
+    const sim = board();
+    claimWith(sim, 600, 2, 2);
+    passes(sim, 3);
+    expect(sim.state.item[at(sim, 2, 2)]).toBe(ITEM.MINE + 3);
+    place(sim.state, at(sim, 2, 2), 2, 10_000, dirty);
+    expect(sim.state.owner[at(sim, 2, 2)]).toBe(2);
+    expect(sim.state.item[at(sim, 2, 2)]).toBe(ITEM.MINE);
   });
 });
 

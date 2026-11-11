@@ -8,7 +8,7 @@ import { PASSABLE, COIN_RADIUS, SEAT_CEILING, STAT, STAT_SLOTS } from "./constan
 import { ORTHO, vonNeumannBall, idx, xOf, yOf, inBounds } from "./geometry.js";
 import { bump, raise } from "./stats.js";
 import { isVacant, markShield } from "./state.js";
-import { digMine, isMine, tileCeiling } from "./v5.js";
+import { digMine, isMine, resetMine, tileCeiling } from "./v5.js";
 import type { State } from "./state.js";
 
 export type DirtySet = Set<number>;
@@ -24,6 +24,7 @@ export function setOwner(state: State, i: number, next: EmpireId): void {
   if (prev > 0) state.empires[prev - 1]!.tilesOwned--;
   if (next > 0) state.empires[next - 1]!.tilesOwned++;
   state.owner[i] = next;
+  resetMine(state, i);
 }
 
 /** When an empire came into existence, which is not when the game did.
@@ -676,6 +677,7 @@ function land(
   if (isMine(item)) {
     // A mine is ground like any other, and a claim (not a march, not a
     // cascade) with a big enough bank behind it digs one that has nothing left.
+    // Mining by population there is no dig: what lands is what gets mined.
     const took = place(state, i, empire.id, amount, dirty, direct);
     if (direct && digMine(state, i, empire, trigger)) dirty.add(i);
     return took;

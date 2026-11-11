@@ -134,6 +134,14 @@ export interface Rules {
   mineYield?: number;
   mineEvery?: number;
 
+  /** From v5, mining by population, which replaces the dig above in any game
+   *  composed with it. A mine is claimed like any tile and the population on
+   *  it is mined: `minePopCost` a diamond, taken off a little every upkeep pass
+   *  over `mineEvery` passes, while the capital reaches it and the tile holds
+   *  enough to finish the diamond it is on. Growth leaves a mine alone. Absent
+   *  (every game composed before it): dig. */
+  minePopCost?: number;
+
   /** Percent of spawns that also put an extra coin into a farm: open ground
    *  one empire has walled in (see Sim.spawnInFarm). Absent (every game
    *  composed before it): none. */

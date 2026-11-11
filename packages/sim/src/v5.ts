@@ -14,10 +14,24 @@
 // `ITEM.MINE` is a mine with nothing left, `ITEM.MINE + n` one with n diamonds
 // to come. So the snapshot layout, and with it the hash of every v4 game, is
 // untouched.
+//
+// MINING BY POPULATION. A game composed with `minePopCost` mines the other way,
+// and that is the one new games get. There is no dig. A mine is claimed like
+// any other tile, and the population standing on it is what gets mined: while
+// the capital reaches it, every upkeep pass takes `minePopCost / mineEvery` off
+// the tile, and every `mineEvery` passes that adds up to a diamond. It keeps
+// going while the tile holds enough to finish the diamond it is on, so a
+// thousand on a mine at 300 a diamond is three diamonds over fifteen minutes and
+// a hundred left standing guard. Growth does not refill a mine.
+//
+// The byte then counts passes into the current diamond: `ITEM.MINE + n` is a
+// mine n passes along. It goes back to `ITEM.MINE` when the tile changes hands,
+// so nobody inherits a diamond somebody else paid most of.
 
 import { ITEM, CONTROL, TERRAIN } from "./types.js";
 import type { Empire, EmpireId, Item } from "./types.js";
-import { DEFAULT_RULES, hours } from "./constants.js";
+import { DEFAULT_RULES, STAT, hours } from "./constants.js";
+import { bump } from "./stats.js";
 import { ORTHO, idx, inBounds, xOf, yOf } from "./geometry.js";
 import type { State } from "./state.js";
 
@@ -34,16 +48,79 @@ export const isMine = (item: number): boolean => item >= ITEM.MINE;
 /** Diamonds a mine has left to give; 0 for a mine to dig, or no mine. */
 export const mineLeft = (item: number): number => (item > ITEM.MINE ? item - ITEM.MINE : 0);
 
-export const mineDigCost = (state: State): number =>
-  state.genesis.rules.mineDigCost ?? DEFAULT_RULES.mineDigCost!;
+/** The bank a dig took and the diamonds it gave, for a game composed before
+ *  `minePopCost` that left them out of its rules. New games mine by
+ *  population and carry neither. */
+const DIG_COST = 800;
+const DIG_YIELD = 3;
+
+export const mineDigCost = (state: State): number => state.genesis.rules.mineDigCost ?? DIG_COST;
+
+/** The game mines by population (`minePopCost`) rather than by digging. */
+export const minesByPop = (state: State): boolean =>
+  isV5(state) && state.genesis.rules.minePopCost !== undefined;
+
+/** Population a diamond takes off a mine, in a game that mines by population. */
+export const minePopCost = (state: State): number => Math.max(1, state.genesis.rules.minePopCost ?? 0);
+
+/** Upkeep passes a diamond takes. The byte counts up to it, so it stays well
+ *  under what is left of the byte above `ITEM.MINE`. */
+export const mineEvery = (state: State): number =>
+  Math.min(240, Math.max(1, state.genesis.rules.mineEvery ?? DEFAULT_RULES.mineEvery!));
+
+/** Population taken off a mine by its first `passes` passes towards a diamond.
+ *  Spread so that a whole diamond takes exactly `minePopCost`. */
+const drained = (state: State, passes: number): number =>
+  Math.floor((minePopCost(state) * passes) / mineEvery(state));
+
+/** Population a mine still has to give up to finish the diamond it is on. */
+export function mineNeeds(state: State, i: number): number {
+  return minePopCost(state) - drained(state, mineLeft(state.item[i]!));
+}
+
+/** Whether a mine is giving: dug and not worked out, or (mining by population)
+ *  held with enough on it to finish its diamond. Whether the capital still
+ *  reaches it is upkeep's business, not this. */
+export function mineWorking(state: State, i: number): boolean {
+  const item = state.item[i]!;
+  if (!isMine(item)) return false;
+  if (!minesByPop(state)) return mineLeft(item) > 0;
+  return state.owner[i]! > 0 && state.pop[i]! >= mineNeeds(state, i);
+}
+
+/** The bank that makes a mine worth claiming: a dig, or one diamond's worth. */
+export const mineBank = (state: State): number => (minesByPop(state) ? minePopCost(state) : mineDigCost(state));
+
+/** One upkeep pass on a mine its owner's capital reaches, mining by
+ *  population. Returns the population it took off the tile. */
+export function workMine(state: State, i: number, empire: Empire): number {
+  const passes = mineLeft(state.item[i]!);
+  if (state.pop[i]! < mineNeeds(state, i)) return 0;
+  const take = drained(state, passes + 1) - drained(state, passes);
+  state.pop[i] = state.pop[i]! - take;
+  if (passes + 1 >= mineEvery(state)) {
+    state.item[i] = ITEM.MINE;
+    if (empire.diamonds < 0xffff) empire.diamonds++;
+    bump(empire, null, STAT.DIAMONDS);
+  } else {
+    state.item[i] = (ITEM.MINE + passes + 1) as Item;
+  }
+  return take;
+}
+
+/** A mine that changes hands starts its diamond again, mining by population. */
+export function resetMine(state: State, i: number): void {
+  if (state.item[i]! > ITEM.MINE && minesByPop(state)) state.item[i] = ITEM.MINE;
+}
 
 /** Dig a worked-out mine, if `spent` (the bank behind the claim) is enough and
  *  the claimer holds the tile now. True if it did. */
 export function digMine(state: State, i: number, empire: Empire, spent: number): boolean {
   if (state.item[i] !== ITEM.MINE) return false;
   if (state.owner[i] !== empire.id) return false;
+  if (minesByPop(state)) return false;
   if (spent < mineDigCost(state)) return false;
-  const yieldOf = Math.min(250, Math.max(1, state.genesis.rules.mineYield ?? DEFAULT_RULES.mineYield!));
+  const yieldOf = Math.min(250, Math.max(1, state.genesis.rules.mineYield ?? DIG_YIELD));
   state.item[i] = (ITEM.MINE + yieldOf) as Item;
   return true;
 }
