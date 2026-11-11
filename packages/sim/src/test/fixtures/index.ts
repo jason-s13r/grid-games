@@ -10,6 +10,7 @@
 // one means deleting both, and `protocols.test.ts` is what tells you which.
 
 import type { Genesis, Move } from "../../types.js";
+import v4 from "./recorded-v4.json";
 import v5 from "./recorded-v5.json";
 import v6 from "./recorded-v6.json";
 
@@ -21,4 +22,4 @@ export interface Recorded {
   moveLog: Move[];
 }
 
-export const RECORDED = [v6, v5] as unknown as Recorded[];
+export const RECORDED = [v6, v5, v4] as unknown as Recorded[];

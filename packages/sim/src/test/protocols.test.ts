@@ -26,6 +26,7 @@ import { humans } from "../specs.js";
 import type { Genesis, Move } from "../types.js";
 import { hex } from "../hash.js";
 import { RECORDED } from "./fixtures/index.js";
+import type { Recorded } from "./fixtures/index.js";
 
 const genesisAt = (protocol: number): Genesis => ({
   ...makeGenesis({ seed: 1, empires: [humans(1), humans(1)] }),
@@ -76,11 +77,6 @@ describe("the supported set", () => {
     expect(new Set(SUPPORTED_PROTOCOLS).size).toBe(SUPPORTED_PROTOCOLS.length);
   });
 
-  it("supports at most the current version and its predecessor", () => {
-    // N and N-1 only. A third entry is a third gated branch to maintain, and
-    // the retirement rule exists so the array cannot grow by inattention.
-    expect(SUPPORTED_PROTOCOLS.length).toBeLessThanOrEqual(2);
-  });
 });
 
 describe("retirement", () => {
@@ -124,20 +120,36 @@ describe("the fixture set", () => {
     }
   });
 
-  it("plays an older game the same under the newest version", () => {
-    // What each version adds is behind something the genesis asks for (v6's
-    // landscape behind `terrain: 2`), so a game recorded under an older
-    // version, which asks for none of it, replays to its own hash under the
-    // newest version's number too. An ungated change to the rules would show
-    // up here. Each fixture is its own game: v6 draws a different map, so
-    // one log cannot be played on both.
-    for (const recorded of RECORDED) {
-      if (recorded.genesis.protocol === PROTOCOL_VERSION) continue;
-      const sim = new Sim({ ...recorded.genesis, protocol: PROTOCOL_VERSION });
+  it("differs between versions only where a rule is gated on one", () => {
+    // Taken a version and the one before it at a time. Where the two
+    // fixtures are the same game (record() is deterministic in the seed, and
+    // its hand reads nothing of the protocol), the newer one's moves replayed
+    // under the older number must reach the older hash: the gate on the
+    // version is the whole difference. Where they are not, because the newer
+    // version draws another map (v6's landscape) and one log cannot be played
+    // on both, the older game replayed under the newer number must reach its
+    // own hash: it asks for none of what the newer version adds. Either way an
+    // ungated change to the rules shows up here.
+    const sorted = [...RECORDED].sort((a, b) => b.genesis.protocol - a.genesis.protocol);
+    const replay = (from: Recorded, protocol: number): string => {
+      const sim = new Sim({ ...from.genesis, protocol });
       const byStep = new Map<number, Move[]>();
-      for (const move of recorded.moveLog) byStep.set(move.step, [...(byStep.get(move.step) ?? []), move]);
-      while (sim.step < recorded.steps) sim.advance(byStep.get(sim.step) ?? []);
-      expect(hex(sim.hash()), `v${recorded.genesis.protocol} under v${PROTOCOL_VERSION}`).toBe(recorded.hash);
+      for (const move of from.moveLog) byStep.set(move.step, [...(byStep.get(move.step) ?? []), move]);
+      while (sim.step < from.steps) sim.advance(byStep.get(sim.step) ?? []);
+      return hex(sim.hash());
+    };
+    // The same seed, map and moves; the rules may differ by what the newer
+    // version composes with, which is the gate being tested.
+    const sameGame = (a: Recorded, b: Recorded) =>
+      a.genesis.seed === b.genesis.seed &&
+      JSON.stringify(a.genesis.map) === JSON.stringify(b.genesis.map) &&
+      JSON.stringify(a.moveLog) === JSON.stringify(b.moveLog);
+    for (let k = 1; k < sorted.length; k++) {
+      const newer = sorted[k - 1]!;
+      const older = sorted[k]!;
+      const label = `v${older.genesis.protocol} against v${newer.genesis.protocol}`;
+      if (sameGame(newer, older)) expect(replay(newer, older.genesis.protocol), label).toBe(older.hash);
+      else expect(replay(older, newer.genesis.protocol), label).toBe(older.hash);
     }
   });
 

@@ -37,9 +37,11 @@ Three consequences run through the rest of the repository:
   replay. The `Sim` constructor and `inspectGenesis` check membership in the
   set, not equality with the constant — a version nobody supports is refused at
   the door, because the alternative is a silent desync three hours in.
-- **A build supports N and N-1, and no more.** A superseded version is dropped
-  once no game can still be running on it; `PROTOCOL_SUNSET` carries the date
-  and a test fails the day it passes. A running game is never upgraded — its
+- **A superseded version is supported for a month and a bit.** It is dropped
+  once no game can still be running on it: its successor's release plus the
+  longest game plus two weeks. `PROTOCOL_SUNSET` carries the date and a test
+  fails the day it passes. Several majors in a month means several supported
+  at once until their dates come round. A running game is never upgraded — its
   protocol is inside its own game id, so changing it would invalidate every
   signature already cast.
 - **Nothing outside the simulation may enter it.** Camera, chat, signatures,
