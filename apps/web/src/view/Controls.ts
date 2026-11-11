@@ -390,10 +390,7 @@ export class Controls {
             buy: "growth",
             glyph: "&#8593;",
             name: "Growth",
-            what:
-              state.genesis.protocol >= 5
-                ? `Permanent. Tiles joined to your capital fill up to ${growthCeiling(state)} by themselves, while someone in your empire is playing.`
-                : "Permanent. Tiles connected to your capital gain population.",
+            what: `Permanent. Tiles joined to your capital fill up to ${growthCeiling(state)} by themselves, while someone in your empire is playing.`,
             cost: rules.growthCost,
             diamonds: empire.diamonds,
           }),

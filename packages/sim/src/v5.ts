@@ -1,7 +1,6 @@
-// What protocol 5 adds: diamond mines, a ceiling on how strong a simulation
-// bot's tiles may be, and limits on growth. Each piece reads
-// `state.genesis.protocol`, never PROTOCOL_VERSION, so a v4 game in progress
-// keeps the rules it started with.
+// What protocol 5 added: diamond mines, a ceiling on how strong a simulation
+// bot's tiles may be, and limits on growth. Gated on the version until v4 was
+// retired; every game this build plays has them now.
 //
 // MINES. Diamonds stop lying about the map as coins. Instead a few tiles
 // beside mountains are mines, placed with the map. A mine is dug by claiming it
@@ -12,8 +11,7 @@
 //
 // The item layer carries a mine in the byte it already has for each tile:
 // `ITEM.MINE` is a mine with nothing left, `ITEM.MINE + n` one with n diamonds
-// to come. So the snapshot layout, and with it the hash of every v4 game, is
-// untouched.
+// to come. So the snapshot layout is the one it always was.
 //
 // MINING BY POPULATION. A game composed with `minePopCost` mines the other way,
 // and that is the one new games get. There is no dig. A mine is claimed like
@@ -34,8 +32,6 @@ import { DEFAULT_RULES, STAT, hours } from "./constants.js";
 import { bump } from "./stats.js";
 import { ORTHO, idx, inBounds, xOf, yOf } from "./geometry.js";
 import type { State } from "./state.js";
-
-export const isV5 = (state: State): boolean => state.genesis.protocol >= 5;
 
 /** A coin: something a claim sets off. Not a diamond, not a mine. */
 export const isCoin = (item: number): boolean =>
@@ -58,7 +54,7 @@ export const mineDigCost = (state: State): number => state.genesis.rules.mineDig
 
 /** The game mines by population (`minePopCost`) rather than by digging. */
 export const minesByPop = (state: State): boolean =>
-  isV5(state) && state.genesis.rules.minePopCost !== undefined;
+  state.genesis.rules.minePopCost !== undefined;
 
 /** Population a diamond takes off a mine, in a game that mines by population. */
 export const minePopCost = (state: State): number => Math.max(1, state.genesis.rules.minePopCost ?? 0);
@@ -211,9 +207,9 @@ const REACH = 12;
 // --- how strong a bot's tile may be ------------------------------------------
 
 /** The most population a tile of `empireId` may hold, or Infinity. A ceiling
- *  for empires the simulation plays, from v5; nobody else has one. */
+ *  for empires the simulation plays; nobody else has one. */
 export function tileCeiling(state: State, empireId: EmpireId): number {
-  if (!isV5(state) || empireId <= 0) return Infinity;
+  if (empireId <= 0) return Infinity;
   const empire = state.empires[empireId - 1];
   if (!empire || empire.control !== CONTROL.SIMBOT) return Infinity;
   const rules = state.genesis.rules;

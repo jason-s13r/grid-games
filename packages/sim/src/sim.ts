@@ -28,7 +28,7 @@ import type { DirtySet } from "./rules.js";
 import { checkVictory } from "./victory.js";
 import { policy, turnOf } from "./policy.js";
 import { summarise } from "./stats.js";
-import { isCoin, isV5 } from "./v5.js";
+import { isCoin } from "./v5.js";
 import type { EmpireSummary } from "./stats.js";
 
 export interface GenesisInit {
@@ -253,61 +253,18 @@ export class Sim {
 
   /** Coins spawn only on NEUTRAL passable tiles. That is what makes farming
    *  work: enclose an area, leave neutral pockets inside it, and they keep
-   *  producing.
-   *
-   *  Uniform placement across the whole map put most coins in empty country
-   *  nobody was fighting over, so the shop stayed out of reach and the
-   *  cascade — the best thing in the game — hardly ever fired. Most probes now
-   *  land on an owned tile and hop a few tiles off it, which lands them just
-   *  outside somebody's border: near the fighting, still neutral, still
-   *  farmable by whoever encloses the pocket. A minority stay uniform so the
-   *  far map is not dead ground.
-   *
-   *  Four draws per attempt whatever the branch, so the RNG stream is a
-   *  function of state alone. */
+   *  producing. Where they land is `spawnNear`'s. */
   private spawnItem(dirty: DirtySet): void {
-    const state = this.state;
-    const rules = state.genesis.rules;
-    if (state.itemCount >= rules.maxItemsOnMap) return;
-
-    const { width, height } = state;
-    const n = state.owner.length;
-    const r = rules.coinNearRadius;
-
-    if (isV5(state)) return this.spawnNear(dirty);
-
-    // Bounded probe rather than a full scan, so spawning stays O(1) on any map
-    // size.
-    for (let attempt = 0; attempt < 24; attempt++) {
-      const seed = state.rng.int(n);
-      const near = state.rng.int(100) < rules.coinNearBias;
-      const dx = state.rng.range(-r, r);
-      const dy = state.rng.range(-r, r);
-
-      let i = seed;
-      if (near && state.owner[seed] !== 0) {
-        const x = Math.max(0, Math.min(width - 1, xOf(seed, width) + dx));
-        const y = Math.max(0, Math.min(height - 1, yOf(seed, width) + dy));
-        i = idx(x, y, width);
-      }
-
-      if (state.owner[i] !== 0) continue;
-      if (state.item[i] !== ITEM.NONE) continue;
-      if (!PASSABLE[state.terrain[i]!]) continue;
-
-      state.item[i] = state.rng.weighted(rules.coinWeights) as Item;
-      state.itemCount++;
-      dirty.add(i);
-      return;
-    }
+    if (this.state.itemCount >= this.state.genesis.rules.maxItemsOnMap) return;
+    this.spawnNear(dirty);
   }
 
-  /** Spawning from v5. One draw decides whether this coin lands near
+  /** One draw decides whether this coin lands near
    *  something or anywhere: `coinNearBias` percent of coins land near an owned
    *  tile or another coin, and the rest anywhere. A coin meant to land near
    *  something keeps probing until a probe finds an owned tile or a coin to hop
-   *  off, rather than landing wherever the first probe fell, which is what
-   *  made v4's share of coins near the fighting small while empires were.
+   *  off, rather than landing wherever the first probe fell, which kept the
+   *  share of coins near the fighting small while empires were.
    *
    *  So coins gather near empires and near one another, a cluster grows, and
    *  ground that encloses one is worth farming. Diamonds no longer spawn: they

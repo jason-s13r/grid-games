@@ -1,6 +1,6 @@
 // Protocol 5: coins that gather, a ceiling on a simulation bot's tiles, growth
-// that stops, and diamond mines. Each is checked against a v4 game as well, so
-// the gate on the version is tested along with the rule.
+// that stops, and diamond mines. These were checked against a v4 game as well
+// until v4 was retired.
 
 import { describe, expect, it } from "vitest";
 import { Sim, makeGenesis, mapFor, coinsFor, CLAIM } from "../sim.js";
@@ -54,13 +54,10 @@ describe("a simulation bot's tiles have a ceiling", () => {
     expect(popAt(sim, 6, 5)).toBe(5_000);
   });
 
-  it("leaves people and v4 games alone", () => {
+  it("leaves people alone", () => {
     const sim = board();
     place(sim.state, at(sim, 9, 9), 2, 999, dirty);
     expect(popAt(sim, 9, 9)).toBe(5_989);
-    const old = board(4);
-    place(old.state, at(old, 5, 5), 1, 999, dirty);
-    expect(popAt(old, 5, 5)).toBe(5_989);
   });
 });
 
@@ -92,13 +89,6 @@ describe("growth", () => {
     upkeep(sim.state, dirty);
     expect(popAt(sim, 2, 0)).toBe(2);
   });
-
-  it("is as it was in a v4 game", () => {
-    const sim = board(4);
-    sim.state.step = minutes(60);
-    upkeep(sim.state, dirty);
-    expect(popAt(sim, 2, 2)).toBe(1_000);
-  });
 });
 
 describe("diamond mines", () => {
@@ -111,7 +101,7 @@ describe("diamond mines", () => {
     });
   };
 
-  it("are placed beside mountains, one per 1,024 tiles, and not in v4", () => {
+  it("are placed beside mountains, one per 1,024 tiles", () => {
     const genesis = makeGenesis({ seed: 7, empires: [humans(1), humans(1)] });
     const sim = new Sim(genesis);
     const mines = [...sim.state.item.keys()].filter((i) => sim.state.item[i] === ITEM.MINE);
@@ -121,8 +111,6 @@ describe("diamond mines", () => {
       expect(isMountainEdge(sim, i)).toBe(true);
     }
     expect(sim.state.itemCount).toBe(0);
-    const old = new Sim({ ...genesis, protocol: 4 });
-    expect([...old.state.item].some((item) => item >= ITEM.MINE)).toBe(false);
   });
 
   // A game composed before mining by population: mines are dug.
@@ -314,12 +302,12 @@ describe("coins", () => {
   };
 
   it("gather near empires and near one another, and are never diamonds", () => {
-    const v4 = census(4);
     const v5 = census(5);
-    expect(v5.nearGround).toBeGreaterThan(v4.nearGround * 2);
-    expect(v5.neighbours).toBeGreaterThan(v4.neighbours * 1.5);
+    // On this seed a v4 game, with coins anywhere, had under a third of them
+    // near anybody's ground and under two neighbours each.
+    expect(v5.nearGround).toBeGreaterThan(0.5);
+    expect(v5.neighbours).toBeGreaterThan(2);
     expect(v5.diamonds).toBe(0);
-    expect(v4.diamonds).toBeGreaterThan(0);
   });
 });
 

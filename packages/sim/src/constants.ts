@@ -15,22 +15,22 @@ export const PROTOCOL_VERSION: number = Number(SIM_VERSION.split(".")[0]);
  *  PROTOCOL_VERSION is always its first entry — written out rather than derived,
  *  so a major release that forgets to list itself here fails a test instead of
  *  silently dropping the version before it. */
-export const SUPPORTED_PROTOCOLS: readonly number[] = [6, 5, 4];
+export const SUPPORTED_PROTOCOLS: readonly number[] = [6, 5];
 
 /** The day each superseded version stops being played, ISO. Written by hand at
- *  the bump — the release date plus the longest duration preset — and checked
- *  by a test that fails once a date has passed. Retirement is an alarm clock,
- *  not something somebody has to remember. */
+ *  the bump and checked by a test that fails once a date has passed.
+ *  Retirement is an alarm clock, not something somebody has to remember.
+ *
+ *  What needs an old version's code is a game still running on it: a game is
+ *  played to its end on the version it started on, and the newest one can
+ *  have started just before the successor was deployed. So the date is that
+ *  deploy plus the longest game (`MAX_DURATION`) plus two days for slack. A
+ *  version can go sooner once nothing is running on it. Watching a finished
+ *  game does not hold a version up: a retired version's games are watched
+ *  from the frames their rooms recorded, without its rules. */
 export const PROTOCOL_SUNSET: Readonly<Record<number, string>> = {
-  // Release day + 90. From v4 on this is arithmetic — a version's longest
-  // possible game is fixed the moment it stops being current, so the date is
-  // its successor's release plus MAX_DURATION plus slack, and raising the cap
-  // later can never invalidate a date already published.
-  //
-  // v6's release (11 November 2026) plus the 31-day cap plus two weeks.
-  5: "2026-12-26",
-  // v5's release (31 October 2026) plus the 31-day cap plus two weeks.
-  4: "2026-12-15",
+  // v6 deployed 11 November 2026, plus 31 days, plus two.
+  5: "2026-12-14",
 };
 
 /** Whether this build will play a game stamped with `version`.

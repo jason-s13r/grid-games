@@ -30,7 +30,7 @@ import type { State } from "./state.js";
 import type { Empire } from "./types.js";
 import { STAT } from "./constants.js";
 import { bump } from "./stats.js";
-import { growthCeiling, isAttended, isMine, isV5, mineLeft, minesByPop, minesGiveNow, workMine } from "./v5.js";
+import { growthCeiling, isAttended, isMine, mineLeft, minesByPop, minesGiveNow, workMine } from "./v5.js";
 
 /** Flood the empire's own tiles outward from its capital. Returns a mask over
  *  the whole map: 1 where the capital still reaches. */
@@ -67,18 +67,17 @@ export function reachable(state: State, empire: Empire): Uint8Array {
 
 export function upkeep(state: State, dirty: DirtySet): void {
   const rules = state.genesis.rules;
-  // From v5 growth stops at a ceiling and waits for somebody to be there, and
+  // Growth stops at a ceiling and waits for somebody to be there, and
   // connected mines give their diamonds. See v5.ts.
-  const v5 = isV5(state);
-  const ceiling = v5 ? growthCeiling(state) : Infinity;
+  const ceiling = growthCeiling(state);
   const byPop = minesByPop(state);
-  const mining = v5 && !byPop && minesGiveNow(state);
+  const mining = !byPop && minesGiveNow(state);
 
   for (const empire of state.empires) {
     if (!empire.alive) continue;
 
     const seen = reachable(state, empire);
-    const growing = empire.growthUnlocked !== 0 && (!v5 || isAttended(state, empire));
+    const growing = empire.growthUnlocked !== 0 && isAttended(state, empire);
     let delta = 0;
 
     for (let i = 0; i < state.owner.length; i++) {
