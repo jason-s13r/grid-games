@@ -1,5 +1,31 @@
 # Changelog
 
+## web@1.12.0 (2026-11-11)
+
+### Features
+
+- a small map of each game in the listings
+  The room builds a grid of who holds what, at most 96 cells across, each
+  cell what covers most of its square, with the house each empire flies.
+  It is sent at the start and the end, and in between at most every ten
+  minutes, from the snapshot the room already takes; rooms wake hourly,
+  so a quiet game's map is at most an hour old.
+
+  The Worker deflates it into the games row (migration 0004) and the
+  listings carry it. The start page draws it a pixel a cell in the
+  zoomed-out map colours, says how old it is, and takes the house you
+  flew and the winner's name from it rather than from whatever game is
+  on the board.
+
+### Fixes
+
+- the Qot. games link goes to qot.nz
+
+### Dependencies
+
+- room: 1.6.0 -> 1.7.0
+
+
 ## web@1.11.0 (2026-11-11)
 
 ### Features

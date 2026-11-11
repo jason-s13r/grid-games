@@ -1,5 +1,37 @@
 # Changelog
 
+## room@1.7.0 (2026-11-11)
+
+### Features
+
+- record the map over a game, and keep it in the archive
+  The room records a frame of the map on a steady pace, about 4,000 over a
+  game with an end whatever its length, plus the start and the end. It
+  simulates in pieces that stop at each frame, so a quiet room's hourly
+  catch-up records its frames as surely as a busy one.
+
+  A frame is a grid like the listings' map, a tile a cell up to Large
+  maps and at most 256 cells across, stored as runs: a key frame every
+  64, deltas between. One row written per frame. A six-hour game on a
+  Large or Vast map comes to about 600 KB.
+
+  The archive carries it as `timeline`, with the house each empire flew,
+  for a replay to fast-forward through and make a video from.
+
+- a small map of each game in the listings
+  The room builds a grid of who holds what, at most 96 cells across, each
+  cell what covers most of its square, with the house each empire flies.
+  It is sent at the start and the end, and in between at most every ten
+  minutes, from the snapshot the room already takes; rooms wake hourly,
+  so a quiet game's map is at most an hour old.
+
+  The Worker deflates it into the games row (migration 0004) and the
+  listings carry it. The start page draws it a pixel a cell in the
+  zoomed-out map colours, says how old it is, and takes the house you
+  flew and the winner's name from it rather than from whatever game is
+  on the board.
+
+
 ## room@1.6.0 (2026-11-11)
 
 ### Features
