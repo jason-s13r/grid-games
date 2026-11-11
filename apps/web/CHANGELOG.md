@@ -1,5 +1,34 @@
 # Changelog
 
+## web@1.8.1 (2026-11-11)
+
+### Fixes
+
+- catch a sleeping room up an hour at a time
+  A room simulated everything since it last woke in one call. On a large
+  map with bots, twelve hours of game takes most of a Durable Object's 30 s
+  of CPU, so a long idle gap got the object thrown away mid-catch-up: the
+  alarm failed until Cloudflare gave up on it, every hello failed the same
+  way, and the game sat at its last snapshot, never ending or archiving.
+  Clients waited on "Connecting..." forever.
+
+  The room now simulates at most an hour of game per call (MAX_ADVANCE)
+  and, while behind, asks to be woken again straight away, so each wake
+  gets fresh CPU and the game catches up over a handful of alarms. Running
+  games check in hourly instead of twice a day, so a wake never has much
+  to do. Asking for a game's info sets its alarm again, which restarts a
+  room whose alarm was dropped.
+
+  A browser client catches up a few thousand steps a frame instead of
+  all at once, so arriving far behind no longer freezes the tab. And an
+  ended, archived game opens as its replay: the check looked for a phase
+  of "ended", which a live room never reports.
+
+### Dependencies
+
+- room: 1.3.0 -> 1.3.1
+
+
 ## web@1.8.0 (2026-11-11)
 
 ### Features
