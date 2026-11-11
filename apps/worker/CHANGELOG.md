@@ -1,5 +1,30 @@
 # Changelog
 
+## worker@0.6.0 (2026-11-11)
+
+### Features
+
+- count seats taken, and let a player leave a lobby
+  A game's player count is now the seats taken: in a lobby, the people who
+  have picked an empire, rather than everybody who has opened it. A lobby
+  also lists how many are in it, picked or not ("1 player, 3 in lobby"),
+  kept in a new games.lobby column. Both change only on a join, a pick or
+  a leave, so they cost no more writes than before.
+
+  The lobby's Leave button now takes the player out of the game
+  altogether: out of its lobby and its count, and off their own list of
+  games. Coming back is joining again. Leaving a game that has started is
+  still just closing it; the seat stays.
+
+  The deploy applies D1 migrations before the Worker goes up as well as
+  after, so a new column exists before the code that reads it.
+
+### Dependencies
+
+- room: 1.4.0 -> 1.5.0
+- web: 1.9.0 -> 1.10.0
+
+
 ## worker@0.5.0 (2026-11-11)
 
 ### Features
