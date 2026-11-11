@@ -174,7 +174,9 @@ export class OnlinePanel {
           ? `<div class="setup-foot"><button class="btn primary" type="button" data-online-action="start"${
               picked ? "" : " disabled"
             }>Start game</button></div>`
-          : `<p class="hint">Waiting for the game's creator to start it.</p>`
+          : lobby.startsAt
+            ? `<p class="hint">Pick an empire before then to play: a game nobody has picked one in by the start is called off.</p>`
+            : `<p class="hint">Waiting for the game's creator to start it.</p>`
       }`;
   }
 }

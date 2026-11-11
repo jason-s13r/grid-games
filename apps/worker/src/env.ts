@@ -18,4 +18,8 @@ export interface Env {
   DEFAULT_DURATION_MINUTES?: string;
   /** "Support the game": a link, or "off". Set in the dashboard. */
   TIP_URL?: string;
+  /** A player key to own the scheduled public games (see schedule.ts), so
+   *  they can be started early or have their settings changed. Unset: nobody
+   *  owns them. Set in the dashboard. */
+  SCHEDULE_CREATOR?: string;
 }

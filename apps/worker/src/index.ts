@@ -1,7 +1,9 @@
 // The Worker at tessera.qot.nz.
 //
 //   POST /api/games            create a game, returns { id }
-//   GET  /api/games?list=open  public games: open (default), running, ended
+//   GET  /api/games?list=open  public games: open (default), running, ended.
+//                              Asking for the open ones also makes any
+//                              missing scheduled game (see schedule.ts)
 //   GET  /api/games/:id        whether a game exists, and its phase
 //   GET  /api/games/:id/archive  a finished game, whole, for a replay
 //   GET  /api/players/:key     one player's record and recent games
@@ -22,6 +24,7 @@ import type { Env } from "./env.js";
 import { LEADER_STATS, forgetPlayer, leaderboard, listGames, playerStats } from "./records.js";
 import type { LeaderScope, Listing } from "./records.js";
 import { hasArchive, serveArchive } from "./archive.js";
+import { ensureScheduled } from "./schedule.js";
 import { forgetPayload, verify } from "@tessera/protocol";
 
 export { GameRoom } from "./game-room.js";
@@ -42,6 +45,8 @@ export default {
         return json({ error: "list is open, running or ended" }, 400);
       }
       if (!env.DB) return json({ games: [] }, 200, 15);
+      // Whoever looks for a game to join finds one of each scheduled length.
+      if (which === "open") await ensureScheduled(env, Date.now()).catch((e: unknown) => console.error("schedule failed", e));
       return json({ games: await listGames(env.DB, which as Listing, Date.now()) }, 200, 15);
     }
 

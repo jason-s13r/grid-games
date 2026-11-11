@@ -169,7 +169,8 @@ export interface RoomConfig {
    *  are bound to. Not the genesis game id, which does not exist until the
    *  game starts. */
   roomId: string;
-  /** The key allowed to start the game by hand. */
+  /** The key allowed to start the game by hand and change its settings.
+   *  Empty for a scheduled game, which nobody owns and which starts itself. */
   creator: string;
   /** Human empires on the map. Those nobody picks are left open. */
   empires: number;

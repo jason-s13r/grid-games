@@ -113,7 +113,9 @@ export class GameSettingsDialog {
               <p class="hint">${
                 online.mine
                   ? "Unlisted games can still be joined by anyone with the link."
-                  : "Only the game's creator can change this."
+                  : online.settings?.creator
+                    ? "Only the game's creator can change this."
+                    : "A scheduled public game: its settings are fixed."
               }</p>
             </section>`
           : ""
