@@ -1,5 +1,41 @@
 # Changelog
 
+## room@1.9.0 (2026-11-11)
+
+### Features
+
+- give old archives their timelines in the background
+  The backfill becomes a Durable Object instead of a script to run from a
+  terminal. The open games list kicks it, and on its alarm it works through
+  finished games archived without a timeline: a game hour of replay a wake,
+  as a room catches up, with the sim's snapshot and the frames so far kept
+  between wakes, so a ten-day game takes a few hundred wakes and an
+  eviction loses nothing. Each game must replay to its archived hash before
+  its timeline is written into the archive. When every finished game has a
+  timeline, or cannot be given one, it marks itself finished and idles.
+
+  GET /api/backfill says how it is going. The frame chain and the pace are
+  shared with timelineOf, so both make exactly what a room would have kept.
+
+- watch a retired version's games as a time-lapse
+  A replay re-runs a game's rules, so once its version is retired a
+  finished game could not be watched at all. Now the replay opens such a
+  game from the timeline its room recorded: the map over time, played as a
+  time-lapse with a scrubber and the day, the houses in their colours.
+
+  Games archived before rooms kept timelines have none, so `timelineOf`
+  makes one from an archive, the same frames a room would have kept, and
+  `pnpm --filter @tessera/worker backfill-timelines` gives every finished
+  archive in R2 that lacks one its timeline. It checks each replays to the
+  archived hash first, and has to be run while this checkout still plays
+  those games' versions. The archive cache key moves to v2, as archives
+  are rewritten in place.
+
+### Dependencies
+
+- sim: 6.0.0 -> 6.1.0
+
+
 ## room@1.8.0 (2026-11-11)
 
 ### Features

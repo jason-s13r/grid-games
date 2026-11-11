@@ -1,5 +1,29 @@
 # Changelog
 
+## web@1.15.0 (2026-11-11)
+
+### Features
+
+- watch a retired version's games as a time-lapse
+  A replay re-runs a game's rules, so once its version is retired a
+  finished game could not be watched at all. Now the replay opens such a
+  game from the timeline its room recorded: the map over time, played as a
+  time-lapse with a scrubber and the day, the houses in their colours.
+
+  Games archived before rooms kept timelines have none, so `timelineOf`
+  makes one from an archive, the same frames a room would have kept, and
+  `pnpm --filter @tessera/worker backfill-timelines` gives every finished
+  archive in R2 that lacks one its timeline. It checks each replays to the
+  archived hash first, and has to be run while this checkout still plays
+  those games' versions. The archive cache key moves to v2, as archives
+  are rewritten in place.
+
+### Dependencies
+
+- sim: 6.0.0 -> 6.1.0
+- room: 1.8.0 -> 1.9.0
+
+
 ## web@1.14.0 (2026-11-11)
 
 ### Features

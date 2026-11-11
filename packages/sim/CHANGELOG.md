@@ -1,5 +1,24 @@
 # Changelog
 
+## sim@6.1.0 (2026-11-11)
+
+### Features
+
+- play v4 again until its sunset
+  6.0.0 dropped v4 a month early, to keep to a test that held the build to
+  two versions. The rule is the date, not the count: a superseded version
+  is played until its successor's release plus the longest game plus two
+  weeks, and several majors in a month means several supported at once.
+  So v4 is back until 15 December as published, the count test is gone,
+  and the sunset tests stay the alarm.
+
+  The v4 fixture and the v5 tests' v4 comparisons are restored. The
+  fixture check now takes each version with the one before it: the same
+  game is replayed under the older number to the older hash, as before,
+  and where the newer version draws another map the older game is
+  replayed under the newer number to its own hash.
+
+
 ## sim@6.0.0 (2026-11-11)
 
 ### Features
