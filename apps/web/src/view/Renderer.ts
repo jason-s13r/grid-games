@@ -42,7 +42,8 @@ const KIND: Record<number, number> = {
 };
 
 /** The classes that join a terrain tile up with its neighbours: a `j-` for
- *  each side the same kind of ground goes on from, `x-turn` for a crossing
+ *  each side the same kind of ground goes on from, `bend-` for a river
+ *  turning a corner, `x-turn` for a crossing
  *  over ground that runs east and west rather than north and south, and a
  *  variant for a mountain. Off the map counts as going on, so a river runs off
  *  the edge rather than stopping short of it.
@@ -72,6 +73,10 @@ export function edges(state: State, i: number): string {
   const t = terrain[i]!;
   if (t === TERRAIN.RIVER_BRIDGED && (e || w) && !(n || s)) cls += " x-turn";
   if (t === TERRAIN.WALL_LADDERED && (n || s) && !(e || w)) cls += " x-turn";
+  // A river turning a corner curves round it.
+  if (t === TERRAIN.RIVER && Number(n) + Number(e) + Number(s) + Number(w) === 2 && n !== s) {
+    cls += ` bend-${n ? "n" : "s"}${e ? "e" : "w"}`;
+  }
   if (t === TERRAIN.MOUNTAIN) {
     const v = (Math.imul(i, 0x9e3779b1) >>> 29) % 3;
     if (v) cls += ` v${v}`;

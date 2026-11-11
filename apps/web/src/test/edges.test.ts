@@ -50,6 +50,12 @@ describe("terrain edges", () => {
     expect(at(rows, 0, 1)).toEqual(["j-n", "j-e", "j-w"]);
   });
 
+  it("bends a river turning a corner, and not one running straight", () => {
+    expect(at([".R.", ".RR", "..."], 1, 1)).toEqual(["j-n", "j-e", "bend-ne"]);
+    expect(at(["...", "RR.", ".R."], 1, 1)).toEqual(["j-s", "j-w", "bend-sw"]);
+    expect(at([".R.", ".R.", ".R."], 1, 1)).toEqual(["j-n", "j-s"]);
+  });
+
   it("does not join different kinds", () => {
     const rows = ["...", "WRM", "..."];
     expect(edges(board(rows), 4)).toBe("");

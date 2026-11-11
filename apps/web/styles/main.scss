@@ -448,6 +448,21 @@ h1, h2, h3, .brand, .screen-brand {
   background: var(--_band), var(--_water);
 }
 
+// A river turning a corner curves round it: an arc of water about the corner
+// between the two sides it goes on from, the inner bank `--m` from it and the
+// outer bank `--m` short of the far sides.
+.tile.t-river[class*=" bend-"] {
+  --_r: calc(var(--s) * 0.24);
+  background:
+    radial-gradient(circle calc(var(--s) * 1.5) at var(--at),
+      var(--land) 0 var(--_r), #0000 0 calc(var(--s) - var(--_r)), var(--land) 0),
+    var(--_water);
+}
+.tile.bend-ne { --at: 100% 0; }
+.tile.bend-se { --at: 100% 100%; }
+.tile.bend-sw { --at: 0 100%; }
+.tile.bend-nw { --at: 0 0; }
+
 .tile.t-wall,
 .tile.t-ladder {
   @extend %t-band;
@@ -642,23 +657,33 @@ h1, h2, h3, .brand, .screen-brand {
     radial-gradient(#26597a, #2f6b8f 70%);
 }
 
-// A range: rock, rounded where it ends, and peaks with a shaded face, a lit
-// face and snow. Three ways of standing (`v1`, `v2` from the tile's place), so
-// a range is not one peak stamped over and over. A peak's apex is given in
-// lengths, not percentages, so the snow's shorter box puts it in the same
-// place.
+// A range: rock, jagged along each side it ends on, and peaks with a shaded
+// face, a lit face and snow. Three ways of standing (`v1`, `v2` from the
+// tile's place), so a range is not one peak stamped over and over. A peak's
+// apex is given in lengths, not percentages, so the snow's shorter box puts it
+// in the same place.
 .tile.t-mountain {
-  @extend %t-rounded;
+  --_t: calc(var(--s) / 4);
+  // Teeth of land along each side that ends.
+  --_edge:
+    linear-gradient(135deg, var(--kn) 25%, #0000 0) 0 0 / var(--_t) var(--_t) repeat-x,
+    linear-gradient(225deg, var(--kn) 25%, #0000 0) 0 0 / var(--_t) var(--_t) repeat-x,
+    linear-gradient(45deg, var(--ks) 25%, #0000 0) 0 100% / var(--_t) var(--_t) repeat-x,
+    linear-gradient(315deg, var(--ks) 25%, #0000 0) 0 100% / var(--_t) var(--_t) repeat-x,
+    linear-gradient(135deg, var(--kw) 25%, #0000 0) 0 0 / var(--_t) var(--_t) repeat-y,
+    linear-gradient(45deg, var(--kw) 25%, #0000 0) 0 0 / var(--_t) var(--_t) repeat-y,
+    linear-gradient(225deg, var(--ke) 25%, #0000 0) 100% 0 / var(--_t) var(--_t) repeat-y,
+    linear-gradient(315deg, var(--ke) 25%, #0000 0) 100% 0 / var(--_t) var(--_t) repeat-y;
   --_p: from 148deg at 50% calc(var(--s) * 0.14);
   --_snow: conic-gradient(var(--_p), #d9d3c6 32deg, #f6f3ec 0 64deg, #0000 0) 0 0 / 100% 40% no-repeat;
   --_rock: conic-gradient(var(--_p), #544c41 32deg, #8c8170 0 64deg, #0000 0);
-  background: var(--_round), var(--_snow), var(--_rock), linear-gradient(#6b6255, #5f574b);
+  background: var(--_edge), var(--_snow), var(--_rock), linear-gradient(#6b6255, #5f574b);
 }
 // Two peaks, the nearer one lower and to the right.
 .tile.t-mountain.v1 {
   --_q: from 146deg at 70% calc(var(--s) * 0.42);
   background:
-    var(--_round),
+    var(--_edge),
     conic-gradient(var(--_q), #544c41 34deg, #8c8170 0 68deg, #0000 0),
     conic-gradient(from 150deg at 32% calc(var(--s) * 0.1), #d9d3c6 30deg, #f6f3ec 0 60deg, #0000 0) 0 0 / 100% 34% no-repeat,
     conic-gradient(from 150deg at 32% calc(var(--s) * 0.1), #544c41 30deg, #8c8170 0 60deg, #0000 0),
@@ -668,7 +693,7 @@ h1, h2, h3, .brand, .screen-brand {
 .tile.t-mountain.v2 {
   --_q: from 135deg at 46% calc(var(--s) * 0.3);
   background:
-    var(--_round),
+    var(--_edge),
     conic-gradient(var(--_q), #544c41 45deg, #8c8170 0 90deg, #0000 0),
     linear-gradient(#6b6255, #5f574b);
 }
