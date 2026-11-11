@@ -22,6 +22,9 @@ export class Minimap {
     if (!ctx) throw new Error("2d context unavailable");
     this.ctx = ctx;
     this.ctx.imageSmoothingEnabled = false;
+    // For the stylesheet, which caps the map's height on a phone by capping its
+    // width at that height times this.
+    canvas.style.setProperty("--map-ratio", String(mapWidth / mapHeight));
 
     // A canvas has two sizes and they are not the same one. The backing store
     // is what fit() letterboxes the map into; the bounding rect is CSS pixels,

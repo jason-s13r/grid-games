@@ -2461,6 +2461,20 @@ a.btn {
   }
   // Not while the Map tab is open: the big one is on screen already.
   .app:has(.acc[data-acc="map"][open]) .inset { display: none; }
+
+  // The Map tab's map, letterboxed: no taller than about a quarter of the
+  // screen, centred, and clear of the bottom edge, where a phone browser's
+  // toolbar sits over the page. The width is what is capped, at that height
+  // times the map's shape, so the canvas keeps its proportions and a tap on
+  // it still lands where it was aimed.
+  .side .minimap {
+    width: min(100% - 24px, calc(28dvh * var(--map-ratio, 1.5)));
+    margin: 4px auto 0;
+  }
+  .acc[data-acc="map"] > .acc-body {
+    padding-bottom: calc(24px + env(safe-area-inset-bottom, 0px));
+    .hint { text-align: center; }
+  }
 }
 
 // --- narrow screens ----------------------------------------------------------
