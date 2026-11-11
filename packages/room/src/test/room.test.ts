@@ -81,7 +81,7 @@ describe("the lobby", () => {
   it("refuses a new house once every empire on the map has one", async () => {
     const h = new Harness({ creator: alice.key, empires: 2 });
     const [a, b, c] = [await h.join(alice), await h.join(bob), await h.join(carol)];
-    a.client.pickBanner("alp");
+    a.client.pickBanner("peony");
     b.client.pickBanner("lumen");
     await h.settle();
     c.client.pickBanner("cobalt");
@@ -118,7 +118,7 @@ describe("the lobby", () => {
     const [a, b, c] = [await h.join(alice), await h.join(bob), await h.join(carol)];
     b.client.pickBanner("lumen");
     await h.settle();
-    a.client.pickBanner("alp");
+    a.client.pickBanner("peony");
     c.client.pickBanner("lumen");
     await h.settle();
     a.client.start();
@@ -129,7 +129,7 @@ describe("the lobby", () => {
     expect(a.client.you!.seat).toEqual({ empire: 1, member: 0 });
     expect(b.client.you!.seat).toEqual({ empire: 2, member: 0 });
     expect(c.client.you!.seat).toEqual({ empire: 2, member: 1 });
-    expect(empires.map((e) => e.banner)).toEqual(["alp", "lumen", undefined, expect.any(String), expect.any(String)]);
+    expect(empires.map((e) => e.banner)).toEqual(["peony", "lumen", undefined, expect.any(String), expect.any(String)]);
     // Bots fly houses of their own, nobody else's.
     const flown = empires.flatMap((e) => (e.banner ? [e.banner] : []));
     expect(new Set(flown).size).toBe(flown.length);

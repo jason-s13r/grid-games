@@ -380,10 +380,11 @@ h1, h2, h3, .brand, .screen-brand {
 // minimap draw the two mixed in about the share each pattern paints them
 // (`mapColour` in sim/src/banners.ts), so a change to how much of a tile a
 // pattern covers belongs in that table too.
-.tile.p-cross {
+// The chevron turned on its side, pointing right.
+.tile.p-arrow {
   background:
-    linear-gradient(var(--c2) 0 0) 50% 50% / 62% 20% no-repeat,
-    linear-gradient(var(--c2) 0 0) 50% 50% / 20% 62% no-repeat,
+    conic-gradient(from 225deg at 38% 50%, var(--c1) 90deg, #0000 0),
+    conic-gradient(from 225deg at 74% 50%, var(--c2) 90deg, #0000 0),
     var(--c1);
 }
 

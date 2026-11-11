@@ -43,7 +43,7 @@ export interface Banner {
 export type Pattern =
   | "star"
   | "spiral"
-  | "cross"
+  | "arrow"
   | "saltire"
   | "stripes"
   | "bars"
@@ -57,7 +57,7 @@ export type Pattern =
 export const PATTERNS: readonly Pattern[] = [
   "star",
   "spiral",
-  "cross",
+  "arrow",
   "saltire",
   "stripes",
   "bars",
@@ -95,7 +95,7 @@ export const BANNERS: readonly Banner[] = [
   { id: "indigo", name: "Indigo", c1: "#6f6bff", c2: "#101041", pattern: "star" },
   { id: "sand", name: "Sand", c1: "#e0cfa0", c2: "#3a3122", pattern: "spiral" },
   // The first houses with flags of their own rather than the prototype's two.
-  { id: "alp", name: "Alp", c1: "#e3202f", c2: "#ffffff", pattern: "cross" },
+  { id: "peony", name: "Peony", c1: "#ff7eb6", c2: "#4a0b2a", pattern: "arrow" },
   { id: "ink", name: "Ink", c1: "#1c1b24", c2: "#e8c547", pattern: "saltire" },
   { id: "plum", name: "Plum", c1: "#a23b7e", c2: "#22051a", pattern: "stripes" },
   { id: "tide", name: "Tide", c1: "#5ec8ff", c2: "#062a40", pattern: "bars" },
@@ -183,7 +183,7 @@ export function flyBanners(
 const FIRST_SHARE: Record<Pattern, number> = {
   star: 0.45,
   spiral: 0.5,
-  cross: 0.78,
+  arrow: 0.72,
   saltire: 0.78,
   stripes: 0.62,
   bars: 0.72,

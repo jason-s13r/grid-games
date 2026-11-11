@@ -31,7 +31,7 @@ const COMMITTED = [
   "moss",
   "indigo",
   "sand",
-  "alp",
+  "peony",
   "ink",
   "plum",
   "tide",
@@ -169,9 +169,9 @@ describe("flying banners", () => {
 
   it("keeps a sealed house and lends a vacancy one nobody is flying", () => {
     // Empire 1 picked Verdant, which empire 2 would have worn by index.
-    const flown = ids(flyBanners([{ banner: "verdant" }, {}, { banner: "alp" }]));
+    const flown = ids(flyBanners([{ banner: "verdant" }, {}, { banner: "peony" }]));
     expect(flown[0]).toBe("verdant");
-    expect(flown[2]).toBe("alp");
+    expect(flown[2]).toBe("peony");
     expect(flown[1]).not.toBe("verdant");
     expect(new Set(flown).size).toBe(3);
   });
