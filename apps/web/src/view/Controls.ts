@@ -15,6 +15,7 @@ import { escape } from "./escape";
 import { endBar, endCard } from "./EndCard";
 import { span } from "./clock";
 import { empireTheme } from "./palette";
+import { flag } from "./Houses";
 import type { Driver } from "../game/Driver";
 
 /** A step count as a wall clock. Exported because the scrubber counts in the
@@ -314,7 +315,7 @@ export class Controls {
       this.els.hud,
       "hud",
       `
-      <span class="swatch" data-banner="${empireTheme(empire.id).id}"></span>
+      ${flag(theme, 18)}
       <strong class="hud-name">${theme.name}</strong>
       ${isProtected(state, empire) ? '<span class="tag">protected</span>' : ""}
       <div class="meter" title="population timer">
@@ -573,7 +574,7 @@ export class Controls {
         // makes. Listing it as territory with nobody in it is the honest
         // rendering — and it never shows as dead, because it was never alive.
         const vacant = isVacant(state.empires[e.id - 1]!);
-        const row = `<span class="swatch" data-banner="${empireTheme(e.id).id}"></span>
+        const row = `${flag(t, 18)}
           <span class="standing-name">${t.name}${this.who(state, e.id)}</span>
           <span class="standing-tiles">${
             vacant && claimable

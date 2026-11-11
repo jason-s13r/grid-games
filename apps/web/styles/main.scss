@@ -1730,7 +1730,7 @@ a.btn {
 
 .standing {
   display: grid;
-  grid-template-columns: 12px 1fr auto auto 26px;
+  grid-template-columns: 18px 1fr auto auto 26px;
   align-items: center;
   gap: 6px;
   padding: 3px 0;
@@ -2259,16 +2259,49 @@ a.btn {
   font-size: 10px;
   padding-top: 1px;
 }
-.chat-who {
+// A line: the speaker's flag as an avatar, then who and when over what they
+// said.
+.chat-line { padding: 3px 0; gap: 6px; }
+.chat-avatar {
   flex: none;
-  font-weight: 700;
+  width: 20px;
+  padding-top: 1px;
+  .flag.tile { border-radius: 4px; }
 }
-.chat-body {
-  // Fill the room left by the stamp and the name. Without the grow the box
-  // shrinks to its min-content width and a wrapped line reads as indented.
+.chat-text {
   flex: 1;
   min-width: 0;
+  display: grid;
 }
+.chat-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 2px 6px;
+}
+.chat-who {
+  flex: none;
+  font: inherit;
+  font-weight: 400;
+  color: inherit;
+  padding: 0;
+  background: none;
+  border: 0;
+  text-align: left;
+  b { font-weight: 700; }
+}
+.chat-person { color: var(--muted); }
+.chat-key { opacity: 0.75; }
+.chat-body {
+  min-width: 0;
+}
+// Flags in place of colour squares: the standings, the bar over the board,
+// the results card.
+.standing .flag.tile,
+.end-row .flag.tile,
+.end-bar .flag.tile,
+.hud .flag.tile { border-radius: 4px; vertical-align: middle; }
+.end-title .flag.tile { margin-right: 8px; vertical-align: -3px; }
 .chat-mine .chat-body { color: #1c1a16; }
 .chat-note {
   color: var(--muted);
@@ -2596,7 +2629,7 @@ a.btn {
   .brand { order: 0; font-size: 17px; }
   // The HUD's pieces join the bar's own row, so they can sit on either line.
   .hud { display: contents; }
-  .hud .swatch { order: 1; }
+  .hud .swatch, .hud .flag { order: 1; }
   .hud-name { order: 2; font-size: 14px; }
   .meter { order: 3; flex: 1; width: auto; min-width: 0; max-width: 150px; height: 18px; }
   .menu-dock { order: 4; margin-left: auto; }
@@ -2621,7 +2654,6 @@ a.btn {
   appearance: none;
   padding: 0;
   font: inherit;
-  font-weight: 700;
   background: none;
   border: 0;
   cursor: pointer;

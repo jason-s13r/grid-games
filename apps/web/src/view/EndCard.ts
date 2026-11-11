@@ -18,6 +18,7 @@ import { WIN, summarise } from "@tessera/sim";
 import type { State } from "@tessera/sim";
 import { placesOf } from "@tessera/room";
 import { empireTheme } from "./palette";
+import { flag } from "./Houses";
 import { span } from "./clock";
 
 /** Rows in the card's table before it stops; your own row is added if it is
@@ -87,7 +88,7 @@ export function endCard(state: State, you: number, who: (empire: number) => stri
       const cls = `end-row${e.id === you ? " you" : ""}${e.alive ? "" : " fell"}`;
       return `<li class="${cls}">
         <span class="end-place">${placed.get(e.id)}</span>
-        <span class="swatch" data-banner="${t.id}"></span>
+        ${flag(t, 18)}
         <span class="end-name">${t.name}${who(e.id)}</span>
         <span class="end-tiles">${e.alive ? `${e.tilesOwned.toLocaleString()} tiles` : "fell"}</span>
       </li>`;
@@ -98,7 +99,7 @@ export function endCard(state: State, you: number, who: (empire: number) => stri
     <section class="end-card" aria-labelledby="end-title" style="--accent:${accent}">
       <p class="end-eyebrow">Game over</p>
       <h2 class="end-title" id="end-title">${
-        state.winner > 0 ? `<span class="swatch" data-banner="${empireTheme(state.winner).id}"></span>` : ""
+        state.winner > 0 ? flag(empireTheme(state.winner), 26) : ""
       }${headline(state, you)}</h2>
       <p class="end-why">${reason(state)}</p>
       ${place && !won ? `<p class="end-you">You came ${ordinal(place)}.</p>` : ""}
@@ -113,9 +114,9 @@ export function endCard(state: State, you: number, who: (empire: number) => stri
 
 /** The card tucked away: a bar with a way back to it. */
 export function endBar(state: State, you: number): string {
-  const flag = state.winner > 0 ? `<span class="swatch" data-banner="${empireTheme(state.winner).id}"></span>` : "";
+  const winner = state.winner > 0 ? flag(empireTheme(state.winner), 18) : "";
   return `<div class="end-bar">
-    ${flag}<strong>${headline(state, you)}</strong>
+    ${winner}<strong>${headline(state, you)}</strong>
     <span class="end-bar-why">Game over</span>
     <button class="btn btn-small" type="button" data-end-show>Results</button>
   </div>`;

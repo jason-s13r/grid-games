@@ -6,6 +6,7 @@
 
 import type { ChatLine } from "@tessera/room";
 import { empireTheme } from "./palette";
+import { flag } from "./Houses";
 import { escape } from "./escape";
 
 /** Players this browser has blocked, by key: their lines are not shown, in
@@ -157,17 +158,27 @@ export class ChatPanel {
       row.className = `chat-line${line.key === me ? " chat-mine" : ""}`;
       row.dataset.from = line.key;
       const when = new Date(line.at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-      const colour = line.empire ? empireTheme(line.empire).c1 : "inherit";
+      // The speaker's house as their avatar, then the house and who they are:
+      // "Sping (jason#a1b2c3)". A watcher has no house, only the name.
+      const house = line.empire ? empireTheme(line.empire) : undefined;
+      const name = line.name || "player";
+      const tag = `${escape(name)}<span class="chat-key">#${escape(line.key.slice(0, 6))}</span>`;
+      const label = house ? `<b>${escape(house.name)}</b> <span class="chat-person">(${tag})</span>` : `<span class="chat-person">${tag}</span>`;
       const who = line.name || `player ${line.key.slice(0, 6)}`;
       row.innerHTML = `
-        <span class="chat-when">${escape(when)}</span>
-        ${line.channel === "team" ? `<span class="chat-mark">team</span>` : ""}
-        ${
-          line.key === me
-            ? `<span class="chat-who" style="color:${colour}">${escape(who)}</span>`
-            : `<button type="button" class="chat-who chat-mutable" style="color:${colour}" data-block="${escape(line.key)}" data-name="${escape(who)}" title="Block ${escape(who)}: hide their lines, in every game">${escape(who)}</button>`
-        }
-        <span class="chat-body">${escape(line.text)}</span>`;
+        <span class="chat-avatar">${house ? flag(house, 20) : ""}</span>
+        <span class="chat-text">
+          <span class="chat-head">
+            ${
+              line.key === me
+                ? `<span class="chat-who">${label}</span>`
+                : `<button type="button" class="chat-who chat-mutable" data-block="${escape(line.key)}" data-name="${escape(who)}" title="Block ${escape(who)}: hide their lines, in every game">${label}</button>`
+            }
+            ${line.channel === "team" ? `<span class="chat-mark">team</span>` : ""}
+            <span class="chat-when">${escape(when)}</span>
+          </span>
+          <span class="chat-body">${escape(line.text)}</span>
+        </span>`;
       this.log.append(row);
     }
     // Follow the conversation, unless the reader has scrolled back to read.

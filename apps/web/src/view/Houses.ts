@@ -9,9 +9,10 @@ import type { Banner, BannerId } from "@tessera/sim";
 import { BANNERS } from "./palette";
 import { escape } from "./escape";
 
-/** A small flag, drawn with the board's own tile pattern. */
-export function flag(banner: Banner): string {
-  return `<span class="flag tile p-${banner.pattern}" data-banner="${banner.id}" aria-hidden="true"></span>`;
+/** A small flag, drawn with the board's own tile pattern. `size` in px. */
+export function flag(banner: Banner, size?: number): string {
+  const style = size ? ` style="--s:${size}px"` : "";
+  return `<span class="flag tile p-${banner.pattern}" data-banner="${banner.id}"${style} aria-hidden="true"></span>`;
 }
 
 export interface House {
