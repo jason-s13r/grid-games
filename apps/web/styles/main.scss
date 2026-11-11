@@ -345,6 +345,69 @@ h1, h2, h3, .brand, .screen-brand {
   overflow: hidden;
 }
 
+// --- terrain -------------------------------------------------------------------
+//
+// Impassable ground reads as solid; crossings read as built. Each drawn from
+// gradients on the tile's own size, like the flags, and close to the one colour
+// the zoomed-out map gives it (`TERRAIN_COLORS` in palette.ts), so zooming out
+// does not change what a place looks like.
+//
+// The ground under a crossing comes before the flags, so a crossing somebody
+// holds shows their flag, the way the zoomed-out map shows their colour. The
+// crossing itself is drawn over whatever is under it, from `::before`, beneath
+// the tile's number.
+
+// Brick, for walls and the wall under a ladder: three courses, the middle one
+// offset by half a brick.
+%t-bricks {
+  --mortar: #625a51;
+  --_j: conic-gradient(from 90deg at 1px 50%, #0000 50%, var(--mortar) 0 75%, #0000 0);
+  background:
+    repeating-linear-gradient(#0000 0 calc(var(--s) / 3 - 1px), var(--mortar) 0 calc(var(--s) / 3)),
+    var(--_j) 0 0 / calc(var(--s) / 2) calc(var(--s) * 2 / 3),
+    var(--_j) calc(var(--s) / 4) calc(var(--s) / -3) / calc(var(--s) / 2) calc(var(--s) * 2 / 3),
+    linear-gradient(#958c82, #82796f);
+}
+
+// Water, for rivers and the river under a bridge: two rows of ripples running
+// across.
+%t-water {
+  --_w: radial-gradient(50% 60% at 50% 100%, #0000 62%, rgba(255, 255, 255, 0.45) 0 78%, #0000 0);
+  background:
+    var(--_w) 0 calc(var(--s) * 0.16) / 50% 28% repeat-x,
+    var(--_w) calc(var(--s) / 4) calc(var(--s) * 0.6) / 50% 28% repeat-x,
+    #4a90b8;
+}
+
+.tile.t-bridge { @extend %t-water; }
+.tile.t-ladder { @extend %t-bricks; }
+
+.tile.t-bridge,
+.tile.t-ladder { isolation: isolate; }
+
+// A deck across: planks, with a rail along each side.
+.tile.t-bridge::before {
+  content: "";
+  position: absolute;
+  z-index: -1;
+  inset: 20% -1px;
+  border-block: max(2px, calc(var(--s) / 12)) solid #5a4528;
+  background: repeating-linear-gradient(90deg, #b08c55 0 calc(var(--s) / 5 - 1px), #6d5836 0 calc(var(--s) / 5));
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.35);
+}
+
+// A ladder up: two rails and the rungs between them.
+.tile.t-ladder::before {
+  content: "";
+  position: absolute;
+  z-index: -1;
+  inset: 6% 24%;
+  background:
+    linear-gradient(90deg, #6d4f2a 0 20%, #0000 0 80%, #6d4f2a 0),
+    repeating-linear-gradient(#0000 0 12%, #d2a764 0 24%);
+  filter: drop-shadow(0 1px 1px rgba(0, 0, 0, 0.4));
+}
+
 // The prototype's three-point star.
 .tile.p-star {
   --d: calc(var(--s) / 10);
@@ -470,13 +533,30 @@ h1, h2, h3, .brand, .screen-brand {
   background: conic-gradient(from 45deg, var(--c1) 25%, var(--c2) 0 50%, var(--c1) 0 75%, var(--c2) 0);
 }
 
-// Terrain. Impassable ground reads as solid; crossings read as built.
-.tile.t-mountain { background: #6b6255 linear-gradient(135deg, #8a7f6d 25%, transparent 25%); }
-.tile.t-lake     { background: #2f6b8f; }
-.tile.t-river    { background: #4a90b8; }
-.tile.t-bridge   { background: #9a7f52; box-shadow: inset 0 0 0 2px #6d5836; }
-.tile.t-wall     { background: #8a8178; box-shadow: inset 0 0 0 1px #6d655c; }
-.tile.t-ladder   { background: #b09a6a; box-shadow: inset 0 0 0 2px #7d6b45; }
+
+// Ground nobody can stand on, after the flags because nobody holds it.
+
+// A peak: a shaded face and a lit one, capped with snow.
+.tile.t-mountain {
+  // The apex in lengths, not percentages, so the snow's shorter box puts it
+  // in the same place.
+  --_peak: from 148deg at 50% calc(var(--s) * 0.12);
+  background:
+    conic-gradient(var(--_peak), #d9d3c6 32deg, #f6f3ec 0 64deg, #0000 0) 0 0 / 100% 40% no-repeat,
+    conic-gradient(var(--_peak), #544c41 32deg, #8c8170 0 64deg, #0000 0),
+    linear-gradient(#6b6255, #5f574b);
+}
+
+// Still water: deep in the middle, and the odd glint.
+.tile.t-lake {
+  background:
+    radial-gradient(circle at 30% 35%, rgba(255, 255, 255, 0.5) 0 6%, #0000 0),
+    radial-gradient(circle at 72% 70%, rgba(255, 255, 255, 0.35) 0 4%, #0000 0),
+    radial-gradient(#26597a, #2f6b8f 70%);
+}
+
+.tile.t-river { @extend %t-water; }
+.tile.t-wall  { @extend %t-bricks; }
 
 // Items sit on top of whatever holds them.
 .tile.i-bronze,
