@@ -46,6 +46,7 @@ describe("scheduled games", () => {
       const config = configFor(series, slot, now);
       expect(config.creator).toBe("");
       expect(config.public).toBe(true);
+      expect(config.chat).toBe("open");
       expect(config.startAt!).toBeGreaterThan(now);
       expect(config.startAt! - now).toBeLessThanOrEqual(2 * joinMs(series));
       expect(config.roomId).toMatch(/^[A-Za-z0-9_-]{4,64}$/);

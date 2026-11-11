@@ -83,7 +83,8 @@ export function configFor(series: Series, slot: number, now: number, creator = "
     joinShare: JOIN_SHARE,
     startAt: startsAt(slot),
     public: true,
-    chat: "team",
+    // Everybody, to all or to their own team.
+    chat: "open",
     createdAt: now,
   };
 }
