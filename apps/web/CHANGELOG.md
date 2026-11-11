@@ -1,5 +1,39 @@
 # Changelog
 
+## web@1.9.0 (2026-11-11)
+
+### Features
+
+- scheduled public games of each length, always open
+  There is now always a public 6-hour, 1-day, 3-day and 10-day game to
+  sign up for. Each length runs on a fixed grid: with J the late-join
+  window (a third of the game), game k starts at k*2J and takes late
+  joiners until k*2J + J, which is when game k+1 opens its lobby, J before
+  its own start. For six hours: two hours of lobby, two of late joining,
+  and a new game every four hours.
+
+  Asking for the open list makes any missing scheduled game, so nothing
+  runs on a timer. Room ids come from the series and slot (6h-<slot>), so
+  two lists at once make the same room and the second init is refused. A
+  slot that was called off at its start (nobody picked an empire) moves
+  the list on to the next slot early, so one is always open.
+
+  Scheduled games are owned by the key in SCHEDULE_CREATOR, a dashboard
+  variable, or by nobody when it is unset: then nobody can start one early
+  or change its settings, and it starts itself. The lobby and settings
+  say so.
+
+- link a best single game on the leaderboard to its game
+  The "best single game" lists now say which game each best came from,
+  and the number links to it: a finished game, so it opens as its replay.
+  Wins are a total and stay unlinked. The link is a real /g/<id> link, so
+  it can be opened in a new tab; a plain click opens it in place.
+
+### Dependencies
+
+- room: 1.3.1 -> 1.4.0
+
+
 ## web@1.8.1 (2026-11-11)
 
 ### Fixes
