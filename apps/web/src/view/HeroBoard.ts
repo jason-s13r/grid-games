@@ -8,7 +8,7 @@ import { bannerById } from "@tessera/sim";
 const SIZE = 14;
 
 const EMPIRES = [
-  { banner: "vermilion", capital: [10, 3] },
+  { banner: "sping", capital: [10, 3] },
   { banner: "cobalt", capital: [6, 9] },
   { banner: "amber", capital: [12, 11] },
   { banner: "verdant", capital: [8, 0] },

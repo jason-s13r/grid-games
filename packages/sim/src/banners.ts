@@ -80,7 +80,7 @@ export const PATTERNS: readonly Pattern[] = [
  *  thing that makes "growing the table is a pure data change" true rather than
  *  aspirational. */
 export const BANNERS: readonly Banner[] = [
-  { id: "vermilion", name: "Vermilion", c1: "#ff2600", c2: "#1a0400", pattern: "star" },
+  { id: "vermilion", name: "Vermilion", c1: "#0d0606", c2: "#ff1f3d", pattern: "star" },
   { id: "verdant", name: "Verdant", c1: "#72e21f", c2: "#044012", pattern: "spiral" },
   { id: "cobalt", name: "Cobalt", c1: "#3d8bff", c2: "#04173f", pattern: "star" },
   { id: "amber", name: "Amber", c1: "#ffb300", c2: "#3d2400", pattern: "spiral" },
@@ -105,9 +105,9 @@ export const BANNERS: readonly Banner[] = [
   { id: "orchid", name: "Orchid", c1: "#e83ad6", c2: "#3a0636", pattern: "dots" },
   { id: "mint", name: "Mint", c1: "#7ff0b0", c2: "#053320", pattern: "diamond" },
   { id: "lumen", name: "Lumen", c1: "#ffe14d", c2: "#3a3000", pattern: "rays" },
-  // A black star on red: Vermilion's flag turned inside out, as a house of its
-  // own rather than a rename, so every game that flew Vermilion still does.
-  { id: "sping", name: "Sping", c1: "#0d0606", c2: "#ff1f3d", pattern: "star" },
+  // A red star on black: the flag Vermilion flew until it turned inside out
+  // (a black star on red), kept as a house of its own.
+  { id: "sping", name: "Sping", c1: "#ff2600", c2: "#1a0400", pattern: "star" },
 ];
 
 /** How many empires a game may have, which is how many banners there are.
