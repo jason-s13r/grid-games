@@ -1,5 +1,16 @@
 # Changelog
 
+## web@1.13.0 (2026-11-11)
+
+### Features
+
+- flags in place of colour squares, and in chat
+  The standings, the bar over the board and the results card show each
+  house's flag rather than a square of its colour. A chat line has the
+  speaker's flag as its avatar and names them as their house and who they
+  are, "Sping (jason#a1b2c3)"; a watcher, with no house, is just the name.
+
+
 ## web@1.12.0 (2026-11-11)
 
 ### Features
