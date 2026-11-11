@@ -31,7 +31,10 @@
 
   // Listings, players and results. No database_id: `wrangler deploy` creates
   // the database on first deploy and binds it. The schema is in migrations/,
-  // applied by `pnpm deploy` after the Worker is up, and locally by `pnpm dev`.
+  // applied by `pnpm deploy` before the Worker goes up (so new columns are
+  // there for the code that reads them; this fails harmlessly on a first
+  // deploy, before the database exists) and again after, and locally by
+  // `pnpm dev`.
   "d1_databases": [{ "binding": "DB", "database_name": "tessera", "migrations_dir": "migrations" }],
 
   // Finished games, whole, for replays. Wrangler creates the database on

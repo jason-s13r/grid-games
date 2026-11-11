@@ -183,7 +183,9 @@ export class GamesPanel {
     const mine = "empire" in game ? game : undefined;
     const theme = mine?.empire ? empireTheme(mine.empire) : undefined;
     const size = `${game.width}×${game.height}`;
-    const people = `${game.players} ${game.players === 1 ? "player" : "players"}`;
+    // Players are seats taken; a lobby also says how many have looked in.
+    const seats = `${game.players} ${game.players === 1 ? "player" : "players"}`;
+    const people = game.phase === "lobby" && game.lobby ? `${seats}, ${game.lobby} in lobby` : seats;
     const bots = `${game.bots} ${game.bots === 1 ? "bot" : "bots"}`;
     const label = { resume: game.phase === "lobby" ? "Open lobby" : "Resume", join: "Join", watch: "Watch", view: "View" }[action];
     return `<li class="game-row">

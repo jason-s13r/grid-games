@@ -48,10 +48,12 @@ export class Harness {
   readonly games: GameSummary[] = [];
   readonly players: PlayerRecord[] = [];
   readonly results: GameResult[] = [];
+  readonly left: string[] = [];
   private readonly events: RoomEvents = {
     game: (summary) => this.games.push(summary),
     player: (record) => this.players.push(record),
     ended: (result) => this.results.push(result),
+    left: (_roomId, key) => this.left.push(key),
   };
 
   constructor(config: Partial<RoomConfig> & { creator: string }) {

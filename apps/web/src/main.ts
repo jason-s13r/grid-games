@@ -654,6 +654,8 @@ const online = new OnlinePanel(
     pick: (empire) => link?.client.pickEmpire(empire),
     start: () => link?.client.start(),
     leave: () => {
+      // Out of a lobby for good, not just away from it.
+      link?.client.leave();
       leaveRoom();
       shell.left();
     },

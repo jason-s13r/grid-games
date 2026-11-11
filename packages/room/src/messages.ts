@@ -143,6 +143,8 @@ export type ClientMessage =
       bot?: boolean;
     }
   | { t: "lobby"; name?: string; empire?: number | null }
+  /** Leave a game that has not started: out of its lobby and its records. */
+  | { t: "leave" }
   | { t: "start" }
   | { t: "move"; move: { seq: number; type: MoveType; x: number; y: number }; sig: string }
   | { t: "hash"; step: number; hash: number }

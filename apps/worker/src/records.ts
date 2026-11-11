@@ -11,12 +11,13 @@ export function writeGame(db: D1Database, game: GameSummary, now: number): Promi
   return db
     .prepare(
       `INSERT INTO games (id, creator, public, phase, created_at, starts_at, started_at, join_until, ends_at,
-         ended_at, width, height, empires, seats_per_empire, bots, players, sim_version, updated_at)
-       VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18)
+         ended_at, width, height, empires, seats_per_empire, bots, players, sim_version, updated_at, lobby)
+       VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19)
        ON CONFLICT (id) DO UPDATE SET
          public = excluded.public, phase = excluded.phase, starts_at = excluded.starts_at, started_at = excluded.started_at,
          join_until = excluded.join_until, ends_at = excluded.ends_at, ended_at = excluded.ended_at,
-         players = excluded.players, sim_version = excluded.sim_version, updated_at = excluded.updated_at`,
+         players = excluded.players, sim_version = excluded.sim_version, updated_at = excluded.updated_at,
+         lobby = excluded.lobby`,
     )
     .bind(
       game.roomId,
@@ -37,6 +38,7 @@ export function writeGame(db: D1Database, game: GameSummary, now: number): Promi
       game.players,
       game.simVersion ?? null,
       now,
+      game.lobby ?? 0,
     )
     .run();
 }
@@ -49,6 +51,11 @@ export function dropGame(db: D1Database, id: string): Promise<unknown> {
     db.prepare(`DELETE FROM seats WHERE game_id = ?1`).bind(id),
     db.prepare(`DELETE FROM games WHERE id = ?1`).bind(id),
   ]);
+}
+
+/** A player left a game before it started: it is no longer one of theirs. */
+export function dropPlayer(db: D1Database, id: string, key: string): Promise<unknown> {
+  return db.prepare(`DELETE FROM seats WHERE game_id = ?1 AND key = ?2`).bind(id, key).run();
 }
 
 export function writePlayer(db: D1Database, player: PlayerRecord): Promise<unknown> {
@@ -129,7 +136,7 @@ export interface ListedGame {
 
 const GAME_COLUMNS = `g.id, g.phase, g.created_at AS createdAt, g.starts_at AS startsAt, g.started_at AS startedAt,
   g.join_until AS joinUntil, g.ends_at AS endsAt, g.ended_at AS endedAt, g.width, g.height, g.empires,
-  g.seats_per_empire AS seatsPerEmpire, g.bots, g.players, g.winner`;
+  g.seats_per_empire AS seatsPerEmpire, g.bots, g.players, g.lobby, g.winner`;
 
 export type Listing = "open" | "running" | "ended";
 

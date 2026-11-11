@@ -15,7 +15,10 @@ export interface ListedGame {
   empires: number;
   seatsPerEmpire: number;
   bots: number;
+  /** Seats taken. */
   players: number;
+  /** Everybody in the lobby, picked or not: lobby only. */
+  lobby?: number;
   winner: number | null;
 }
 

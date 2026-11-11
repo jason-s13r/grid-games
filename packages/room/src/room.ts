@@ -324,9 +324,14 @@ export class Room {
       empires: config.empires,
       seatsPerEmpire: this.seatsPerEmpire(),
       bots: config.bots.length,
-      players: this.roster ? this.players.filter((p) => this.roster!.has(p.key)).length : this.players.length,
+      // Seats taken: in the lobby, those who have picked an empire, not
+      // everybody who has looked in.
+      players: this.roster
+        ? this.players.filter((p) => this.roster!.has(p.key)).length
+        : this.players.filter((p) => p.empire !== null).length,
     };
     if (this.startsAt !== undefined && this._phase === "lobby") summary.startsAt = this.startsAt;
+    if (this._phase === "lobby") summary.lobby = this.players.length;
     const genesis = this.genesis;
     if (genesis) {
       summary.startedAt = genesis.startedAt;
@@ -394,6 +399,8 @@ export class Room {
     switch (message.t) {
       case "lobby":
         return this.lobbyChoice(peer.key, message);
+      case "leave":
+        return this.leave(peer);
       case "start":
         if (peer.key !== this.config.creator) return this.error(peer, "only the creator can start");
         return this.start(peer);
@@ -490,6 +497,7 @@ export class Room {
     const player = this.players.find((p) => p.key === key);
     if (!player) return;
     if (message.name !== undefined) player.name = cleanName(message.name);
+    const before = player.empire;
     if (message.empire !== undefined) {
       const wanted = message.empire;
       if (wanted === null) {
@@ -505,6 +513,27 @@ export class Room {
       }
     }
     this.store.put("players", this.players);
+    if (player.empire !== before) {
+      // The listing counts seats taken, and the player's own record says which.
+      this.recordPlayer(key);
+      this.events.game?.(this.summary());
+    }
+    this.broadcastLobby();
+  }
+
+  /** Out of a game that has not started, altogether: its lobby, its count and
+   *  the player's list of games. Coming back is joining again. A started game
+   *  keeps its seats; leaving one is just closing the tab. */
+  private leave(peer: Peer): void {
+    if (this._phase !== "lobby" || !peer.key) return;
+    const key = peer.key;
+    const at = this.players.findIndex((p) => p.key === key);
+    if (at < 0) return;
+    this.players.splice(at, 1);
+    this.store.put("players", this.players);
+    peer.key = undefined;
+    this.events.left?.(this.config.roomId, key);
+    this.events.game?.(this.summary());
     this.broadcastLobby();
   }
 

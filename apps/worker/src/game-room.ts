@@ -24,7 +24,7 @@ import { Room } from "@tessera/room";
 import type { Connection, RoomConfig, RoomEvents } from "@tessera/room";
 import { SqlStore } from "./store.js";
 import type { StoreUsage } from "./store.js";
-import { dropGame, writeGame, writePlayer, writeResult } from "./records.js";
+import { dropGame, dropPlayer, writeGame, writePlayer, writeResult } from "./records.js";
 import { writeArchive } from "./archive.js";
 import type { Env } from "./env.js";
 
@@ -181,6 +181,7 @@ export class GameRoom extends DurableObject<Env> {
     return {
       game: (summary) => keep(() => writeGame(db, summary, Date.now())),
       player: (record) => keep(() => writePlayer(db, record)),
+      left: (roomId, key) => keep(() => dropPlayer(db, roomId, key)),
       ended: (result) => keep(() => writeResult(db, result)),
     };
   }

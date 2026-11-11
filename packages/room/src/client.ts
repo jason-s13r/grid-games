@@ -289,6 +289,11 @@ export class RoomClient {
     this.send({ t: "start" });
   }
 
+  /** Leave a game that has not started: out of its lobby and its records. */
+  leave(): void {
+    if (this.phase === "lobby") this.send({ t: "leave" });
+  }
+
   /** Sign and send a move. The room stamps its step; it is applied when a batch
    *  comes back with it in. False when this client holds no seat. */
   async submit(type: MoveType, x = 0, y = 0): Promise<boolean> {

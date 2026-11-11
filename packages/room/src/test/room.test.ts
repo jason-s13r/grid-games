@@ -683,8 +683,9 @@ describe("records", () => {
     const { h } = await started();
     const lobby = h.players.filter((p) => p.empire === null).map((p) => p.name);
     expect(lobby).toEqual(["alice", "bob"]);
+    // Reported when each picks, and again at the start.
     const seated = h.players.filter((p) => p.empire !== null);
-    expect(seated.map((p) => [p.name, p.empire])).toEqual([
+    expect([...new Map(seated.map((p) => [p.name, p.empire])).entries()]).toEqual([
       ["alice", 1],
       ["bob", 2],
     ]);
@@ -732,6 +733,33 @@ describe("records", () => {
     h.restart();
     await h.room.tick();
     expect(h.results).toHaveLength(1);
+  });
+});
+
+describe("seats in the lobby", () => {
+  it("count those who picked an empire, and let a player leave altogether", async () => {
+    const h = new Harness({ creator: alice.key });
+    const a = await h.join(alice, "alice");
+    const b = await h.join(bob, "bob");
+    expect(h.games.at(-1)!.players).toBe(0);
+    expect(h.games.at(-1)!.lobby).toBe(2);
+
+    b.client.pickEmpire(1);
+    await h.settle();
+    expect(h.games.at(-1)!.players).toBe(1);
+    // Records count empires from 1.
+    expect(h.players.at(-1)).toEqual(expect.objectContaining({ key: bob.key, empire: 2 }));
+
+    b.client.leave();
+    await h.settle();
+    expect(h.left).toEqual([bob.key]);
+    expect(h.games.at(-1)!.players).toBe(0);
+    expect(h.games.at(-1)!.lobby).toBe(1);
+    expect(a.client.lobby!.players.map((p) => p.name)).toEqual(["alice"]);
+    // Gone for good: a pick after leaving does nothing.
+    b.client.pickEmpire(1);
+    await h.settle();
+    expect(a.client.lobby!.players.map((p) => p.name)).toEqual(["alice"]);
   });
 });
 

@@ -23,8 +23,11 @@ export interface GameSummary {
   empires: number;
   seatsPerEmpire: number;
   bots: number;
-  /** People in the game: in the lobby, or holding a seat once it runs. */
+  /** Seats taken: people who have picked an empire in the lobby, or who hold
+   *  a seat once it runs. */
   players: number;
+  /** Everybody in the lobby, picked or not. Lobby only. */
+  lobby?: number;
   startsAt?: number;
   startedAt?: number;
   /** Until when a newcomer may still take or ask for a seat. */
@@ -83,6 +86,8 @@ export interface GameResult {
 export interface RoomEvents {
   game?(summary: GameSummary): void;
   player?(record: PlayerRecord): void;
+  /** A player left a game before it started: it is no longer theirs. */
+  left?(roomId: string, key: string): void;
   ended?(result: GameResult): void;
 }
 
