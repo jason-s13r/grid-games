@@ -12,7 +12,10 @@
 // Read from the Worker's records whenever the start page is shown. Nothing
 // here polls.
 
-import { empireTheme, mapColour } from "./palette";
+import { flag } from "./Houses";
+import { mapColour } from "./palette";
+import { drawMaps, houseIn, mapCanvas, parseMap } from "./Thumb";
+import type { ListedMap } from "./Thumb";
 import { escape } from "./escape";
 import { leaderboard, listGames, playerStats } from "../net/records";
 import type { LeaderScope, LeaderStat, ListedGame, PlayerGame } from "../net/records";
@@ -71,7 +74,9 @@ export class GamesPanel {
     const ticket = ++this.ticket;
     const section = (name: string): HTMLElement => this.root.querySelector(`[data-list="${name}"]`)!;
     const fill = (name: string, html: string): void => {
-      if (ticket === this.ticket) section(name).innerHTML = html;
+      if (ticket !== this.ticket) return;
+      section(name).innerHTML = html;
+      drawMaps(section(name), this.maps);
     };
     const failed = (name: string, title: string) => (error: Error) =>
       fill(name, `<h2>${title}</h2><p class="hint">Could not load this: ${escape(error.message)}</p>`);
@@ -175,24 +180,43 @@ export class GamesPanel {
     }</div>`;
   }
 
+  /** The maps of the games last listed, by id, for drawing once the rows are
+   *  on the page. */
+  private maps = new Map<string, ListedMap>();
+
   private list(games: Array<ListedGame | PlayerGame>, action: (g: ListedGame) => "resume" | "join" | "watch" | "view"): string {
     return `<ul class="games-list">${games.map((g) => this.row(g, action(g))).join("")}</ul>`;
   }
 
   private row(game: ListedGame | PlayerGame, action: "resume" | "join" | "watch" | "view"): string {
     const mine = "empire" in game ? game : undefined;
-    const theme = mine?.empire ? empireTheme(mine.empire) : undefined;
+    const map = parseMap(game.map);
+    if (map) this.maps.set(game.id, map);
+    // The house you flew, from the game's own map: the board in front of you
+    // may be another game, flying other houses.
+    // In a lobby the number is only a guess at where a house will sit.
+    const theme = mine?.empire && game.phase !== "lobby" ? houseIn(map, mine.empire) : undefined;
     const size = `${game.width}×${game.height}`;
     // Players are seats taken; a lobby also says how many have looked in.
     const seats = `${game.players} ${game.players === 1 ? "player" : "players"}`;
     const people = game.phase === "lobby" && game.lobby ? `${seats}, ${game.lobby} in lobby` : seats;
     const bots = `${game.bots} ${game.bots === 1 ? "bot" : "bots"}`;
     const label = { resume: game.phase === "lobby" ? "Open lobby" : "Resume", join: "Join", watch: "Watch", view: "View" }[action];
+    const picture = map
+      ? mapCanvas(game.id, map)
+      : `<span class="game-map game-map-none">${theme ? flag(theme) : ""}</span>`;
+    const old = game.mapAt ? Date.now() - game.mapAt : 0;
+    const age =
+      map && game.mapAt && game.phase === "playing"
+        ? `<span class="hint">map as of ${old < 60_000 ? "just now" : `${span(old)} ago`}</span>`
+        : "";
     return `<li class="game-row">
-      ${theme ? `<span class="swatch" style="background:${mapColour(theme)}"></span>` : ""}
+      ${picture}
       <span class="game-what">
         <span><strong>${escape(game.id)}</strong> · ${escape(this.status(game, mine))}</span>
         <span class="hint">${size}, ${game.empires} ${game.empires === 1 ? "empire" : "empires"} + ${bots}, ${people}</span>
+        ${theme ? `<span class="game-you"><span class="swatch" style="background:${mapColour(theme)}"></span>${escape(theme.name)}</span>` : ""}
+        ${age}
       </span>
       <button class="btn btn-small${action === "join" || action === "resume" ? " go" : ""}" type="button"
         data-games-open="${escape(game.id)}"${action === "view" ? " data-games-ended" : ""}>${label}</button>
@@ -204,7 +228,8 @@ export class GamesPanel {
     if (game.phase === "lobby") return game.startsAt ? `starts ${when(game.startsAt, now)}` : "in the lobby";
     if (game.phase === "ended") {
       if (mine?.place) return mine.won ? "you won" : `you came ${ordinal(mine.place)}`;
-      return game.winner ? `won by ${empireTheme(game.winner).name}` : "ended";
+      const winner = game.winner ? houseIn(parseMap(game.map), game.winner) : undefined;
+      return winner ? `won by ${winner.name}` : game.winner ? "won" : "ended";
     }
     const joining = game.joinUntil && game.joinUntil > now ? `, seats open for ${span(game.joinUntil - now)}` : "";
     return game.endsAt ? `ends ${when(game.endsAt, now)}${joining}` : `running${joining}`;

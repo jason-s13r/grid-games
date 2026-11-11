@@ -20,6 +20,11 @@ export interface ListedGame {
   /** Everybody in the lobby, picked or not: lobby only. */
   lobby?: number;
   winner: number | null;
+  /** The map, small, as JSON: see view/Thumb.ts. Null before the start, and
+   *  for games that ended before maps were kept. */
+  map?: string | null;
+  /** When the room took it, ms since the epoch. */
+  mapAt?: number | null;
 }
 
 export interface PlayerGame extends ListedGame {

@@ -5,7 +5,7 @@
 // is logged and dropped: a listing a little out of date is a nuisance, a game
 // that stops because a database hiccupped would be a disaster.
 
-import type { GameResult, GameSummary, PlayerRecord } from "@tessera/room";
+import type { GameResult, GameSummary, MapThumb, PlayerRecord } from "@tessera/room";
 
 export function writeGame(db: D1Database, game: GameSummary, now: number): Promise<unknown> {
   return db
@@ -41,6 +41,31 @@ export function writeGame(db: D1Database, game: GameSummary, now: number): Promi
       game.lobby ?? 0,
     )
     .run();
+}
+
+/** The map as the listings carry it: its size, the houses, and its cells
+ *  deflated and base64 encoded. A few hundred bytes to a couple of KB. */
+export interface ListedMap {
+  w: number;
+  h: number;
+  /** House ids, by empire id from 1. */
+  b: string[];
+  c: string;
+  step: number;
+}
+
+export async function encodeMap(map: MapThumb): Promise<string> {
+  const deflated = await new Response(
+    new Blob([map.cells]).stream().pipeThrough(new CompressionStream("deflate-raw")),
+  ).arrayBuffer();
+  let binary = "";
+  for (const byte of new Uint8Array(deflated)) binary += String.fromCharCode(byte);
+  const listed: ListedMap = { w: map.width, h: map.height, b: map.banners, c: btoa(binary), step: map.step };
+  return JSON.stringify(listed);
+}
+
+export async function writeMap(db: D1Database, roomId: string, map: MapThumb, at: number): Promise<unknown> {
+  return db.prepare(`UPDATE games SET map = ?2, map_at = ?3 WHERE id = ?1`).bind(roomId, await encodeMap(map), at).run();
 }
 
 /** Take a game out of the records altogether: a deserted one, which nobody
@@ -132,11 +157,14 @@ export interface ListedGame {
   bots: number;
   players: number;
   winner: number | null;
+  /** `ListedMap` as JSON, or null. */
+  map: string | null;
+  mapAt: number | null;
 }
 
 const GAME_COLUMNS = `g.id, g.phase, g.created_at AS createdAt, g.starts_at AS startsAt, g.started_at AS startedAt,
   g.join_until AS joinUntil, g.ends_at AS endsAt, g.ended_at AS endedAt, g.width, g.height, g.empires,
-  g.seats_per_empire AS seatsPerEmpire, g.bots, g.players, g.lobby, g.winner`;
+  g.seats_per_empire AS seatsPerEmpire, g.bots, g.players, g.lobby, g.winner, g.map, g.map_at AS mapAt`;
 
 export type Listing = "open" | "running" | "ended";
 

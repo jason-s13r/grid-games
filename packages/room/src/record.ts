@@ -9,6 +9,7 @@
 import { STEPS_PER_SECOND, summarise } from "@tessera/sim";
 import type { Genesis, Sim, State } from "@tessera/sim";
 import type { ClaimedFlag, Stamped } from "./messages.js";
+import type { MapThumb } from "./thumb.js";
 
 export type GamePhase = "lobby" | "playing" | "ended";
 
@@ -89,6 +90,9 @@ export interface RoomEvents {
   /** A player left a game before it started: it is no longer theirs. */
   left?(roomId: string, key: string): void;
   ended?(result: GameResult): void;
+  /** The map as it stands, small, for the listings. Sent when the game
+   *  starts and ends, and in between at most every `MAP_EVERY_MS`. */
+  map?(roomId: string, map: MapThumb, at: number): void;
 }
 
 /** Wall time of a step. */

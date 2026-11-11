@@ -5,6 +5,8 @@ export { places, placesOf, resultOf, timeOf } from "./record.js";
 export type { EmpireResult, GameArchive, GamePhase, GameResult, GameSummary, PlayerRecord, RoomEvents, SeatResult } from "./record.js";
 export type { RoomClientOptions } from "./client.js";
 export { MemoryStore } from "./store.js";
+export { THUMB_WIDTH, TERRAIN_BASE, thumbnail } from "./thumb.js";
+export type { MapThumb } from "./thumb.js";
 export type { RoomStore, StoredSnapshot } from "./store.js";
 export { CHECKPOINT_EVERY, SNAPSHOT_EVERY, advanceTo, stepAt } from "./advance.js";
 export { CHAT_MODES, decode, encode } from "./messages.js";

@@ -32,7 +32,8 @@ import {
   STEPS_PER_SECOND,
 } from "@tessera/sim";
 import type { BannerId, EmpireSpec, Genesis, Move } from "@tessera/sim";
-import { BANNERS, bannerAt, bannerById, isVacant } from "@tessera/sim";
+import { BANNERS, bannerAt, bannerById, flyBanners, isVacant } from "@tessera/sim";
+import { thumbnail } from "./thumb.js";
 import type { SignedInvite } from "@tessera/protocol";
 import {
   NONCE_BYTES,
@@ -138,6 +139,11 @@ function housed(player: StoredPlayer & { empire?: number | null }): StoredPlayer
   const banner = typeof empire === "number" ? (bannerAt(empire + 1)?.id ?? null) : null;
   return { ...rest, banner };
 }
+
+/** The listings' map is sent no more often than this while a game runs: it
+ *  is a database write each time, and a busy room snapshots every couple of
+ *  game minutes. Hourly wakes and the start and end are always sent. */
+export const MAP_EVERY_MS = 10 * 60_000;
 
 /** Chat lines kept, for whoever arrives later. */
 const KEEP_CHAT = 200;
@@ -724,6 +730,22 @@ export class Room {
     const sim = this.sim!;
     this.store.putSnapshot({ step: sim.step, hash: sim.hash(), bytes: new Uint8Array(sim.snapshot()) });
     this.store.put("seqs", this.seqs);
+    this.sendMap();
+  }
+
+  /** The map for the listings, if it is due: at the start and the end, and
+   *  otherwise once `MAP_EVERY_MS` has passed since the last. */
+  private sendMap(): void {
+    if (!this.events.map || !this.sim || !this.genesis) return;
+    const sim = this.sim;
+    const now = this.now();
+    const last = this.store.get<number>("mapAt");
+    const due = last === undefined || sim.step === 0 || sim.ended || now - last >= MAP_EVERY_MS;
+    if (!due) return;
+    const claimed = new Map(this.claimedFlags().map((f) => [f.empire, f.banner] as const));
+    const banners = flyBanners(this.genesis.empires, claimed).map((b) => b.id);
+    this.store.put("mapAt", now);
+    this.events.map(this.config.roomId, thumbnail(sim.state, banners, sim.step), now);
   }
 
   // --- moves -----------------------------------------------------------------

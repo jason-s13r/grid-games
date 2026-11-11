@@ -10,6 +10,7 @@ import { RoomClient } from "../client.js";
 import { MemoryStore } from "../store.js";
 import type { RoomConfig } from "../messages.js";
 import type { GameResult, GameSummary, PlayerRecord, RoomEvents } from "../record.js";
+import type { MapThumb } from "../thumb.js";
 
 export class Clock {
   constructor(public time = 1_800_000_000_000) {}
@@ -49,11 +50,13 @@ export class Harness {
   readonly players: PlayerRecord[] = [];
   readonly results: GameResult[] = [];
   readonly left: string[] = [];
+  readonly maps: Array<{ map: MapThumb; at: number }> = [];
   private readonly events: RoomEvents = {
     game: (summary) => this.games.push(summary),
     player: (record) => this.players.push(record),
     ended: (result) => this.results.push(result),
     left: (_roomId, key) => this.left.push(key),
+    map: (_roomId, map, at) => this.maps.push({ map, at }),
   };
 
   constructor(config: Partial<RoomConfig> & { creator: string }) {

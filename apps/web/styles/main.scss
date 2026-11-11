@@ -2745,6 +2745,31 @@ a.btn {
   border-top: 1px solid #e3ebe5;
   &:first-child { border-top: none; }
 }
+// A game's map, small: a pixel a cell, scaled up crisp.
+.game-map {
+  flex: none;
+  width: 84px;
+  height: auto;
+  max-height: 64px;
+  object-fit: contain;
+  image-rendering: pixelated;
+  border-radius: 6px;
+  background: var(--paper);
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.15);
+}
+.game-map-none {
+  display: grid;
+  place-items: center;
+  height: 56px;
+  aspect-ratio: auto;
+}
+.game-you {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12px;
+  .swatch { width: 12px; height: 12px; border-radius: 3px; }
+}
 .game-what {
   flex: 1;
   min-width: 0;

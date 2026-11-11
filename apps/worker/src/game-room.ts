@@ -24,7 +24,7 @@ import { Room } from "@tessera/room";
 import type { Connection, RoomConfig, RoomEvents } from "@tessera/room";
 import { SqlStore } from "./store.js";
 import type { StoreUsage } from "./store.js";
-import { dropGame, dropPlayer, writeGame, writePlayer, writeResult } from "./records.js";
+import { dropGame, dropPlayer, writeGame, writeMap, writePlayer, writeResult } from "./records.js";
 import { writeArchive } from "./archive.js";
 import type { Env } from "./env.js";
 
@@ -183,6 +183,12 @@ export class GameRoom extends DurableObject<Env> {
       player: (record) => keep(() => writePlayer(db, record)),
       left: (roomId, key) => keep(() => dropPlayer(db, roomId, key)),
       ended: (result) => keep(() => writeResult(db, result)),
+      // After whatever is already on its way: the map is an UPDATE, and the
+      // game's own row may be in the same batch of writes.
+      map: (roomId, map, at) => {
+        const before = Promise.allSettled(this.writes);
+        keep(() => before.then(() => writeMap(db, roomId, map, at)));
+      },
     };
   }
 
