@@ -4,7 +4,7 @@
 // drive it: moves in, dirty tiles out, camera and DOM strictly outside the
 // simulation. Online play comes back through the Cloudflare room.
 
-import { seedFrom, durationRules, minutes, PROTOCOL_VERSION, BANNERS, bannerById } from "@tessera/sim";
+import { seedFrom, durationRules, minutes, PROTOCOL_VERSION, BANNERS, bannerById, playsProtocol } from "@tessera/sim";
 import type { BotChoice } from "@tessera/sim";
 import { displayName, fingerprint } from "@tessera/protocol";
 import "@fontsource/fredoka/500.css";
@@ -43,6 +43,7 @@ import { GameSettingsDialog } from "./view/GameSettings";
 import { KeysDialog } from "./view/Keys";
 import { ReplayGame, SPEEDS } from "./game/Replay";
 import type { Archive } from "./game/Replay";
+import { TimeLapse } from "./view/TimeLapse";
 import { fromBase64Url, toBase64Url, utf8, fromUtf8 } from "@tessera/protocol";
 import type { SignedInvite } from "@tessera/protocol";
 import { RoomLink, createGame, roomIdFrom } from "./net/room";
@@ -773,6 +774,20 @@ async function openReplay(roomId: string): Promise<void> {
     if (!response.ok) throw new Error(response.status === 404 ? "it has no archive yet" : `the server said ${response.status}`);
     const archive = (await response.json()) as Archive;
     if (location.pathname !== `/g/${roomId}`) history.pushState(null, "", `/g/${roomId}`);
+    // A version this build no longer plays: its map over time, from the frames
+    // the room recorded, since its rules are gone.
+    if (!playsProtocol(archive.genesis.protocol)) {
+      if (!archive.timeline) throw new Error(`it was played on v${archive.genesis.protocol}, which this version no longer plays`);
+      online.home();
+      const overlay = document.createElement("div");
+      overlay.className = "timelapse";
+      document.body.append(overlay);
+      new TimeLapse(overlay, archive.timeline, { roomId, protocol: archive.genesis.protocol }, () => {
+        overlay.remove();
+        if (location.pathname !== "/") history.pushState(null, "", "/");
+      });
+      return;
+    }
     mount(new ReplayGame(archive));
     flyClaimed(archive.flags);
     online.home();

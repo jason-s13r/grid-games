@@ -7,7 +7,7 @@ export type { RoomClientOptions } from "./client.js";
 export { MemoryStore } from "./store.js";
 export { THUMB_WIDTH, TERRAIN_BASE, thumbnail } from "./thumb.js";
 export type { MapThumb } from "./thumb.js";
-export { FRAMES_PER_GAME, FRAME_WIDTH, KEY_EVERY, decodeFrame, encodeFrame, frameEvery, isKeyFrame } from "./frames.js";
+export { FRAMES_PER_GAME, FRAME_WIDTH, KEY_EVERY, decodeFrame, encodeFrame, frameEvery, isKeyFrame, timelineOf } from "./frames.js";
 export type { StoredFrame, Timeline } from "./frames.js";
 export type { RoomStore, StoredSnapshot } from "./store.js";
 export { CHECKPOINT_EVERY, SNAPSHOT_EVERY, advanceTo, stepAt } from "./advance.js";

@@ -39,9 +39,10 @@ export async function serveArchive(
 ): Promise<Response | null> {
   // Cached as plain bytes, with no content-encoding for the cache to act on:
   // what goes in is exactly the stored gzip, and it is labelled on the way
-  // out. The key carries a version, so a change of layout starts afresh.
+  // out. The key carries a version, so a change of layout starts afresh: v2
+  // since older archives were given timelines in place.
   const cache = caches.default;
-  const cacheKey = new Request(`${new URL(request.url).origin}/cache/archive/v1/${roomId}`);
+  const cacheKey = new Request(`${new URL(request.url).origin}/cache/archive/v2/${roomId}`);
   let bytes: ArrayBuffer | undefined;
   let etag: string | undefined;
   const cached = await cache.match(cacheKey);

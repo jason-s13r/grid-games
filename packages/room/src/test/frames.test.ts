@@ -4,7 +4,7 @@
 import { beforeAll, describe, expect, it } from "vitest";
 import { STEPS_PER_SECOND, Sim } from "@tessera/sim";
 import type { Identity } from "@tessera/protocol";
-import { KEY_EVERY, decodeFrame, encodeFrame, frameEvery, isKeyFrame } from "../frames.js";
+import { KEY_EVERY, decodeFrame, encodeFrame, frameEvery, isKeyFrame, timelineOf } from "../frames.js";
 import type { StoredFrame } from "../frames.js";
 import { FRAME_WIDTH } from "../frames.js";
 import { thumbnail } from "../thumb.js";
@@ -108,5 +108,20 @@ describe("the room's timeline", () => {
     const log = archive.moveLog.map((s) => s.move);
     while (sim.step < archive.steps && !sim.ended) sim.advance(log.filter((m) => m.step === sim.step));
     expect(decoded.at(-1)!.cells).toEqual(thumbnail(sim.state, [], sim.step, FRAME_WIDTH).cells);
+  });
+
+  it("is made again from the archive alone, frame for frame", async () => {
+    // What a game archived before rooms kept timelines is given, so it can be
+    // watched once its sim is retired.
+    const duration = 20 * 60 * STEPS_PER_SECOND;
+    const { h, a } = await running(duration);
+    await h.run(3 * 60_000, 1_000);
+    a.drop();
+    h.clock.advance(30 * 60_000);
+    await h.room.tick();
+    await h.room.tick();
+    const archive = h.room.archive()!;
+    const { timeline, ...without } = archive;
+    expect(timelineOf(without)).toEqual(timeline);
   });
 });

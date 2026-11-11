@@ -9,6 +9,7 @@
 
 import { Sim, STEPS_PER_SECOND } from "@tessera/sim";
 import type { Genesis, Move } from "@tessera/sim";
+import type { Timeline } from "@tessera/room";
 import type { Driver } from "./Driver";
 
 export interface Archive {
@@ -18,6 +19,9 @@ export interface Archive {
   moveLog: Array<{ move: Move; sig?: string }>;
   /** Houses brought to vacancies, in the order they were claimed. */
   flags?: Array<{ empire: number; banner: string }>;
+  /** The map over time, for watching a game whose version this build no
+   *  longer plays. */
+  timeline?: Timeline;
   /** Where the game ended. */
   steps: number;
   hash?: string;

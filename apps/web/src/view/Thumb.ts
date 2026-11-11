@@ -45,10 +45,12 @@ async function inflate(base64: string): Promise<Uint8Array> {
   return new Uint8Array(await new Response(stream).arrayBuffer());
 }
 
-/** The colour of every cell value a map can hold. */
-function lookup(map: ListedMap): Array<[number, number, number]> {
+/** The colour of every cell value a map can hold, with these houses flown by
+ *  empire id from 1. For the listings' maps and a timeline's frames, which
+ *  share their cell values (`thumbnail` in the room). */
+export function cellColours(banners: readonly string[]): Array<[number, number, number]> {
   const colours: Array<[number, number, number]> = new Array(256).fill(rgb(NEUTRAL));
-  map.b.forEach((id, at) => {
+  banners.forEach((id, at) => {
     const banner = bannerById(id);
     if (banner) colours[at + 1] = rgb(mapColour(banner));
   });
@@ -59,7 +61,7 @@ function lookup(map: ListedMap): Array<[number, number, number]> {
 export async function drawMap(canvas: HTMLCanvasElement, map: ListedMap): Promise<void> {
   const cells = await inflate(map.c);
   if (cells.length !== map.w * map.h) return;
-  const colours = lookup(map);
+  const colours = cellColours(map.b);
   const image = new ImageData(map.w, map.h);
   for (let i = 0; i < cells.length; i++) {
     const [r, g, b] = colours[cells[i]!]!;

@@ -8,8 +8,11 @@
 //
 // Which frames to show, and how fast, is the reader's choice.
 
-import { STEPS_PER_SECOND } from "@tessera/sim";
-import type { BannerId, Genesis } from "@tessera/sim";
+import { STEPS_PER_SECOND, Sim, flyBanners } from "@tessera/sim";
+import type { BannerId, Genesis, Move } from "@tessera/sim";
+import { toBase64Url } from "@tessera/protocol";
+import { thumbnail } from "./thumb.js";
+import type { GameArchive } from "./record.js";
 
 /** Frames over a game with an end, about. */
 export const FRAMES_PER_GAME = 4000;
@@ -103,3 +106,41 @@ export function decodeFrame(bytes: Uint8Array, size: number, previous?: Uint8Arr
 }
 
 export const isKeyFrame = (bytes: Uint8Array): boolean => bytes[0] === KEY;
+
+/** The timeline a room would have kept for a finished game, made again from
+ *  its archive: the game replayed from its record, a frame taken at the same
+ *  pace and in the same encoding as a room takes them. For games archived
+ *  before rooms kept timelines, so they can still be watched once the sim
+ *  that played them is retired. Needs a sim that plays the game's version. */
+export function timelineOf(archive: GameArchive): Timeline {
+  const { genesis } = archive;
+  const sim = new Sim(genesis);
+  const every = frameEvery(genesis);
+  const byStep = new Map<number, Move[]>();
+  for (const { move } of archive.moveLog) byStep.set(move.step, [...(byStep.get(move.step) ?? []), move]);
+
+  const frames: Array<[number, string]> = [];
+  let last: { cells: Uint8Array; sinceKey: number } | undefined;
+  const take = () => {
+    const cells = thumbnail(sim.state, [], sim.step, FRAME_WIDTH).cells;
+    const previous = last && last.sinceKey + 1 < KEY_EVERY ? last : undefined;
+    frames.push([sim.step, toBase64Url(encodeFrame(cells, previous?.cells))]);
+    last = { cells, sinceKey: previous ? previous.sinceKey + 1 : 0 };
+  };
+
+  take();
+  while (sim.step < archive.steps && !sim.ended) {
+    sim.advance(byStep.get(sim.step) ?? []);
+    if (sim.step % every === 0 || sim.step >= archive.steps || sim.ended) take();
+  }
+
+  const size = thumbnail(sim.state, [], 0, FRAME_WIDTH);
+  const claimed = new Map((archive.flags ?? []).map((f) => [f.empire, f.banner] as const));
+  return {
+    width: size.width,
+    height: size.height,
+    every,
+    banners: flyBanners(genesis.empires, claimed).map((b) => b.id),
+    frames,
+  };
+}
