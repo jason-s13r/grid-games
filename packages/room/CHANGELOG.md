@@ -1,5 +1,30 @@
 # Changelog
 
+## room@1.10.0 (2026-11-13)
+
+### Features
+
+- run a game nobody is left to move in on to its end
+  Once joining has closed and no living empire is played from outside the
+  simulation, the rest of the game is SimBots, whose moves every peer
+  derives from the seed. Nothing that could still arrive is a move the
+  simulation would accept, so there is no reason to wait for the clock.
+
+  The room now runs such a game on to its end an hour a wake, asking to be
+  woken straight away until it gets there, and reports the result and
+  archive then. It stamps nothing more once it is unattended. A tab runs
+  ahead the same way, a frame at a time, and reports hashes only up to the
+  room's clock rather than one for every minute it races through.
+
+  A headless bot in a seat sends its own moves, so its empire keeps a game
+  on the clock. No hash moves: this decides when steps are simulated, not
+  what they do.
+
+### Dependencies
+
+- sim: 6.1.0 -> 6.2.0
+
+
 ## room@1.9.0 (2026-11-11)
 
 ### Features

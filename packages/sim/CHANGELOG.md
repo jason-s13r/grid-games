@@ -1,5 +1,23 @@
 # Changelog
 
+## sim@6.2.0 (2026-11-13)
+
+### Features
+
+- retire v4, and sunset a version when its games are done
+  v4 is dropped with its fixture and its gated branches: coins spawned
+  anywhere, growth without a ceiling, no mines, no ceiling on a bot's
+  tiles. Every game this build plays is v5 or later, where those were
+  already the rules, so no hash moves. No v4 game is running, and the
+  finished ones were given their timelines, so they are still watched, as
+  a time-lapse.
+
+  A sunset date is now the successor's deploy plus the longest game plus
+  two days: what needs an old version's code is a game still running on
+  it, and watching a finished game no longer does. v5's moves up to 14
+  December.
+
+
 ## sim@6.1.0 (2026-11-11)
 
 ### Features
