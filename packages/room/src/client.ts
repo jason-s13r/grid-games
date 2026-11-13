@@ -24,7 +24,7 @@ import {
   signMove,
   toBase64Url,
 } from "@tessera/protocol";
-import { advanceTo, stepAt } from "./advance.js";
+import { advanceTo, goalOf, stepAt } from "./advance.js";
 import { decode, encode } from "./messages.js";
 import type { SignedInvite } from "@tessera/protocol";
 import type {
@@ -132,21 +132,25 @@ export class RoomClient {
     return this.now() + offset;
   }
 
-  /** Simulate up to now. Returns the tiles that changed. A host calls this
+  /** Simulate up to now, or once nobody is left to move, on towards the end
+   *  (see `unattended`). Returns the tiles that changed. A host calls this
    *  every frame. */
   advance(): Set<number> {
     const sim = this.sim;
     if (!sim || !this.genesis) return new Set();
     const now = stepAt(this.genesis.startedAt, this.roomNow());
-    const target = Math.min(now, sim.step + (this.options.maxAdvance ?? Infinity));
+    const limit = sim.step + (this.options.maxAdvance ?? Infinity);
     const dirty = new Set<number>();
-    while (sim.step < target && !sim.ended) {
+    for (;;) {
+      // Asked again each interval: the game can become unattended part-way.
+      const target = Math.min(goalOf(sim, now), limit);
+      if (sim.step >= target || sim.ended) break;
       // One rewind interval at a time, keeping a rewind point at each.
       const to = Math.min(target, (Math.floor(sim.step / REWIND_EVERY) + 1) * REWIND_EVERY);
       const result = advanceTo(sim, to, this.known);
       for (const tile of result.dirty) dirty.add(tile);
       for (const { step, hash } of result.checkpoints) {
-        if (step % REPORT_EVERY === 0) this.reports.set(step, hash);
+        if (this.reportable(step)) this.reports.set(step, hash);
         this.remember(step, hash);
       }
       if (sim.step % REWIND_EVERY === 0) this.keepRewind();
@@ -159,11 +163,18 @@ export class RoomClient {
     return dirty;
   }
 
+  /** A checkpoint to report: one a minute, up to the room's clock. Past it is
+   *  a game nobody is left to move in, run ahead to its end; the room runs its
+   *  own copy the same way, and a report a minute of it would be a flood. */
+  private reportable(step: number): boolean {
+    return step % REPORT_EVERY === 0 && step <= stepAt(this.genesis!.startedAt, this.roomNow());
+  }
+
   /** Still simulating towards now, a frame at a time (see maxAdvance). */
   get catchingUp(): boolean {
     const sim = this.sim;
     if (!sim || !this.genesis || sim.ended) return false;
-    return stepAt(this.genesis.startedAt, this.roomNow()) - sim.step > CATCHING_UP_SLACK;
+    return goalOf(sim, stepAt(this.genesis.startedAt, this.roomNow())) - sim.step > CATCHING_UP_SLACK;
   }
 
   /** This client's hash at a recent checkpoint step (every CHECKPOINT_EVERY),
@@ -408,7 +419,7 @@ export class RoomClient {
       const to = Math.min(reached, (Math.floor(sim.step / REWIND_EVERY) + 1) * REWIND_EVERY);
       const result = advanceTo(sim, to, this.known);
       for (const { step, hash } of result.checkpoints) {
-        if (step % REPORT_EVERY === 0) this.reports.set(step, hash);
+        if (this.reportable(step)) this.reports.set(step, hash);
         this.remember(step, hash);
       }
       if (sim.step % REWIND_EVERY === 0) this.keepRewind();

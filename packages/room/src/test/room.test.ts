@@ -999,3 +999,92 @@ describe("a game nobody came to", () => {
     expect(h.room.deserted()).toBe(true);
   });
 });
+
+describe("a game nobody is left to move in", () => {
+  const hour = 3600_000;
+
+  /** Alice and two SimBots, joining closed from the first step. */
+  async function withBots(): Promise<{ h: Harness; a: Linked }> {
+    const h = new Harness({
+      creator: alice.key,
+      bots: ["easy", "easy"],
+      joinShare: 0,
+      duration: (4 * hour * STEPS_PER_SECOND) / 1000,
+    });
+    const a = await h.join(alice, "alice");
+    a.client.pickBanner("vermilion");
+    await h.settle();
+    a.client.start();
+    await h.settle();
+    await h.run(2_000);
+    return { h, a };
+  }
+
+  /** Alice's empire falls, identically in the room and in her tab. */
+  function fall(h: Harness, a: Linked): void {
+    const empire = a.client.you!.seat!.empire;
+    h.room.catchUp();
+    const room = (h.room as unknown as { sim: Sim }).sim;
+    expect(a.client.sim!.step).toBe(room.step);
+    for (const sim of [room, a.client.sim!]) {
+      sim.state.empires[empire - 1]!.alive = 0;
+      sim.state.empires[empire - 1]!.eliminatedAt = sim.step;
+    }
+  }
+
+  it("keeps to the clock while a person still holds a living empire", async () => {
+    const { h } = await withBots();
+    const step = h.room.step;
+    await h.room.tick();
+    expect(h.room.step).toBeLessThan(step + 100);
+    expect(h.room.behind).toBe(false);
+  });
+
+  it("runs on to the end in the room, an hour a wake, and reports the result", async () => {
+    const { h, a } = await withBots();
+    fall(h, a);
+    const at = h.clock.time;
+
+    await h.room.tick();
+    expect(h.room.behind).toBe(true);
+    expect(h.room.wakeAt()).toBe(h.clock.time);
+    for (let wakes = 0; wakes < 10 && h.room.wakeAt() !== undefined; wakes++) await h.room.tick();
+
+    expect(h.room.ended).toBe(true);
+    expect(h.clock.time).toBe(at);
+    expect(h.results).toHaveLength(1);
+    expect(h.results[0]!.step).toBeGreaterThanOrEqual(4 * 3600 * STEPS_PER_SECOND);
+    expect(h.games.at(-1)!.phase).toBe("ended");
+    expect(h.room.wakeAt()).toBeUndefined();
+  });
+
+  it("runs on to the same end in a tab, without a report for every minute of it", async () => {
+    const { h, a } = await withBots();
+    fall(h, a);
+    (a.client as unknown as { options: { maxAdvance?: number } }).options.maxAdvance = 12_000;
+    const sent: string[] = [];
+    const send = (a.client as unknown as { options: { send: (t: string) => void } }).options.send;
+    a.client.reconnected((text) => {
+      sent.push(text);
+      send(text);
+    });
+
+    while (a.client.catchingUp) a.client.advance();
+    expect(a.client.sim!.ended).toBe(true);
+    expect(sent.filter((t) => t.includes('"hash"')).length).toBeLessThan(3);
+
+    for (let wakes = 0; wakes < 10 && h.room.wakeAt() !== undefined; wakes++) await h.room.tick();
+    expect(a.client.sim!.step).toBe(h.room.step);
+    expect(a.client.sim!.hash()).toBe(h.room.hash());
+  });
+
+  it("stamps nothing more once it has nobody left", async () => {
+    const { h, a } = await withBots();
+    fall(h, a);
+    await h.room.tick();
+    const logged = h.store.movesFrom(0).length;
+    a.client.say("gg");
+    await h.run(1_000);
+    expect(h.store.movesFrom(0).length).toBe(logged);
+  });
+});

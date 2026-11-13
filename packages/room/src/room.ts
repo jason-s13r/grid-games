@@ -50,7 +50,7 @@ import {
   verifyHello,
   verifyMove,
 } from "@tessera/protocol";
-import { SNAPSHOT_EVERY, advanceTo, stepAt } from "./advance.js";
+import { SNAPSHOT_EVERY, advanceTo, goalOf, stepAt, unattended } from "./advance.js";
 import { CHAT_MODES, decode, encode } from "./messages.js";
 import { resultOf, timeOf } from "./record.js";
 import type { GameArchive, GameResult, GameSummary, RoomEvents } from "./record.js";
@@ -835,6 +835,9 @@ export class Room {
    *  if one is due, and tell everybody. */
   private stamp(moves: Stamped[], key?: string, at?: number): number {
     const step = at ?? this.openStep();
+    // Nobody left could make a move count, and the room's simulation may be
+    // ahead of the clock by now: anything stamped would land behind it.
+    if (this.sim && unattended(this.sim.state)) return step;
     const all = [...moves];
     // A seat's own move is its presence (from v4), so it resets the beat
     // rather than bringing one along.
@@ -855,11 +858,12 @@ export class Room {
     return step;
   }
 
-  /** Simulate up to `to`, never past a step that could still receive a move. */
+  /** Simulate up to `to`, never past a step that could still receive a move.
+   *  Once no step can (see `unattended`), straight on to the end. */
   private advance(to: number): void {
     const sim = this.sim;
     if (!sim || !this.genesis) return;
-    const wanted = Math.min(to, this.openStep());
+    const wanted = goalOf(sim, Math.min(to, this.openStep()));
     const bound = Math.min(wanted, sim.step + MAX_ADVANCE);
     // Behind until an advance reaches now. A short one (to answer a client's
     // hash report, say) neither starts nor ends that.
@@ -887,6 +891,8 @@ export class Room {
     }
 
     this.next = sim.step;
+    // Became unattended part-way: the rest is owed now, not at the clock's pace.
+    if (!sim.ended && unattended(sim.state)) this.cutShort = true;
     if (sim.ended) this.cutShort = false;
     if (Math.floor(this.next / SNAPSHOT_EVERY) > Math.floor(from / SNAPSHOT_EVERY) || sim.ended) {
       this.keepSnapshot();
