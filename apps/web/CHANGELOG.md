@@ -1,5 +1,16 @@
 # Changelog
 
+## web@1.17.1 (2026-11-14)
+
+### Fixes
+
+- keep chat read across a reload
+  The unread count lived only in memory, and the room sends chat history
+  after the board, so every reload counted the history as new lines.
+  Remember the newest line read per room in localStorage and count only
+  lines past it.
+
+
 ## web@1.17.0 (2026-11-14)
 
 ### Features
