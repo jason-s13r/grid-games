@@ -1,5 +1,49 @@
 # Changelog
 
+## web@1.17.0 (2026-11-14)
+
+### Features
+
+- unread count on the Chat tab
+  On a phone the panels are tabs and most of the time is spent on the
+  map, so a line said in chat went unseen. Lines from other people that
+  arrive while the chat is not on screen are counted on the chat panel
+  (data-unread), the tab bar copies the count onto the Chat tab as a
+  badge (and into its label), and opening the chat clears it. History
+  loaded on joining, your own lines and blocked players do not count.
+
+### Fixes
+
+- stop layout shift on game links and idle work on the board
+  Web Analytics had desktop CLS at 0.32 (poor) and mobile INP at 240ms.
+
+  Layout shift: a /g/ link drew the whole start page first, its lists
+  loading and pushing the footers about, then swapped to the board while
+  the side panels behind the menu were still filling. The menu now hides
+  the game's panels under it (visibility), and a game link keeps the
+  start page's lists and footers out until the room answers. Measured
+  locally at 1440x900: 0.18 -> 0.002.
+
+  Taps: the time was waiting, not handling. The protected capital's ring
+  animated outline-color, repainting the tile layer every frame; it now
+  fades an overlay by opacity, which the compositor runs. The tab bar
+  rewrote attributes on the app element whenever any `hidden` was set,
+  and the tile info set `hidden` several times a second, restyling the
+  app each time; both write only on a change now, as do the clock, zoom
+  level and hint, and the tile layer's transform. Main-thread time on a
+  throttled phone emulation: about 1.5s -> 0.9s per 3s of play.
+
+- redraw chat when a claimant's house arrives
+  Chat history is drawn on open, before the people list brings the houses
+  claimants flew into vacancies, so their earlier lines kept the seat's
+  default flag and name. flyClaimed now repaints the chat log along with
+  the map.
+
+### Dependencies
+
+- sim: 6.2.0 -> 6.3.0
+
+
 ## web@1.16.0 (2026-11-13)
 
 ### Features

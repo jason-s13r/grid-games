@@ -1,5 +1,16 @@
 # Changelog
 
+## sim@6.3.0 (2026-11-14)
+
+### Features
+
+- raise the coin cascade cap from 4096 to 65536 tile visits
+  Coins are no longer capped at 360 on the map, so the cascade cap was the
+  only thing bounding a chain and big farms hit it. The cap is a genesis
+  rule, so games composed before this keep 4096 and no protocol bump is
+  needed.
+
+
 ## sim@6.2.0 (2026-11-13)
 
 ### Features
