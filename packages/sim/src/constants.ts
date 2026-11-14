@@ -100,7 +100,10 @@ export const DEFAULT_RULES: Rules = {
   popRateDen: 1,
   maxMultiplier: 4,
 
-  cascadeTileCap: 4096,
+  // Counts tile visits, not unique tiles: overlapping coin shapes spend it
+  // twice. 4096 cut chains short once coins were no longer capped at 360 on the
+  // map. Rules travel in the genesis, so games composed before keep 4096.
+  cascadeTileCap: 65_536,
   coinIntervalMin: seconds(1.5),
   coinIntervalMax: seconds(4),
   // Diamonds buy every item in the shop at three apiece, so the replacement
