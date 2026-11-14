@@ -33,6 +33,9 @@ export class ChatPanel {
   private readonly blocked = loadBlocked();
   private chatMode: "open" | "team" | "off" = "open";
   private isSeated = false;
+  /** Everything shown, so the log can be drawn again when a house changes. */
+  private lines: ChatLine[] = [];
+  private me = "";
 
   constructor(
     root: HTMLElement,
@@ -77,6 +80,7 @@ export class ChatPanel {
   open(lines: readonly ChatLine[], me: string, seated: boolean): void {
     this.section.hidden = false;
     this.log.innerHTML = "";
+    this.lines = [];
     this.add(lines, me);
     this.seated(seated);
   }
@@ -84,6 +88,19 @@ export class ChatPanel {
   close(): void {
     this.section.hidden = true;
     this.log.innerHTML = "";
+    this.lines = [];
+  }
+
+  /** Draw the log again: a claimant's house arrives after the history does,
+   *  and lines already shown were drawn under the seat's default flag. */
+  repaint(): void {
+    if (this.section.hidden) return;
+    const top = this.log.scrollTop;
+    const lines = this.lines;
+    this.log.innerHTML = "";
+    this.lines = [];
+    this.add(lines, this.me);
+    this.log.scrollTop = top;
   }
 
   /** Team chat needs an empire to be on. */
@@ -152,6 +169,8 @@ export class ChatPanel {
 
   add(lines: readonly ChatLine[], me: string): void {
     const pinned = this.log.scrollTop + this.log.clientHeight >= this.log.scrollHeight - 8;
+    this.me = me;
+    this.lines.push(...lines);
     for (const line of lines) {
       if (this.blocked.has(line.key)) continue;
       const row = document.createElement("div");

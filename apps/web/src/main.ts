@@ -702,6 +702,7 @@ function flyClaimed(claimed: ReadonlyArray<{ empire: number; banner: string }> |
   mapImage.recolour();
   mapImage.paintAll(game.sim.state);
   camera.changed = true;
+  chat.repaint();
 }
 /** What to do once we are in the lobby of a game we just created. */
 let afterCreate: { start: boolean } | undefined;
