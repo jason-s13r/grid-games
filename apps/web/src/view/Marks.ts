@@ -137,7 +137,9 @@ export class Marks {
 
     const line = hover ? this.describe(state, game, hover[0], hover[1]) : this.idle;
     this.info.classList.toggle("is-idle", !hover);
-    this.info.hidden = !line;
+    // Only on a change: the tab bar watches every `hidden` in the app, and
+    // setting one, even to what it already was, wakes it (see Tabs.ts).
+    if (this.info.hidden !== !line) this.info.hidden = !line;
     if (this.info.textContent !== line) this.info.textContent = line;
   }
 

@@ -32,6 +32,8 @@ type View =
 
 export class OnlinePanel {
   private view: View = { kind: "home" };
+  /** Set once the constructor is done. See render(). */
+  private ready = false;
 
   constructor(
     private readonly els: OnlineElements,
@@ -77,6 +79,7 @@ export class OnlinePanel {
     });
 
     this.render();
+    this.ready = true;
   }
 
   home(problem?: string): void {
@@ -101,6 +104,10 @@ export class OnlinePanel {
 
   private render(): void {
     const { view } = this;
+    // Arrived by a game link and now past "Connecting…": the start page's
+    // lists can come back (see index.html). Not on the first, constructor's
+    // render, which comes before the link is followed.
+    if (this.ready && view.kind !== "connecting") document.documentElement.removeAttribute("data-arriving");
     this.els.body.innerHTML = this.body().trim();
     this.els.root.hidden = !this.els.body.innerHTML;
   }

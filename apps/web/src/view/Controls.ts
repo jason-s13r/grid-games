@@ -438,7 +438,8 @@ export class Controls {
   onHome: (() => void) | null = null;
 
   private showClock(state: State): void {
-    this.els.clock.textContent = clockLine(state, this.game.online);
+    const line = clockLine(state, this.game.online);
+    if (this.els.clock.textContent !== line) this.els.clock.textContent = line;
     this.els.clock.title = `step ${state.step}`;
   }
 
@@ -598,6 +599,6 @@ export class Controls {
   }
 
   setZoomHint(text: string): void {
-    this.els.zoomhint.textContent = text;
+    if (this.els.zoomhint.textContent !== text) this.els.zoomhint.textContent = text;
   }
 }

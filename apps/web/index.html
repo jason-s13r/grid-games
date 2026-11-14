@@ -49,6 +49,12 @@
         "author": { "@type": "Person", "name": "Jason Schwarzenberger", "url": "https://jason.schwarzenberger.co.nz/" }
       }
     </script>
+    <!-- A game link: mark the page before it is first drawn, so the start
+         page's lists stay out of the way while the room connects. Cleared by
+         view/Online.ts once there is more to show than "Connecting…". -->
+    <script>
+      if (location.pathname.startsWith("/g/")) document.documentElement.setAttribute("data-arriving", "");
+    </script>
     <link rel="stylesheet" href="styles/main.scss" />
     <script type="module" src="src/main.ts"></script>
   </head>

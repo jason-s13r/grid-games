@@ -124,18 +124,24 @@ export class Tabs {
     this.paint();
   }
 
+  /** Writes only what differs. This runs on every `hidden` change in the app,
+   *  and an attribute set on the app element, even to the value it already
+   *  has, makes the browser restyle everything under it — on a phone, enough
+   *  work several times a second to make taps wait. */
   private paint(): void {
-    this.app.dataset.panel = this.active ?? "";
+    const panel = this.active ?? "";
+    if (this.app.dataset.panel !== panel) this.app.dataset.panel = panel;
     for (const button of this.bar.querySelectorAll<HTMLElement>("[data-tab]")) {
       const on = button.dataset.tab === this.active;
       button.classList.toggle("on", on);
-      button.setAttribute("aria-selected", String(on));
+      if (button.getAttribute("aria-selected") !== String(on)) button.setAttribute("aria-selected", String(on));
     }
     // Only while tabbed. On a wide screen the panels are the reader's to open
     // and shut, and this would be reaching in and doing it for them.
     if (!this.on) return;
     for (const panel of this.panels()) {
-      panel.open = panel.dataset.acc === this.active;
+      const open = panel.dataset.acc === this.active;
+      if (panel.open !== open) panel.open = open;
     }
   }
 }

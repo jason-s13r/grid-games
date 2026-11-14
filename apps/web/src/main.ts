@@ -927,7 +927,9 @@ function frame(now: number): void {
         ? `${camera.zoom}px per tile`
         : `${camera.zoom}px per tile — blocks below ${DOM_MIN_ZOOM}px`,
     );
-    zoomLevelEl.textContent = `${camera.zoom}`;
+    // Text written only when it changes: rewriting the same words still makes
+    // the browser lay the page out again, five times a second for nothing.
+    if (zoomLevelEl.textContent !== `${camera.zoom}`) zoomLevelEl.textContent = `${camera.zoom}`;
     zoomInEl.disabled = !camera.canZoomIn;
     zoomOutEl.disabled = !camera.canZoomOut;
     minimapDue = now + 200;

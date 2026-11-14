@@ -74,6 +74,19 @@ html:has(.app[data-screen="game"]) body {
   background: var(--side);
 }
 
+// The menu covers the game's own panels, which go on laying themselves out
+// behind it as a game loads and they fill. Nobody sees that, but the browser
+// counts it as the page shifting about (layout shift, in its Web Vitals) unless
+// they are hidden. Hidden, they also stay out of the tab order under the menu.
+.app[data-screen="menu"] > :not(.screen) { visibility: hidden; }
+
+// Arriving by a game link, the start page's lists and footers wait until the
+// room says what it is (see the script in index.html). Otherwise they load and
+// push each other about, and then vanish as the board takes over.
+html[data-arriving] {
+  .game-lists, .site-links, .screen-foot { display: none; }
+}
+
 h1, h2, h3, .brand, .screen-brand {
   font-family: var(--font-display);
 }
@@ -779,12 +792,24 @@ h1, h2, h3, .brand, .screen-brand {
 }
 
 .tile.is-protected {
-  outline-color: #7fe8f0;
-  animation: pulse 1.6s ease-in-out infinite;
+  outline-color: rgba(127, 232, 240, 0.35);
+  // The bright ring fades in and out over the dim one. It pulses by opacity,
+  // on a pseudo-element, because the compositor animates that on its own: an
+  // animated outline-color repainted the whole tile layer every frame, which
+  // kept a phone's main thread busy enough to make taps feel slow.
+  &::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    outline: 2px solid #7fe8f0;
+    outline-offset: -2px;
+    pointer-events: none;
+    animation: pulse 1.6s ease-in-out infinite;
+  }
 }
 
 @keyframes pulse {
-  50% { outline-color: rgba(127, 232, 240, 0.35); }
+  50% { opacity: 0; }
 }
 
 // The pocket around an empire nobody has claimed. Nothing may be taken, marched

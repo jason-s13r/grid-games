@@ -133,8 +133,11 @@ export class Renderer {
     const zoomed = camera.zoom !== this.lastZoom;
 
     // Panning moves one container rather than every tile, so a drag costs a
-    // single style write instead of ~1500.
-    this.tiles.style.transform = `translate(${-camera.x * camera.zoom}px, ${-camera.y * camera.zoom}px)`;
+    // single style write instead of ~1500. Only when the camera moved: a
+    // write every frame, even of the same value, is a frame's worth of work.
+    if (camera.changed || zoomed) {
+      this.tiles.style.transform = `translate(${-camera.x * camera.zoom}px, ${-camera.y * camera.zoom}px)`;
+    }
 
     if (zoomed) {
       this.tiles.style.setProperty("--tile-size", `${camera.zoom}px`);
