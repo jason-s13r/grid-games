@@ -36,6 +36,10 @@ export class ChatPanel {
   /** Everything shown, so the log can be drawn again when a house changes. */
   private lines: ChatLine[] = [];
   private me = "";
+  /** Lines said since the reader last had the chat in front of them. */
+  private unread = 0;
+  /** The panel itself, which carries the count for its tab. */
+  private readonly panel: HTMLDetailsElement | null;
 
   constructor(
     root: HTMLElement,
@@ -59,6 +63,11 @@ export class ChatPanel {
     this.form = root.querySelector("[data-chat-form]")!;
     this.status = root.querySelector("[data-chat-status]")!;
     this.blockedEl = root.querySelector("[data-chat-blocked]")!;
+    this.panel = root.closest("details");
+    // Opening the chat is reading it.
+    this.panel?.addEventListener("toggle", () => {
+      if (this.reading) this.markRead();
+    });
     // Click a name to block that player; click a blocked one to let them back.
     root.addEventListener("click", (event) => {
       const target = (event.target as HTMLElement).closest<HTMLElement>("[data-block], [data-unblock]");
@@ -81,6 +90,7 @@ export class ChatPanel {
     this.section.hidden = false;
     this.log.innerHTML = "";
     this.lines = [];
+    this.markRead();
     this.add(lines, me);
     this.seated(seated);
   }
@@ -89,6 +99,31 @@ export class ChatPanel {
     this.section.hidden = true;
     this.log.innerHTML = "";
     this.lines = [];
+    this.markRead();
+  }
+
+  /** New lines from the room, as they are said. Shown like any other, and
+   *  counted when the chat is not in front of the reader: on a phone it is one
+   *  tab among several, and the map is where the time goes. */
+  heard(lines: readonly ChatLine[], me: string): void {
+    this.add(lines, me);
+    if (this.reading) return;
+    const others = lines.filter((line) => line.key !== me && !this.blocked.has(line.key)).length;
+    if (others === 0) return;
+    this.unread += others;
+    // On the panel, where the tab bar reads it from. See Tabs.ts.
+    this.panel?.setAttribute("data-unread", this.unread > 99 ? "99+" : String(this.unread));
+  }
+
+  /** Whether the log is on screen: its panel open and laid out. A closed tab's
+   *  panel is open=false and display: none. */
+  private get reading(): boolean {
+    return !!this.panel?.open && this.log.getClientRects().length > 0;
+  }
+
+  private markRead(): void {
+    this.unread = 0;
+    this.panel?.removeAttribute("data-unread");
   }
 
   /** Draw the log again: a claimant's house arrives after the history does,

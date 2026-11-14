@@ -57,7 +57,8 @@ export class Tabs {
     new MutationObserver(() => this.sync()).observe(this.app, {
       subtree: true,
       attributes: true,
-      attributeFilter: ["hidden"],
+      // And a panel's unread count, which its tab shows (see Chat.ts).
+      attributeFilter: ["hidden", "data-unread"],
     });
 
     this.apply();
@@ -135,6 +136,13 @@ export class Tabs {
       const on = button.dataset.tab === this.active;
       button.classList.toggle("on", on);
       if (button.getAttribute("aria-selected") !== String(on)) button.setAttribute("aria-selected", String(on));
+      // A count of what is waiting in that panel, such as unread chat.
+      const unread = this.app.querySelector(`[data-acc="${button.dataset.tab}"]`)?.getAttribute("data-unread") ?? null;
+      if (button.getAttribute("data-unread") !== unread) {
+        if (unread === null) button.removeAttribute("data-unread");
+        else button.setAttribute("data-unread", unread);
+        button.setAttribute("aria-label", unread === null ? button.textContent! : `${button.textContent}, ${unread} unread`);
+      }
     }
     // Only while tabbed. On a wide screen the panels are the reader's to open
     // and shut, and this would be reaching in and doing it for them.

@@ -875,7 +875,7 @@ async function enterRoom(roomId: string): Promise<void> {
     if (settingsDialog.open) void settingsContext().then((c) => settingsDialog.update(c));
   };
   client.onChat = (lines) => {
-    if (link === opened) chat.add(lines, identity.key);
+    if (link === opened) chat.heard(lines, identity.key);
   };
   client.onSeated = () => {
     showPeople();

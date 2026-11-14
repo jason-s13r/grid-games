@@ -2664,6 +2664,22 @@ a.btn {
       color: #fff;
       background: var(--forest-ink);
     }
+
+    // Unread chat while another tab is open. See view/Chat.ts.
+    &[data-unread]::after {
+      content: attr(data-unread);
+      display: inline-block;
+      min-width: 18px;
+      height: 18px;
+      margin-left: 6px;
+      padding: 0 5px;
+      font: 700 11px/18px var(--font-body);
+      text-align: center;
+      vertical-align: 1px;
+      color: var(--line);
+      background: var(--gold);
+      border-radius: 999px;
+    }
   }
 
   // The headings are the tabs now. A closed panel is not a strip to be
