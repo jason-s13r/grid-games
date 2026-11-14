@@ -857,7 +857,7 @@ async function enterRoom(roomId: string): Promise<void> {
     mount(new OnlineGame(client));
     online.playing(roomId);
     shell.show("game");
-    chat.open(client.chat, identity.key, !!client.you?.seat);
+    chat.open(client.chat, identity.key, !!client.you?.seat, roomId);
     showPeople();
     if (arrivedWith && !client.you?.seat) client.redeem(arrivedWith);
     arrivedWith = undefined;

@@ -22,6 +22,34 @@ function loadBlocked(): Map<string, string> {
   }
 }
 
+/** How far each game's chat has been read, by room: the room's time of the
+ *  newest line seen. Kept so a reload does not count the history again, which
+ *  arrives after the board does and looks like news. */
+const READ_STORE = "tessera.chatRead";
+/** Rooms remembered; the oldest read is forgotten first. */
+const READ_KEEP = 50;
+
+function loadRead(): Record<string, number> {
+  try {
+    const raw = JSON.parse(localStorage.getItem(READ_STORE) ?? "{}") as unknown;
+    if (!raw || typeof raw !== "object" || Array.isArray(raw)) return {};
+    return Object.fromEntries(Object.entries(raw).filter(([, at]) => typeof at === "number"));
+  } catch {
+    return {};
+  }
+}
+
+function saveRead(room: string, at: number): void {
+  const read = loadRead();
+  read[room] = at;
+  const kept = Object.entries(read).sort((a, b) => b[1] - a[1]).slice(0, READ_KEEP);
+  try {
+    localStorage.setItem(READ_STORE, JSON.stringify(Object.fromEntries(kept)));
+  } catch {
+    // Unsaved, the count starts over on the next reload, as it used to.
+  }
+}
+
 export class ChatPanel {
   private readonly log: HTMLElement;
   private readonly input: HTMLInputElement;
@@ -38,6 +66,9 @@ export class ChatPanel {
   private me = "";
   /** Lines said since the reader last had the chat in front of them. */
   private unread = 0;
+  /** The game this chat belongs to, and the newest line read in it. */
+  private room = "";
+  private lastRead = 0;
   /** The panel itself, which carries the count for its tab. */
   private readonly panel: HTMLDetailsElement | null;
 
@@ -86,12 +117,14 @@ export class ChatPanel {
   }
 
   /** Show the panel for an online game, with its history. */
-  open(lines: readonly ChatLine[], me: string, seated: boolean): void {
+  open(lines: readonly ChatLine[], me: string, seated: boolean, room = ""): void {
     this.section.hidden = false;
     this.log.innerHTML = "";
     this.lines = [];
-    this.markRead();
+    this.room = room;
+    this.lastRead = (room && loadRead()[room]) || 0;
     this.add(lines, me);
+    this.markRead();
     this.seated(seated);
   }
 
@@ -100,6 +133,8 @@ export class ChatPanel {
     this.log.innerHTML = "";
     this.lines = [];
     this.markRead();
+    this.room = "";
+    this.lastRead = 0;
   }
 
   /** New lines from the room, as they are said. Shown like any other, and
@@ -107,8 +142,12 @@ export class ChatPanel {
    *  tab among several, and the map is where the time goes. */
   heard(lines: readonly ChatLine[], me: string): void {
     this.add(lines, me);
-    if (this.reading) return;
-    const others = lines.filter((line) => line.key !== me && !this.blocked.has(line.key)).length;
+    if (this.reading) return this.markRead();
+    // Only what is newer than the last read: on a reload the history comes
+    // through here too, and most of it was read before.
+    const others = lines.filter(
+      (line) => line.at > this.lastRead && line.key !== me && !this.blocked.has(line.key),
+    ).length;
     if (others === 0) return;
     this.unread += others;
     // On the panel, where the tab bar reads it from. See Tabs.ts.
@@ -124,6 +163,10 @@ export class ChatPanel {
   private markRead(): void {
     this.unread = 0;
     this.panel?.removeAttribute("data-unread");
+    const newest = this.lines.reduce((at, line) => Math.max(at, line.at), 0);
+    if (newest <= this.lastRead) return;
+    this.lastRead = newest;
+    if (this.room) saveRead(this.room, newest);
   }
 
   /** Draw the log again: a claimant's house arrives after the history does,

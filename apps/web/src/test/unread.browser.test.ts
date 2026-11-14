@@ -76,4 +76,32 @@ describe("unread chat", () => {
     chat.open([], "me", true);
     expect(panel.hasAttribute("data-unread")).toBe(false);
   });
+
+  it("does not count again, after a reload, what was read before it", async () => {
+    const room = `reload-${Math.random()}`;
+    const said = (at: number, text: string): ChatLine => ({ ...line("them", text), at });
+    const history = [said(1000, "read before the reload"), said(2000, "this too")];
+
+    // Before: the lines arrive, and the chat is opened and read.
+    const before = mount();
+    before.chat.open([], "me", true, room);
+    before.chat.heard(history, "me");
+    await settle();
+    const toggled = new Promise((resolve) => before.panel.addEventListener("toggle", resolve, { once: true }));
+    if (before.app.dataset.tabbed === "on") before.tab()!.click();
+    else before.panel.open = true;
+    await toggled;
+    before.app.remove();
+
+    // After the reload: the board first, then the history, with the map open.
+    const after = mount();
+    after.chat.open([], "me", true, room);
+    after.chat.heard(history, "me");
+    await settle();
+    expect(after.panel.hasAttribute("data-unread")).toBe(false);
+
+    after.chat.heard([said(3000, "new since")], "me");
+    await settle();
+    expect(after.panel.getAttribute("data-unread")).toBe("1");
+  });
 });
