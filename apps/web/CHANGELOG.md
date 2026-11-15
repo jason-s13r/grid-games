@@ -1,5 +1,19 @@
 # Changelog
 
+## web@1.18.0 (2026-11-15)
+
+### Features
+
+- ask a new player for a name before their first game
+  The name field lives in the account dialog behind the gear, where a
+  first-time player does not look, so most new players showed up as a
+  bare fingerprint. Play now, starting a solo game, creating an online
+  game and joining one now open a short dialog asking what to call you
+  first. Play saves the name; Skip (or Escape) plays under the
+  fingerprint. Asked once per browser, remembered in localStorage beside
+  the name and cleared with it by Delete my data.
+
+
 ## web@1.17.1 (2026-11-14)
 
 ### Fixes
