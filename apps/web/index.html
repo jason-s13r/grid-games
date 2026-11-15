@@ -292,6 +292,34 @@
       <div class="keys-body" data-keys-body hidden></div>
     </dialog>
 
+    <!-- A new player's first game: what to call you. Asked once; the same
+         field is in the account dialog above. See view/NamePrompt.ts. -->
+    <dialog class="modal name-prompt" data-name-prompt aria-labelledby="name-prompt-title">
+      <form method="dialog">
+        <h2 id="name-prompt-title">What should we call you?</h2>
+        <div class="field field-stacked">
+          <label for="name-prompt-input">Your name</label>
+          <input
+            id="name-prompt-input"
+            class="lobby-code"
+            data-name-prompt-input
+            maxlength="24"
+            placeholder="kestrel"
+            spellcheck="false"
+            autocomplete="off"
+            enterkeyhint="go"
+          />
+          <p class="hint" data-name-prompt-shown></p>
+          <p class="hint">Other players see this beside your empire and in chat.
+          You can change it any time from the gear on the start page.</p>
+        </div>
+        <div class="name-prompt-actions">
+          <button class="btn" type="button" data-name-prompt-skip>Skip</button>
+          <button class="btn primary" type="submit">Play</button>
+        </div>
+      </form>
+    </dialog>
+
     <!-- The end of a game: who won, why, and the standings. A dialog so it sits
          above everything, which a phone's small board could not hold. See
          view/EndCard.ts. -->

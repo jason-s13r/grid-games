@@ -38,6 +38,7 @@ export function dropIdentity(): void {
   try {
     localStorage.removeItem(IDENTITY_STORE);
     localStorage.removeItem(NAME_STORE);
+    localStorage.removeItem(NAME_ASKED_STORE);
   } catch {
     // Nothing kept, nothing to drop.
   }
@@ -74,6 +75,28 @@ export function setMyName(name: string): string {
     // for the length of this game.
   }
   return clean;
+}
+
+const NAME_ASKED_STORE = "tessera.name-asked";
+
+/** Whether this browser has been asked for a name yet. A new player is asked
+ *  once, before their first game; one who skips it plays under their
+ *  fingerprint and can name themselves later from the gear. */
+export function nameAsked(): boolean {
+  try {
+    return localStorage.getItem(NAME_ASKED_STORE) === "1";
+  } catch {
+    // A blocked store would ask on every game, so it counts as asked.
+    return true;
+  }
+}
+
+export function markNameAsked(): void {
+  try {
+    localStorage.setItem(NAME_ASKED_STORE, "1");
+  } catch {
+    // Asked again next load, which is the lesser nuisance.
+  }
 }
 
 const BANNER_STORE = "tessera.banner";

@@ -6,7 +6,7 @@
 
 import { seedFrom, durationRules, minutes, PROTOCOL_VERSION, BANNERS, bannerById, playsProtocol } from "@tessera/sim";
 import type { BotChoice } from "@tessera/sim";
-import { displayName, fingerprint } from "@tessera/protocol";
+import { cleanName, displayName, fingerprint } from "@tessera/protocol";
 import "@fontsource/fredoka/500.css";
 import "@fontsource/fredoka/600.css";
 import "@fontsource/nunito/400.css";
@@ -16,7 +16,8 @@ import pkg from "../package.json";
 import { LocalGame } from "./game/Local";
 import { boardClick } from "./game/input";
 import type { Driver } from "./game/Driver";
-import { myBanner, myIdentity, myName, setMyBanner, setMyName } from "./net/identity";
+import { markNameAsked, myBanner, myIdentity, myName, nameAsked, setMyBanner, setMyName } from "./net/identity";
+import { NamePrompt } from "./view/NamePrompt";
 import { Rivals } from "./view/Rivals";
 import { CreatePage, MAPS } from "./view/Create";
 import type { CreateState } from "./view/Create";
@@ -119,6 +120,19 @@ nameEl.addEventListener("change", () => {
   if (nameEl.value) link?.client.setName(nameEl.value);
 });
 
+/** Before a new player's first game, ask what to call them. */
+const namePrompt = new NamePrompt(pick<HTMLDialogElement>("[data-name-prompt]"), {
+  save: (name) => {
+    nameEl.value = setMyName(name);
+    void showName();
+    return nameEl.value;
+  },
+  preview: async (name) =>
+    `Shown as ${displayName(cleanName(name), await fingerprint((await myIdentity()).key))}`,
+  asked: markNameAsked,
+});
+const askName = (): Promise<void> => namePrompt.ask(!myName() && !nameAsked());
+
 let MAP = { width: MAPS.medium.width, height: MAPS.medium.height };
 
 let game: Driver;
@@ -162,7 +176,8 @@ shell.onScreen = (screen) => {
 
 /** A fresh solo game. Play now uses the defaults (a medium map, three steady
  *  bots, the default length); the create page passes its own choices. */
-function startSolo(options: { map: { width: number; height: number }; length: number; bots: BotChoice[] }): void {
+async function startSolo(options: { map: { width: number; height: number }; length: number; bots: BotChoice[] }): Promise<void> {
+  await askName();
   leaveRoom();
   const house = myBanner();
   mount(
@@ -178,7 +193,7 @@ function startSolo(options: { map: { width: number; height: number }; length: nu
   shell.show("game");
 }
 
-const playNow = (): void =>
+const playNow = (): Promise<void> =>
   startSolo({ map: MAPS.medium, length: defaultLength, bots: ["steady", "steady", "steady"] });
 
 // --- the menu: the start page and the create page ---------------------------
@@ -204,7 +219,7 @@ const createPage: CreatePage = new CreatePage(createEl, rivals, pick<HTMLElement
   submit: (state) => {
     if (state.mode === "solo") {
       setMyBanner(state.house);
-      startSolo({ ...createPage.solo, bots: rivals.list });
+      void startSolo({ ...createPage.solo, bots: rivals.list });
       showPage("start");
     } else {
       showPage("start");
@@ -236,7 +251,7 @@ startEl.addEventListener("click", (event) => {
   if (!button) return;
   event.preventDefault();
   switch (button.dataset.startAction) {
-    case "play": return playNow();
+    case "play": return void playNow();
     case "new": createPage.open("friends"); return showPage("create");
     case "solo": createPage.open("solo"); return showPage("create");
     case "join": return joinFromBox();
@@ -746,6 +761,7 @@ games.refresh();
 refreshLists = () => games.refresh();
 
 async function createRoom(form: CreateState): Promise<void> {
+  await askName();
   const identity = await myIdentity();
   try {
     const id = await createGame({
@@ -810,6 +826,8 @@ async function enterRoom(roomId: string): Promise<void> {
   // that says the game is over, and once it is archived the replay is the
   // cheap way to look at it.
   if (known?.archived && known.ended) return openReplay(roomId);
+  // The name goes with the join, so it is asked for before it.
+  await askName();
   leaveRoom();
   if (location.pathname !== `/g/${roomId}`) history.pushState(null, "", `/g/${roomId}`);
   online.connecting(roomId);

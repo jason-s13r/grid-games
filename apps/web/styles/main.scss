@@ -3218,3 +3218,11 @@ a.btn {
   input[type="range"] { flex: 1; min-width: 0; accent-color: var(--forest-ink); }
   .hint { min-width: 7em; text-align: right; font-variant-numeric: tabular-nums; }
 }
+
+// A new player's first game asks for a name. See view/NamePrompt.ts.
+.name-prompt {
+  form { display: grid; gap: 12px; }
+  .field-stacked { margin-top: 0; }
+  .name-prompt-actions { display: flex; gap: 8px; .btn { flex: 1; } }
+  .name-prompt-actions .btn.primary { margin-top: 0; }
+}
